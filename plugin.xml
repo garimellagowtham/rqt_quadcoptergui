@@ -1,0 +1,12 @@
+<library path="lib/librqt_quadcoptergui">
+  <class name="rqt_quadcoptergui/QuadcopterGui" type="rqt_quadcoptergui::QuadcopterGui" base_class_type="rqt_gui_cpp::Plugin">
+    <description>
+      A GUI for accessing and controlling Quadcopters through ros. You have to write a parser for connecting to different quadcopters
+    </description>
+    <qtgui>
+      <label>RqtQuadcopterGui</label>
+      <icon type="theme">image-x-generic</icon>
+      <statustip>A GUI for controlling Quadcopters</statustip>
+    </qtgui>
+  </class>
+</library>

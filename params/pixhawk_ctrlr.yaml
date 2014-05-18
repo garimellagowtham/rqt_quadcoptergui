@@ -1,0 +1,7 @@
+ctrlr/kpr: 1.5
+ctrlr/kdr: 1.5
+ctrlr/kpt: 0.5
+ctrlr/kdt: 0.5
+ctrlr/throtbound: 0.5
+ctrlr/rpbound: 20
+ctrlr/cmdrate_throttle: 2

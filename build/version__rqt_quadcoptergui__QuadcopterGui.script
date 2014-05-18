@@ -1,0 +1,9 @@
+    {
+      global:
+        pocoBuildManifest;
+        pocoInitializeLibrary;
+        pocoUninitializeLibrary;
+        pocoBuildManifestrqt_quadcoptergui__QuadcopterGui;
+      local:
+        *;
+    };

@@ -1,0 +1,5 @@
+<?xml version="1.0"?>
+<launch>
+  <rosparam command="load" file="$(find rqt_quadcoptergui)/params/gui_params.yaml" />
+  <node pkg="rqt_gui" type="rqt_gui" name="gui" output="screen"/>
+</launch>

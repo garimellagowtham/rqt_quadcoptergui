@@ -1,0 +1,3 @@
+vrpn_server_ip: "192.168.1.2"
+vrpn_tracker_id: "pixhawk"
+pubfreq: 200

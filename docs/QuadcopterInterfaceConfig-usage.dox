@@ -1,0 +1,22 @@
+\subsubsection usage Usage
+\verbatim
+<node name="Config" pkg="rqt_quadcoptergui" type="Config">
+  <param name="kpr" type="double" value="1.0" />
+  <param name="kdr" type="double" value="1.0" />
+  <param name="kpt" type="double" value="1.0" />
+  <param name="kdt" type="double" value="1.0" />
+  <param name="kit" type="double" value="0.001" />
+  <param name="goalT" type="int" value="1" />
+  <param name="xg" type="double" value="0.0" />
+  <param name="yg" type="double" value="0.0" />
+  <param name="zg" type="double" value="0.0" />
+  <param name="yawg" type="double" value="0.0" />
+  <param name="throtbound" type="double" value="0.2" />
+  <param name="rpbound" type="double" value="20.0" />
+  <param name="perturb_amp" type="double" value="0.2" />
+  <param name="perturb_freq" type="double" value="1.0" />
+  <param name="cmdrate_throttle" type="int" value="1" />
+  <param name="perturb_axis" type="int" value="1" />
+</node>
+\endverbatim
+

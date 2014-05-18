@@ -1,0 +1,12 @@
+\subsubsection usage Usage
+\verbatim
+<node name="Config" pkg="rqt_quadcoptergui" type="Config">
+  <param name="kpr" type="double" value="1.0" />
+  <param name="kdr" type="int" value="1" />
+  <param name="kpt" type="double" value="1.0" />
+  <param name="kdt" type="double" value="1.0" />
+  <param name="throtbound" type="double" value="5.0" />
+  <param name="rpbound" type="double" value="20.0" />
+</node>
+\endverbatim
+

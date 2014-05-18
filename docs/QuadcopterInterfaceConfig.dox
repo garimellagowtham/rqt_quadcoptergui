@@ -1,0 +1,21 @@
+\subsubsection parameters ROS parameters
+
+Reads and maintains the following parameters on the ROS server
+
+- \b "~kpr" : \b [double] Prop Gain on roll               , pitch min: 0.0, default: 1.0, max: 5.0
+- \b "~kdr" : \b [double] Derivative Gain on roll pitch min: 0.0, default: 1.0, max: 5.0
+- \b "~kpt" : \b [double] Prop Gain on thrust min: 0.0, default: 1.0, max: 5.0
+- \b "~kdt" : \b [double] Derivative Gain on thrust min: 0.0, default: 1.0, max: 5.0
+- \b "~kit" : \b [double] Integral Gain on thrust min: 0.0, default: 0.001, max: 0.003
+- \b "~goalT" : \b [int] Time to reach goal min: 0, default: 1, max: 20
+- \b "~xg" : \b [double] Final xposn min: -3.0, default: 0.0, max: 3.0
+- \b "~yg" : \b [double] Final yposn min: -3.0, default: 0.0, max: 3.0
+- \b "~zg" : \b [double] Final zposn min: 0.0, default: 0.0, max: 4.0
+- \b "~yawg" : \b [double] Final yawposn min: -3.14, default: 0.0, max: 3.14
+- \b "~throtbound" : \b [double] Max throttle value min: 0.0, default: 0.2, max: 1.5
+- \b "~rpbound" : \b [double] Max roll/pitch value in deg min: 0.0, default: 20.0, max: 40.0
+- \b "~perturb_amp" : \b [double] Amplitude of perturbation in m min: 0.0, default: 0.2, max: 0.3
+- \b "~perturb_freq" : \b [double] Freq of perturbation in Hz min: 0.0, default: 1.0, max: 5.0
+- \b "~cmdrate_throttle" : \b [int] Reduce cmd publishing rate min: 1, default: 1, max: 3
+- \b "~perturb_axis" : \b [int] Axis x,y,z(1,2,3) min: 1, default: 1, max: 3
+

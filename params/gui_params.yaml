@@ -1,0 +1,5 @@
+# Specify the Quadcopter parser plugin to use:
+parser_plugin: "rqt_quadcopter_parsers/ArdroneParser"
+# this is used for calling the set function from SetptCtrlr
+vrpn_pose: "/ardrone1/pose"
+

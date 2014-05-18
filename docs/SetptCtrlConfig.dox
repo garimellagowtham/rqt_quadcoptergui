@@ -1,0 +1,11 @@
+\subsubsection parameters ROS parameters
+
+Reads and maintains the following parameters on the ROS server
+
+- \b "~kpr" : \b [double] Prop Gain on roll              , pitch min: 0.0, default: 1.0, max: 5.0
+- \b "~kdr" : \b [int] Derivative Gain on roll pitch min: 0, default: 1, max: 5
+- \b "~kpt" : \b [double] Prop Gain on thrust min: 0.0, default: 1.0, max: 5.0
+- \b "~kdt" : \b [double] Derivative Gain on thrust min: 0.0, default: 1.0, max: 5.0
+- \b "~throtbound" : \b [double] Max throttle value min: 0.0, default: 5.0, max: 10.0
+- \b "~rpbound" : \b [double] Max roll/pitch value in deg min: 0.0, default: 20.0, max: 40.0
+
