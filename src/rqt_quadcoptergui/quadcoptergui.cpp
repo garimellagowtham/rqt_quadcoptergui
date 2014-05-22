@@ -46,6 +46,8 @@ QuadcopterGui::QuadcopterGui() : rqt_gui_cpp::Plugin()
 	, reconfiginit(false)
 	, throttlecmdrate(1), ratecount(0)
 	, perturbationon(false), perturb_amp(0), perturb_freq(0), perturb_axis(1)
+	, joymsg_prevbutton(0), buttoncount(0)
+	, joymsg_prevbutton1(0), buttoncount1(0)
 	{
 		setObjectName("QuadcopterGui");
 		parser_loader.reset(new pluginlib::ClassLoader<rqt_quadcoptergui::Parser>("rqt_quadcoptergui","rqt_quadcoptergui::Parser"));
@@ -61,6 +63,7 @@ QuadcopterGui::QuadcopterGui() : rqt_gui_cpp::Plugin()
 		//Indices in FFT: 2           3           7          11          23          53         103         223         479        1039 Hopefully as this is not directly applied
 		frequencies = new float[NSINES]{0.0400,   0.0600,   0.1000,   0.1400,   0.2200,   0.3400,   0.4600,   0.7401,   1.2201,   2.0202};
 		phases = new float[NSINES]{0.0596,  0.6820,   0.0424,   0.0714,   0.5216,   0.0967,   0.8181,   0.8175,   0.7224,   0.1499};
+		armpwm.resize(3);//Number of arms for now just hardcoded
 		//Indices:  2     3     5     7    11    17    23    37    61   101
 
 		//The sampling frequency is 103.289 and window freq = 0.020017 (Around 50 Sec)
@@ -173,6 +176,7 @@ void QuadcopterGui::initPlugin(qt_gui_cpp::PluginContext& context)
 		return;
 	}
 	vrpndata_sub = nh.subscribe(uav_posename,1,&QuadcopterGui::cmdCallback,this);
+	joydata_sub = nh.subscribe("/joy",1,&QuadcopterGui::joyCallback,this);
 
 	//Connect to dynamic reconfigure server:
 	reconfigserver.reset(new dynamic_reconfigure::Server<rqt_quadcoptergui::QuadcopterInterfaceConfig>(nh));
@@ -417,6 +421,46 @@ void QuadcopterGui::shutdownPlugin()
 	  //stringdata_pub.shutdown();
 }
 
+void QuadcopterGui::joyCallback(const sensor_msgs::Joy::ConstPtr &joymsg)
+{
+	if(!parserinstance)
+	{
+		ROS_WARN("Parser not instantiated");
+		return;
+	}
+	//cout<<"Arm pwm: "<<joymsg->axes[0]<<"\t"<<joymsg->axes[1]<<"\t"<<joymsg->axes[2]<<"\t"<<joymsg->axes[3]<<"\t"<<endl;
+	if((joymsg->buttons[0] - joymsg_prevbutton) > 0)
+	{
+		buttoncount = (buttoncount+1)%2;
+	}
+	joymsg_prevbutton = joymsg->buttons[0];
+	if(buttoncount == 0)
+		armpwm[2] = -0.7;
+	else
+		armpwm[2] = 0.7;
+	//For starting to move arm:
+
+	if((joymsg->buttons[1] - joymsg_prevbutton1) > 0)
+	{
+		buttoncount1 = (buttoncount1+1)%2;
+	}
+	joymsg_prevbutton1 = joymsg->buttons[1];
+	if(buttoncount1 == 0)
+	{
+		if(startcontrol)//For now not using data.armed for arm
+		{
+			armpwm[0] = joymsg->axes[1];
+			armpwm[1] = joymsg->axes[0];//Will convert them also into angles later
+			parserinstance->setarmpwm(armpwm);
+		}
+	}
+	else
+	{
+		armpwm[0] =42.5 ;//Default values for the arm to stay at
+		armpwm[1] =42.5 ;//Default values for the arm to stay at
+		parserinstance->setarmangles(armpwm);//Absolute angle command
+	}
+}
 void QuadcopterGui::cmdCallback(const geometry_msgs::TransformStamped::ConstPtr &currframe)
 {
 	/*	if(data.quadstate != "Flying")
@@ -449,7 +493,7 @@ void QuadcopterGui::cmdCallback(const geometry_msgs::TransformStamped::ConstPtr 
 	}
 	if(data.armed && startcontrol)
 	{
-		if((++ratecount) == throttlecmdrate)
+		if((++ratecount) == throttlecmdrate)//Throttling down the rate of sending commands to the uav
 		{
 			ratecount = 0;
 			parserinstance->cmdrpythrust(rescmdmsg,true);//Also controlling yaw

@@ -52,6 +52,7 @@
 
 #include <std_msgs/String.h>
 #include "ros/ros.h"
+#include <sensor_msgs/Joy.h>
 
 //#include <controllers/SetptCtrl.h>
 
@@ -103,6 +104,8 @@ protected:
 
 	ros::Subscriber vrpndata_sub;
 
+	ros::Subscriber joydata_sub;
+
 	//ros::Publisher stringdata_pub;
 
 	virtual void shutdownPlugin();
@@ -125,6 +128,7 @@ protected:
 	boost::shared_ptr<SetptCtrl> ctrlrinst;
 	ros::Timer goaltimer;
 	void cmdCallback(const geometry_msgs::TransformStamped::ConstPtr &currframe);
+	void joyCallback(const sensor_msgs::Joy::ConstPtr &joymsg);
 
 	//Moving goal dynamically:
 	tf::Vector3 diff_goal;
@@ -144,6 +148,9 @@ protected:
 	float *phases;
 	float amplitude, attenuationcoeff;
 	ros::Time perturbtime_offset;
+	int joymsg_prevbutton, buttoncount;
+	int joymsg_prevbutton1, buttoncount1;
+	std::vector<float>armpwm;
 
 	//Reconfigure stuff:
 	 boost::shared_ptr<dynamic_reconfigure::Server<rqt_quadcoptergui::QuadcopterInterfaceConfig> >reconfigserver;

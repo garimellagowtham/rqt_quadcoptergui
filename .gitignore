@@ -1,0 +1,6 @@
+msg_gen
+build
+logfiles/
+build/
+lib/
+bin/

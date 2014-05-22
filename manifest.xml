@@ -14,6 +14,7 @@
 	<depend package="std_msgs"/>
 	<depend package="tf"/>
 	<depend package="controllers"/>
+	<depend package="sensor_msgs"/>
 	<!--depend package="rqt_quadcopter_parsers"/-->
 	<depend package="dynamic_reconfigure"/>
 
