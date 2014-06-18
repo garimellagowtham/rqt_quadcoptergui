@@ -16,7 +16,7 @@
 	<depend package="controllers"/>
 	<depend package="sensor_msgs"/>
 	<depend package="visualization_msgs"/>
-	<!--depend package="rqt_quadcopter_parsers"/-->
+	<depend package="parsernode"/>
 	<depend package="dynamic_reconfigure"/>
 
   <export>
