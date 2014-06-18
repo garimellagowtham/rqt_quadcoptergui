@@ -38,6 +38,7 @@
 #include <fstream>
 #include <string>
 #include <controllers/SetptCtrl.h>
+#include <controllers/arm.h>
 #include <rqt_quadcoptergui/QuadcopterInterfaceConfig.h>
 #include <dynamic_reconfigure/server.h>
 #include <rqt_gui_cpp/plugin.h>
@@ -53,6 +54,7 @@
 #include <std_msgs/String.h>
 #include "ros/ros.h"
 #include <sensor_msgs/Joy.h>
+#include <visualization_msgs/Marker.h>
 
 //#include <controllers/SetptCtrl.h>
 
@@ -69,7 +71,6 @@
 //#include <QMutex>
 #include <boost/thread/mutex.hpp>
 #include <QDockWidget>
-#define NSINES 10
 
 namespace rqt_quadcoptergui {
 
@@ -106,6 +107,9 @@ protected:
 
 	ros::Subscriber joydata_sub;
 
+	ros::Publisher desiredtraj_pub;
+
+
 	//ros::Publisher stringdata_pub;
 
 	virtual void shutdownPlugin();
@@ -126,64 +130,79 @@ protected:
 	geometry_msgs::Quaternion goalposn;
 
 	boost::shared_ptr<SetptCtrl> ctrlrinst;
+	boost::shared_ptr<gcop::Arm> arminst;
 	ros::Timer goaltimer;
 	void cmdCallback(const geometry_msgs::TransformStamped::ConstPtr &currframe);
 	void joyCallback(const sensor_msgs::Joy::ConstPtr &joymsg);
+	bool enable_joy;
 
 	//Moving goal dynamically:
 	tf::Vector3 diff_goal;
 	tf::Vector3 diff_velgoal;
 	tf::Vector3 curr_goal;
+	tf::Vector3 bias_vrpn;//This is right now estimated offline. But will add this online through a checkbox soon TODO
+	float bias_count;
+	//The point is that if there is a bias in vrpn data then, the quadcopter will oscillate not about the actual position but around some angle which
+	//is the  bias in vrpn
+
 	void goaltimerCallback(const ros::TimerEvent&);
 	int goalcount;
 	float goalyaw;
 	bool startcontrol, testctrlr;
 	float corrected_thrustbias;
-	
-	bool perturbationon;
-	int  perturb_axis;
-	float perturb_amp, perturb_freq;
 
-	float *frequencies;
-	float *phases;
-	float amplitude, attenuationcoeff;
-	ros::Time perturbtime_offset;
+	bool followtraj;
+	float traj_amp, traj_freq, traj_skew;
+
+	ros::Time trajtime_offset;
 	int joymsg_prevbutton, buttoncount;
 	int joymsg_prevbutton1, buttoncount1;
-	std::vector<float>armpwm;
+	double as[2][3];//Arm inverse kinematics output
+	double armlocaltarget[3];//Arm goal (Where the object is to grab)
+	//double delta_armgoal[3];//Arm Goal in the Frame of the Quadcopter
+	tf::Vector3 target;//Extraction target point
+	double armpwm[3];//Arm pwm
+	double armangles[3];//The angles of the arm in radians in gcop convention
 
 	//Reconfigure stuff:
-	 boost::shared_ptr<dynamic_reconfigure::Server<rqt_quadcoptergui::QuadcopterInterfaceConfig> >reconfigserver;
-	 dynamic_reconfigure::Server<rqt_quadcoptergui::QuadcopterInterfaceConfig>::CallbackType reconfigcallbacktype;
+	boost::shared_ptr<dynamic_reconfigure::Server<rqt_quadcoptergui::QuadcopterInterfaceConfig> >reconfigserver;
+	dynamic_reconfigure::Server<rqt_quadcoptergui::QuadcopterInterfaceConfig>::CallbackType reconfigcallbacktype;
 
-	 void paramreqCallback(rqt_quadcoptergui::QuadcopterInterfaceConfig &config , uint32_t level);
+	void paramreqCallback(rqt_quadcoptergui::QuadcopterInterfaceConfig &config , uint32_t level);
 
-	 //Storing the current frame along with time stamp:
-	 tf::StampedTransform UV_O;
+	//Storing the current frame along with time stamp:
+	tf::StampedTransform UV_O;
 
-	 tf::Vector3 errorrpy;
+	tf::Vector3 errorrpy;
 
-	 //Storing the current command being set:
-	 geometry_msgs::Quaternion rescmdmsg;
+	//Storing the current command being set:
+	geometry_msgs::Quaternion rescmdmsg;
 
-	 //Logger Stuff
-	 //ofstream cmdfile;
-	 ofstream vrpnfile;
-	 bool enable_logging;
-	 bool reconfiginit;
-	 int throttlecmdrate,ratecount;
+	//Logger Stuff
+	//ofstream cmdfile;
+	ofstream vrpnfile;
+	bool enable_logging;
+	bool reconfiginit;
+	int throttlecmdrate,ratecount;
+	int armcmdrate,armratecount;
+	boost::shared_ptr<visualization_msgs::Marker> trajectoryPtr;
+	boost::shared_ptr<visualization_msgs::Marker> targetPtr;
+	//boost::shared_ptr<visualization_msgs::Marker> finaltipPtr; TODO add final tip frame to see
+	tf::Transform quadtobase;
 
-protected slots:
+
+	protected slots:
 	virtual void wrappertakeoff();
 	virtual void wrapperLand();
 	virtual void wrapperDisarm();
 	virtual void wrapperimu_recalib(int);
-	virtual void perturb_control(int);
+	virtual void follow_trajectory(int);
 	virtual void integrator_control(int);
 	virtual void enable_disablecontroller(int);
 	virtual void enable_disablelog(int);
-	virtual void wrapper_estthrustbias(int);
+	virtual void enable_disablemanualarmctrl(int);
 	virtual void RefreshGui();
+	virtual void Capture_Target();
 };
 
 }

@@ -1,3 +1,7 @@
 vrpn_server_ip: "192.168.1.2"
 vrpn_tracker_id: "pixhawk"
 pubfreq: 200
+bias_vrpnroll: 0.0
+bias_vrpnpitch: 0
+bias_vrpnyaw: 0
+

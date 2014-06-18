@@ -1,7 +1,10 @@
-ctrlr/kpr: 1.5
-ctrlr/kdr: 1.5
-ctrlr/kpt: 0.5
-ctrlr/kdt: 0.5
+ctrlr/kpr: 1
+ctrlr/kdr: 3.0
+ctrlr/kpt: 1.0
+ctrlr/kdt: 1.0
 ctrlr/throtbound: 0.5
 ctrlr/rpbound: 20
 ctrlr/cmdrate_throttle: 2
+ctrlr/targetx: 1.63
+ctrlr/targety: 0.7834
+ctrlr/targetz: 1.26

@@ -60,8 +60,11 @@ class Parser
 		virtual bool reset()=0;//Dont know what to do here specifically
 		virtual bool calibrateimubias()=0;//Calibrate imu of the quadcopter based on sample data
 		virtual bool cmdrpythrust(geometry_msgs::Quaternion &rpytmsg, bool sendyaw = false)=0;//Command the euler angles of the quad and the thrust. the msg format is (x,y,z,w) -> (roll, pitch, yaw, thrust). The thrust value will be adjusted based on whethere there is thrust bias or not.
-		virtual void setarmpwm(std::vector<float> &armpwm)=0;//Command Arm pwm
-		virtual void setarmangles(std::vector<float> &armangles)=0;//Command Arm angles
+		virtual void setarmpwm(double *armpwm)=0;//Command Arm pwm
+		virtual void foldarm()=0;//Command Arm pwm
+		//virtual void setarmpwm(std::vector<float> &armpwm)=0;//Command Arm pwm
+		//virtual void setarmangles(std::vector<float> &armangles)=0;//Command Arm angles
+		virtual void setarmangles(double *armangles)=0;//Command Arm angles This is a bad way of doing it TODO change marin code and my code to make this consistent
 		virtual void estimatethrustbias()=0;
 /*		void setthrustbias(float thrustbias_)
 		{

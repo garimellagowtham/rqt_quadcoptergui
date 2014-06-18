@@ -30,9 +30,9 @@
    <property name="geometry">
     <rect>
      <x>10</x>
-     <y>100</y>
+     <y>140</y>
      <width>311</width>
-     <height>311</height>
+     <height>301</height>
     </rect>
    </property>
   </widget>
@@ -75,7 +75,7 @@
     <string>imu_recalib</string>
    </property>
   </widget>
-  <widget class="QCheckBox" name="thrust_estcheckbox">
+  <widget class="QCheckBox" name="bias_estcheckbox">
    <property name="geometry">
     <rect>
      <x>220</x>
@@ -85,7 +85,7 @@
     </rect>
    </property>
    <property name="text">
-    <string>thrust_est</string>
+    <string>bias_est</string>
    </property>
   </widget>
   <widget class="QPushButton" name="Disarmbutton">
@@ -114,7 +114,7 @@
     <string>enable_ctrl</string>
    </property>
   </widget>
-  <widget class="QCheckBox" name="perturb_checkbox">
+  <widget class="QCheckBox" name="follow_traj">
    <property name="geometry">
     <rect>
      <x>220</x>
@@ -124,7 +124,7 @@
     </rect>
    </property>
    <property name="text">
-    <string>enable_pert</string>
+    <string>traj_on</string>
    </property>
   </widget>
   <widget class="QCheckBox" name="integrator_checkbox">
@@ -151,6 +151,35 @@
    </property>
    <property name="text">
     <string>enable_log</string>
+   </property>
+  </widget>
+  <widget class="QCheckBox" name="enable_joycheckbox">
+   <property name="geometry">
+    <rect>
+     <x>20</x>
+     <y>110</y>
+     <width>101</width>
+     <height>21</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>enable_joy</string>
+   </property>
+   <property name="checked">
+    <bool>true</bool>
+   </property>
+  </widget>
+  <widget class="QPushButton" name="TargetCapturebutton">
+   <property name="geometry">
+    <rect>
+     <x>20</x>
+     <y>480</y>
+     <width>101</width>
+     <height>24</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Target_Capture</string>
    </property>
   </widget>
  </widget>

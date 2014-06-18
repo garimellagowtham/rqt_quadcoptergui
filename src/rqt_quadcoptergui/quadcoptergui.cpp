@@ -45,25 +45,48 @@ QuadcopterGui::QuadcopterGui() : rqt_gui_cpp::Plugin()
 	, enable_logging(false)
 	, reconfiginit(false)
 	, throttlecmdrate(1), ratecount(0)
-	, perturbationon(false), perturb_amp(0), perturb_freq(0), perturb_axis(1)
+	, enable_joy(true)
+	, armcmdrate(4), armratecount(0)
+	, followtraj(false), traj_amp(0), traj_freq(0), traj_skew(1)
 	, joymsg_prevbutton(0), buttoncount(0)
 	, joymsg_prevbutton1(0), buttoncount1(0)
+	, trajectoryPtr(new visualization_msgs::Marker())
+	, targetPtr(new visualization_msgs::Marker())
 	{
 		setObjectName("QuadcopterGui");
 		parser_loader.reset(new pluginlib::ClassLoader<rqt_quadcoptergui::Parser>("rqt_quadcoptergui","rqt_quadcoptergui::Parser"));
 		UV_O.setIdentity();
 		errorrpy.setValue(0,0,0);
-		//frequencies = new float[NSINES]{0.0400,0.0600,0.1400,0.2200,0.4600,1.0601,2.0602,4.4604,9.5808,20.7818};
-		//phases = new float[NSINES]{0.2760,0.6797,0.6551,0.1626,0.1190,0.4984,0.9597,0.3404,0.5853,0.2238};
-		//amplitude = 29.0f/2582.0f;//the amplitude should be scaled down by (Number of sample in the window/2) otherwise there will be disasters :) The max perturbation comes out to 0.3183 using this
-		amplitude = 50.0f/2582.0f;//the amplitude should be scaled down by (Number of sample in the window/2) otherwise there will be disasters :) The max perturbation comes out to 0.3183 using this
-		attenuationcoeff = 0.06;//To decrease the amplitude of high frequency components in stimulus
-		//frequencies = new float[NSINES]{0.0400,0.0600,   0.1000,   0.2200,   0.3400 ,  0.7401 ,  1.3401 ,  2.6202 ,  5.1404 , 10.4209};
-		//phases = new float[NSINES]{ 0.0377,   0.8852,   0.9133,   0.7962,   0.0987,   0.2619,   0.3354,   0.6797,   0.1366,   0.7212};
-		//Indices in FFT: 2           3           7          11          23          53         103         223         479        1039 Hopefully as this is not directly applied
-		frequencies = new float[NSINES]{0.0400,   0.0600,   0.1000,   0.1400,   0.2200,   0.3400,   0.4600,   0.7401,   1.2201,   2.0202};
-		phases = new float[NSINES]{0.0596,  0.6820,   0.0424,   0.0714,   0.5216,   0.0967,   0.8181,   0.8175,   0.7224,   0.1499};
-		armpwm.resize(3);//Number of arms for now just hardcoded
+		target.setValue(0,0,0);//Initializing the target extraction point
+		quadtobase.setIdentity();
+		quadtobase.setOrigin(tf::Vector3(0.0732,0,-0.06));//The z distance needs to adjusted exactly
+		//armpwm.resize(3);//Number of arms for now just hardcoded
+
+		targetPtr->id = 1;
+		targetPtr->ns = "targetpickup";
+		targetPtr->header.frame_id = "/optitrak";
+		targetPtr->action = visualization_msgs::Marker::ADD;
+		targetPtr->pose.orientation.w = 1.0;
+		targetPtr->type = visualization_msgs::Marker::CUBE;
+		targetPtr->scale.x = 0.1;
+		targetPtr->scale.y = 0.1;
+		targetPtr->scale.z = 0.1;
+		targetPtr->color.r = 1.0;
+		targetPtr->color.a = 1.0;
+
+
+		trajectoryPtr->id = 1;
+		trajectoryPtr->points.resize(31);//Just fixed number of points in trajectoryPtr
+		trajectoryPtr->header.frame_id = "/optitrak";
+		trajectoryPtr->ns = "desired_traj";
+		trajectoryPtr->action = visualization_msgs::Marker::ADD;
+		trajectoryPtr->pose.orientation.w = 1.0;
+		trajectoryPtr->id = 1;
+		trajectoryPtr->type = visualization_msgs::Marker::LINE_STRIP;
+		trajectoryPtr->scale.x = 0.05;//Need thick line
+		trajectoryPtr->color.b = 1.0;
+		trajectoryPtr->color.a = 1.0;
+
 		//Indices:  2     3     5     7    11    17    23    37    61   101
 
 		//The sampling frequency is 103.289 and window freq = 0.020017 (Around 50 Sec)
@@ -71,8 +94,6 @@ QuadcopterGui::QuadcopterGui() : rqt_gui_cpp::Plugin()
 
 QuadcopterGui::~QuadcopterGui()
 {
-	delete frequencies;
-	delete phases;
 }
 
 void QuadcopterGui::initPlugin(qt_gui_cpp::PluginContext& context)
@@ -103,6 +124,11 @@ void QuadcopterGui::initPlugin(qt_gui_cpp::PluginContext& context)
 
 	//stringdata_pub = nh.advertise<std_msgs::String>("stringout",1);
 
+	//Load Target:
+	nh.getParam("/ctrlr/targetx",target[0]);
+	nh.getParam("/ctrlr/targety",target[1]);
+	nh.getParam("/ctrlr/targetz",target[2]);
+
 	try
 	{
 		string parserplugin_name;
@@ -132,21 +158,33 @@ void QuadcopterGui::initPlugin(qt_gui_cpp::PluginContext& context)
 	if(testctrlr)
 		ROS_INFO("In Test Controller Mode");
 	connect(ui_.Takeoffbutton, SIGNAL(clicked()), this, SLOT(wrappertakeoff()));
+	connect(ui_.TargetCapturebutton, SIGNAL(clicked()), this, SLOT(Capture_Target()));
 	connect(ui_.Landbutton, SIGNAL(clicked()), this, SLOT(wrapperLand()));
 	connect(ui_.Disarmbutton, SIGNAL(clicked()), this, SLOT(wrapperDisarm()));
 	connect(ui_.imucheckbox,SIGNAL(stateChanged(int)),this,SLOT(wrapperimu_recalib(int)));
-	connect(ui_.perturb_checkbox,SIGNAL(stateChanged(int)),this,SLOT(perturb_control(int)));
+	connect(ui_.follow_traj,SIGNAL(stateChanged(int)),this,SLOT(follow_trajectory(int)));
 	connect(ui_.log_checkbox,SIGNAL(stateChanged(int)),this,SLOT(enable_disablelog(int)));
+	connect(ui_.enable_joycheckbox,SIGNAL(stateChanged(int)),this,SLOT(enable_disablemanualarmctrl(int)));
 	connect(ui_.integrator_checkbox,SIGNAL(stateChanged(int)),this,SLOT(integrator_control(int)));
-	connect(ui_.thrust_estcheckbox,SIGNAL(stateChanged(int)),this,SLOT(wrapper_estthrustbias(int)));
 	connect(ui_.enable_controller,SIGNAL(stateChanged(int)),this,SLOT(enable_disablecontroller(int)));
 	//connect(ui_.ctrlcheckbox,SIGNAL(stateChanged(int)),this,SLOT(switchctrlr(int)));
 
 	//Create a controller instance from the controllers library:
 	//Get the parameter to know whether to test the controller or directly use it. In testing mode, the thrust value is set to be a very small value and roll and pitch are normal. This way you can move and see if it is doing what its supposed to do
 	ctrlrinst.reset(new SetptCtrl(nh));
+	arminst.reset(new gcop::Arm);
+	arminst->l1 = 0.175;
+	//arminst->l2 = 0.35;
+	arminst->l2 = 0.35;
+	arminst->x1 = 0.025;//Need to change this after measuring again TODO
 	parserinstance->getquaddata(data);
 	ctrlrinst->setextbias(data.thrustbias); //Fext initial guess comes from the parser. We will need to estimate it for some quadcopters if its used in commanding it.
+	//bias_vrpn.setValue(2.33*(M_PI/180),-0.3*(M_PI/180),0);
+	bias_vrpn.setValue(0,0,0);
+	nh.getParam("/bias_vrpnroll",bias_vrpn[0]);
+	nh.getParam("/bias_vrpnpitch",bias_vrpn[1]);
+	nh.getParam("/bias_vrpnyaw",bias_vrpn[2]);
+	bias_count = 200;//Initial bias so we dont vary mean very much
 
 	// Logger
 	string logdir = "/home/gowtham";//Default name
@@ -164,10 +202,10 @@ void QuadcopterGui::initPlugin(qt_gui_cpp::PluginContext& context)
 		vrpnfile.precision(9);
 		vrpnfile<<"#Time \t Pos.X \t Pos.Y \t Pos.Z \t Quat.X \t Quat.Y \t Quat.Z \t Quat.W"<<endl;
 		//cmdfile.open(logdir_stamped+"/cmd.dat");//TODO add warning if we cannot open the file
-    parserinstance->setlogdir(logdir_stamped);
-    ctrlrinst->setlogdir(logdir_stamped);
+		parserinstance->setlogdir(logdir_stamped);
+		ctrlrinst->setlogdir(logdir_stamped);
 	}
-	
+
 	//subscribe to vrpndata for now
 	string uav_posename;
 	if(!nh.getParam("/gui/vrpn_pose",uav_posename))
@@ -178,10 +216,12 @@ void QuadcopterGui::initPlugin(qt_gui_cpp::PluginContext& context)
 	vrpndata_sub = nh.subscribe(uav_posename,1,&QuadcopterGui::cmdCallback,this);
 	joydata_sub = nh.subscribe("/joy",1,&QuadcopterGui::joyCallback,this);
 
+	desiredtraj_pub = nh.advertise<visualization_msgs::Marker>("desired_traj", 5);
+
 	//Connect to dynamic reconfigure server:
 	reconfigserver.reset(new dynamic_reconfigure::Server<rqt_quadcoptergui::QuadcopterInterfaceConfig>(nh));
-  reconfigcallbacktype = boost::bind(&QuadcopterGui::paramreqCallback, this, _1, _2);
-  reconfigserver->setCallback(reconfigcallbacktype);
+	reconfigcallbacktype = boost::bind(&QuadcopterGui::paramreqCallback, this, _1, _2);
+	reconfigserver->setCallback(reconfigcallbacktype);
 	//Create timer for moving Goal Dynamically:
 	goaltimer = nh.createTimer(ros::Duration(0.02), &QuadcopterGui::goaltimerCallback,this);//50Hz So the goal can go upto 25 Hz  Nyquist rate
 	goaltimer.stop();
@@ -198,25 +238,31 @@ void QuadcopterGui::RefreshGui()
 	Matrix3x3 rotmat = UV_O.getBasis();
 	tf::Vector3 vrpnrpy;
 	rotmat.getEulerYPR(vrpnrpy[2],vrpnrpy[1],vrpnrpy[0]);
-	errorrpy = vrpnrpy - tf::Vector3(data.rpydata.x, data.rpydata.y,data.rpydata.z);
+	if(ui_.bias_estcheckbox->isChecked())
+	{
+		bias_vrpn += (1/(bias_count+1))*(vrpnrpy - bias_vrpn);
+		bias_count += 1;//Increase the count
+  }
+	errorrpy = (vrpnrpy - bias_vrpn) - tf::Vector3(data.rpydata.x, data.rpydata.y,data.rpydata.z);
 	//errorrpy.setValue(0,0,0);
 	tf::Vector3 quadorigin = UV_O.getOrigin();
 	// Create a Text message based on the data from the Parser class
 	sprintf(buffer,
-			"Battery Percent: %2.2f\t\nTemperature: %2.2f\tPressure: %2.2f\tWindspeed: %2.2f\tAltitude: %2.2f\t\nRoll: %2.2f\tPitch %2.2f\tYaw %2.2f\nMagx: %2.2f\tMagy %2.2f\tMagz %2.2f\naccx: %2.2f\taccy %2.2f\taccz %2.2f\nvelx: %2.2f\tvely %2.2f\tvelz %2.2f\nposx: %2.2f\tposy: %2.2f\tposz: %2.2f\nvrpnr: %2.2f\tvrpnp: %2.2f\tvrpny: %2.2f\nErrorr: %2.2f\tErrorrp: %2.2f\tErrory: %2.2f\nresr: %2.2f\tresp: %2.2f\tresy: %2.2f\trest: %2.2f\nMass: %2.2f\tTimestamp: %2.2f\t\nQuadState: %s", 
+			"Battery Percent: %2.2f\t\nTemperature: %2.2f\tPressure: %2.2f\tWindspeed: %2.2f\tAltitude: %2.2f\t\nRoll: %2.2f\tPitch %2.2f\tYaw %2.2f\nMagx: %2.2f\tMagy %2.2f\tMagz %2.2f\naccx: %2.2f\taccy %2.2f\taccz %2.2f\nvelx: %2.2f\tvely %2.2f\tvelz %2.2f\nposx: %2.2f\tposy: %2.2f\tposz: %2.2f\nvrpnr: %2.2f\tvrpnp: %2.2f\tvrpny: %2.2f\nErrorr: %2.2f\tErrorrp: %2.2f\tErrory: %2.2f\nresr: %2.2f\tresp: %2.2f\tresy: %2.2f\trest: %2.2f\nbias_r: %2.2f\tbias_p: %2.2f\tbias_y: %2.2f\nMass: %2.2f\tTimestamp: %2.2f\t\nQuadState: %s", 
 			data.batterypercent
 			,data.temperature,data.pressure
 			,data.wind_speed, data.altitude
-			,data.rpydata.x*(180/M_PI),data.rpydata.y*(180/M_PI),data.rpydata.z*(180/M_PI)
+			,data.rpydata.x*(180/M_PI),data.rpydata.y*(180/M_PI),data.rpydata.z*(180/M_PI)//IMU rpy angles
 			,data.magdata.x,data.magdata.y,data.magdata.z
 			,data.linacc.x,data.linacc.y,data.linacc.z
 			,data.linvel.x,data.linvel.y,data.linvel.z
 			,quadorigin[0], quadorigin[1], quadorigin[2]
 			,vrpnrpy[0]*(180/M_PI),vrpnrpy[1]*(180/M_PI),vrpnrpy[2]*(180/M_PI)
 			,errorrpy[0]*(180/M_PI),errorrpy[1]*(180/M_PI),errorrpy[2]*(180/M_PI)
-			, (rescmdmsg.x)*(180/M_PI), (rescmdmsg.y)*(180/M_PI), rescmdmsg.z, rescmdmsg.w
+			,(rescmdmsg.x)*(180/M_PI), (rescmdmsg.y)*(180/M_PI), rescmdmsg.z, rescmdmsg.w
+			,bias_vrpn[0]*(180/M_PI),bias_vrpn[1]*(180/M_PI),bias_vrpn[2]*(180/M_PI)
 			,data.mass,data.timestamp,data.quadstate.c_str());
-			//, (rescmdmsg.x-data.rpydata.x)*(180/M_PI), (rescmdmsg.y-data.rpydata.y)*(180/M_PI), rescmdmsg.z*(180/M_PI), rescmdmsg.w
+	//, (rescmdmsg.x-data.rpydata.x)*(180/M_PI), (rescmdmsg.y-data.rpydata.y)*(180/M_PI), rescmdmsg.z*(180/M_PI), rescmdmsg.w
 
 	//Also  add status about the vrpn data and controller errors etc
 
@@ -225,7 +271,7 @@ void QuadcopterGui::RefreshGui()
 }
 
 /*void QuadcopterGui::StringCallback(const std_msgs::String::ConstPtr &stringdata)
-{
+	{
 	ROS_INFO("Hello");
 	qgui_mutex_.lock();
 	str =  QString::fromStdString(stringdata->data);
@@ -234,20 +280,20 @@ void QuadcopterGui::RefreshGui()
 	stringpubdata.data = stringdata->data;
 	stringdata_pub.publish(stringpubdata);
 	refreshtext = true;
-}
-*/
+	}
+ */
 
 
 bool QuadcopterGui::eventFilter(QObject* watched, QEvent* event)
 {
-  if (watched == widget_ && event->type() == QEvent::Close)
-  {
+	if (watched == widget_ && event->type() == QEvent::Close)
+	{
 		ROS_INFO("Closing...");
-    event->ignore();
-    context_->closePlugin();
+		event->ignore();
+		context_->closePlugin();
 		//stringdata_sub.shutdown();
-    return true;
-  }
+		return true;
+	}
 	return QObject::eventFilter(watched, event);
 }
 
@@ -291,19 +337,73 @@ void QuadcopterGui::wrapperDisarm()
 	ui_.enable_controller->setCheckState(Qt::Unchecked);
 }
 
-void QuadcopterGui::wrapper_estthrustbias(int state)
-{
+/*void QuadcopterGui::wrapper_estthrustbias(int state)
+	{
 	if(!parserinstance)
 	{
-		ROS_WARN("Parser Instance not defined. Cannot take off");
-		return;
+	ROS_WARN("Parser Instance not defined. Cannot take off");
+	return;
 	}
 	if(state == Qt::Checked)
 	{
-		parserinstance->estimatethrustbias();
-		parserinstance->getquaddata(data);
-		ctrlrinst->setextbias(data.thrustbias); //Set the new update thrustbias
-		ui_.thrust_estcheckbox->setCheckState(Qt::Unchecked);
+	parserinstance->estimatethrustbias();
+	parserinstance->getquaddata(data);
+	ctrlrinst->setextbias(data.thrustbias); //Set the new update thrustbias
+	}
+	}
+ */
+void QuadcopterGui::enable_disablemanualarmctrl(int state) //This is also useful for folding the arm before landing
+{
+	//Get ros NodeHandle from parent nodelet manager:
+	ros::NodeHandle nh = getNodeHandle();
+	joymsg_prevbutton = 0; buttoncount = 0;
+	joymsg_prevbutton1 = 0; buttoncount1 = 0;
+	//cout<<"________________________I Am called _____________________"<<endl;
+	if(state == Qt::Checked)
+	{
+		enable_joy = true;
+	}
+	else
+	{
+		enable_joy = false;
+	}
+	if(parserinstance)
+		parserinstance->foldarm();//Just fold the arm whenever you switch between two modes
+}
+
+void QuadcopterGui::Capture_Target()
+{
+	if(!ctrlrinst || !parserinstance || !arminst)
+	{
+		ROS_WARN("Cannot find ctrlr or parser or arm");
+		return;
+	}
+	// We want to capture the position of the final target from knowing the transformation of the quadcopter, known joint angles
+	//and  the transformation from quad to base of the arm using forward kinematics
+	buttoncount1 = (buttoncount1+1)%2;
+	//The button should be pressed two times for first time it will open the arm and wait for you to press the second time when it will capture it
+	if(buttoncount1 == 1)
+	{
+		armangles[0] = 0;
+		armangles[1] = 0;
+		armangles[2] = 0;//Neutral This is not an angle
+		parserinstance->setarmangles(armangles);//Set the angles
+	}
+	else if(buttoncount1 == 0)
+	{
+		//Matrix3x3 rotmat = UV_O.getBasis();
+		//tf::Vector3 vrpnrpy;
+		//rotmat.getEulerYPR(vrpnrpy[2],vrpnrpy[1],vrpnrpy[0]);
+		armangles[0] = 0; armangles[1] = 0; armangles[2] = 0;//Set the  current arm angles
+		//The yaw of the quadcopter is directly used no need to set armgoal[0] 
+		double terminal_pos[3];
+		arminst->Fk(terminal_pos,armangles);
+		tf::Vector3 localpos(terminal_pos[0],terminal_pos[1],terminal_pos[2]);
+		target = UV_O*(quadtobase*localpos);//Setting the target with respect to global frame
+		ROS_INFO("Target Position: %f\t%f\t%f",terminal_pos[0],terminal_pos[1],terminal_pos[2]);
+
+		//Done setting the target folding back the arm
+		parserinstance->foldarm();
 	}
 }
 
@@ -392,18 +492,19 @@ void QuadcopterGui::integrator_control(int state)
 	}
 }
 
-void QuadcopterGui::perturb_control(int state)
+void QuadcopterGui::follow_trajectory(int state)
 {
 	if(state == Qt::Checked)
 	{
-		perturbationon = true;
+		followtraj = true;
 	}
 	else if(state == Qt::Unchecked)
 	{
-		perturbationon = false;
+		followtraj = false;
 		goalcount = 1;
 		diff_goal.setValue(0,0,0);//Will set the goal back to the curr_goal without perturbations
 		diff_velgoal.setValue(0,0,0);//Will set the goal back to the curr_goal without perturbations
+		//////Stop the arm movement TODO Also add a checkbox for the arm and uncheck it when not following the trajectory
 	}
 }
 
@@ -412,13 +513,17 @@ void QuadcopterGui::shutdownPlugin()
 	parserinstance.reset();
 	parser_loader.reset();
 	ctrlrinst.reset();
+	arminst.reset();
 	vrpndata_sub.shutdown();
 	reconfigserver.reset();
 	goaltimer.stop();
 	vrpnfile.close();//Close the file
+	trajectoryPtr.reset();
+	targetPtr.reset();
+	desiredtraj_pub.shutdown();
 	//cmdfile.close();//Close the file
-	  //stringdata_sub.shutdown();
-	  //stringdata_pub.shutdown();
+	//stringdata_sub.shutdown();
+	//stringdata_pub.shutdown();
 }
 
 void QuadcopterGui::joyCallback(const sensor_msgs::Joy::ConstPtr &joymsg)
@@ -431,38 +536,43 @@ void QuadcopterGui::joyCallback(const sensor_msgs::Joy::ConstPtr &joymsg)
 	//cout<<"Arm pwm: "<<joymsg->axes[0]<<"\t"<<joymsg->axes[1]<<"\t"<<joymsg->axes[2]<<"\t"<<joymsg->axes[3]<<"\t"<<endl;
 	if((joymsg->buttons[0] - joymsg_prevbutton) > 0)
 	{
-		buttoncount = (buttoncount+1)%2;
+		buttoncount = (buttoncount+1)%3;
+		cout<<buttoncount<<endl;
 	}
 	joymsg_prevbutton = joymsg->buttons[0];
-	if(buttoncount == 0)
-		armpwm[2] = -0.7;
-	else
-		armpwm[2] = 0.7;
+	if(buttoncount == 0)//Three state gripper
+		armpwm[2] = 0;//Neutral
+	else if(buttoncount == 1)
+		armpwm[2] = -0.3; //Hold
+	else if(buttoncount == 2)
+		armpwm[2] = 0.3;//Release
 	//For starting to move arm:
 
-	if((joymsg->buttons[1] - joymsg_prevbutton1) > 0)
+	if(enable_joy)//If the joystick is not enable return
 	{
-		buttoncount1 = (buttoncount1+1)%2;
-	}
-	joymsg_prevbutton1 = joymsg->buttons[1];
-	if(buttoncount1 == 0)
-	{
-		if(startcontrol)//For now not using data.armed for arm
+		if((joymsg->buttons[1] - joymsg_prevbutton1) > 0)
+		{
+			buttoncount1 = (buttoncount1+1)%2;
+			cout<<buttoncount1<<endl;
+		}
+		joymsg_prevbutton1 = joymsg->buttons[1];
+		if(buttoncount1 == 1)
 		{
 			armpwm[0] = joymsg->axes[1];
 			armpwm[1] = joymsg->axes[0];//Will convert them also into angles later
 			parserinstance->setarmpwm(armpwm);
+			cout<<"Settting armpwm"<<endl;
 		}
-	}
-	else
-	{
-		armpwm[0] =42.5 ;//Default values for the arm to stay at
-		armpwm[1] =42.5 ;//Default values for the arm to stay at
-		parserinstance->setarmangles(armpwm);//Absolute angle command
+		else
+		{
+			parserinstance->foldarm();
+		}
 	}
 }
 void QuadcopterGui::cmdCallback(const geometry_msgs::TransformStamped::ConstPtr &currframe)
 {
+	//static tf::TransformBroadcaster br;
+	/////Add arm angle setting based on current posn and goal for the final tip TODO
 	/*	if(data.quadstate != "Flying")
 			{
 			transformStampedMsgToTF(*currframe,UV_O);//converts to the right format 
@@ -491,15 +601,56 @@ void QuadcopterGui::cmdCallback(const geometry_msgs::TransformStamped::ConstPtr 
 	{
 		rescmdmsg.w = 0.2*data.thrustbias;
 	}
+	//Computing the arm angles
+	//Convert the extraction point into local frame:
+	tf::Vector3 localtarget = (UV_O*quadtobase).inverse()*target;
+	//cout<<"Local Target: "<<localtarget[0]<<"\t"<<localtarget[1]<<"\t"<<localtarget[2]<<endl;
+	armlocaltarget[0] = localtarget[0]; armlocaltarget[1] = localtarget[1]; armlocaltarget[2] = localtarget[2];
+	double armres = arminst->Ik(as,armlocaltarget);
+	//cout<<"Metric for in workspace or not: "<<armres<<endl;
+	//Workspace constraints are not considered but joint constraints are considered in pixhawk
+	//No need to map angles just pass them directly
+	//Use always lower elbow solution i.e second one in the above soln
+	//armangles[2] this is gripper will have to see how to close gripper too
+	//int solnindex = 0;//Upper Elbow when localtargetz > 0
+	//if(localtarget[2] < 0)
+	int	solnindex = 1;//When localtargetz < 0 //For now only choosing lower elbow
+	//Convert the angles into right frame i.e the arm angles = 0 means it is x+ straightened
+	armangles[0] = as[solnindex][1]>(-M_PI/2)?as[solnindex][1]-M_PI/2:as[solnindex][1]+1.5*M_PI;
+	//armangles[1] = as[solnindex][2]>(-M_PI/2)?as[solnindex][2]-M_PI/2:as[solnindex][2]+1.5*M_PI;
+	armangles[1] = as[solnindex][2];//Relative angle wrt to first joint no transformation needed
+	armangles[2] = armpwm[2];//Using the joystick for gripping	
+	//cout<<"Resulting arm angles"<<as[solnindex][0]<<"\t"<<armangles[0]<<"\t"<<armangles[1]<<endl;
+
+	if(!enable_joy)
+	{
+		if((++armratecount == armcmdrate))//default makes it 25 Hz
+		{
+			armratecount = 0;
+			if(arminst && parserinstance) //Can also add startcontrol flag for starting this only when controller has started TODO
+			{
+				if(armres > -0.1) //Check if in reachable workspace
+				{
+					//Set the goal yaw of the quadcopter goalyaw
+					goalyaw = as[solnindex][0];//Target yaw for Quadcopter
+					parserinstance->setarmangles(armangles);
+				}
+				else
+				{
+					parserinstance->foldarm();
+				}
+			}
+		}
+	}
 	if(data.armed && startcontrol)
 	{
 		if((++ratecount) == throttlecmdrate)//Throttling down the rate of sending commands to the uav
 		{
 			ratecount = 0;
-			parserinstance->cmdrpythrust(rescmdmsg,true);//Also controlling yaw
+			parserinstance->cmdrpythrust(rescmdmsg,true);//Also controlling yaw	
 			//ROS_INFO("Setting cmd");
 		}
-	}
+	}	
 	if(enable_logging)
 	{
 		//Logging save to file
@@ -507,10 +658,10 @@ void QuadcopterGui::cmdCallback(const geometry_msgs::TransformStamped::ConstPtr 
 	}	
 	if(!data.armed)//Once the quadcopter is armed we do not set the goal position to quad's origin, the user will set the goal. But the goal will not move until u set the enable_control The user should not give random goal once it is initialized.
 	{
-			curr_goal = UV_O.getOrigin();//set the current goal to be same as the quadcopter origin we dont care abt the orientation as of now
-		  ctrlrinst->setgoal(curr_goal[0],curr_goal[1],curr_goal[2],goalyaw);//Set the goal to be same as the current position of the quadcopter the velgoal is by default 0
+		curr_goal = UV_O.getOrigin();//set the current goal to be same as the quadcopter origin we dont care abt the orientation as of now
+		ctrlrinst->setgoal(curr_goal[0],curr_goal[1],curr_goal[2],goalyaw);//Set the goal to be same as the current position of the quadcopter the velgoal is by default 0
 	}
-	
+
 	//Set the altitude of the quadcopter in the data
 	parserinstance->setaltitude(currframe->transform.translation.z);
 	//#ifdef PRINT
@@ -537,11 +688,19 @@ void QuadcopterGui::paramreqCallback(rqt_quadcoptergui::QuadcopterInterfaceConfi
 		ros::param::get("/ctrlr/throtbound",config.throtbound);
 		ros::param::get("/ctrlr/rpbound",config.rpbound);
 		ros::param::get("/ctrlr/cmdrate_throttle",config.cmdrate_throttle);
-		ros::param::get("/ctrlr/perturb_amp",config.perturb_amp);
-		ros::param::get("/ctrlr/perturb_freq",config.perturb_freq);
-		ros::param::get("/ctrlr/perturb_axis",config.perturb_axis);
+		ros::param::get("/ctrlr/traj_amp",config.traj_amp);
+		ros::param::get("/ctrlr/traj_freq",config.traj_freq);
 		reconfiginit = true;
 	}
+	ctrlrinst->setgains(config.kpr, config.kdr, config.kpt, config.kdt, config.kit);
+	ctrlrinst->setbounds(config.throtbound, (M_PI/180.0)*config.rpbound);//This throttle bound is different from throttle bias which needs to be estimated for some quadcopters. This just cuts off the throttle values that are beyond thrustbias +/- throtbound
+
+	throttlecmdrate = config.cmdrate_throttle;
+
+	//setting perturbation parameters
+	traj_freq = config.traj_freq;
+	traj_amp = config.traj_amp;
+	traj_skew = config.traj_skew;
 	if(level&0x0002)
 	{
 		tf::Vector3 quadorigin = UV_O.getOrigin();
@@ -563,17 +722,21 @@ void QuadcopterGui::paramreqCallback(rqt_quadcoptergui::QuadcopterInterfaceConfi
 			//goaltimer.start();
 			//diff_goal.setValue(0, 0, (-curr_goal[2] + config.zg)/goalcount);
 		}
-
 	}
-	ctrlrinst->setgains(config.kpr, config.kdr, config.kpt, config.kdt, config.kit);
-	ctrlrinst->setbounds(config.throtbound, (M_PI/180.0)*config.rpbound);//This throttle bound is different from throttle bias which needs to be estimated for some quadcopters. This just cuts off the throttle values that are beyond thrustbias +/- throtbound
+	//publish a trajectory marker
+	for(int count1 = 0;count1 <= 30;count1++)
+	{
+		trajectoryPtr->points[count1].x = config.xg + traj_amp*cos((count1/30.0)*2*M_PI);
+		trajectoryPtr->points[count1].y = config.yg;
+		trajectoryPtr->points[count1].z = config.zg + traj_amp*traj_skew*sin((count1/30.0)*2*M_PI);
+	}
+	targetPtr->pose.position.x = target[0];
+	targetPtr->pose.position.y = target[1];
+	targetPtr->pose.position.z = target[2];
+	desiredtraj_pub.publish(trajectoryPtr);
+	desiredtraj_pub.publish(targetPtr);
 
-	throttlecmdrate = config.cmdrate_throttle;
-
-	//setting perturbation parameters
-	perturb_freq = config.perturb_freq;
-	perturb_amp = config.perturb_amp;
-	perturb_axis = config.perturb_axis;
+	//traj_axis = config.traj_axis;
 	//corrected_thrustbias = config.add_thrustbias + data.thrustbias;
 	//ctrlrinst->setextbias(corrected_thrustbias);//Set the corrected thrustbias
 }
@@ -583,12 +746,12 @@ void QuadcopterGui::goaltimerCallback(const ros::TimerEvent &event)
 {
 	//if(data.quadstate == "Flying")
 	//{
-	if(!perturbationon)
+	if(!followtraj)
 	{
 		if(goalcount > 0)
 		{
 			curr_goal = curr_goal + diff_goal;
-			cout<<curr_goal[0]<<"\t"<<curr_goal[1]<<"\t"<<curr_goal[2]<<endl;
+			//cout<<curr_goal[0]<<"\t"<<curr_goal[1]<<"\t"<<curr_goal[2]<<endl;
 			if(!ctrlrinst)
 			{
 				ROS_WARN("Controller not instantiated");
@@ -597,34 +760,17 @@ void QuadcopterGui::goaltimerCallback(const ros::TimerEvent &event)
 			ctrlrinst->setgoal(curr_goal[0],curr_goal[1],curr_goal[2],goalyaw);//By default the vel = 0;
 			goalcount--;
 		}
-		perturbtime_offset = ros::Time::now();
+		trajtime_offset = ros::Time::now();
 	}
 	else
 	{ 
-		ros::Duration currduration = ros::Time::now() - perturbtime_offset;
-		float signal = 0, signalder = 0;
-		for(int count1 = 0;count1 < NSINES;count1++)
-		{
-			signal += amplitude*(1/pow(frequencies[count1]/50,attenuationcoeff))*sin(2*M_PI*(frequencies[count1]*currduration.toSec()+phases[count1]));
-			signalder += 2*M_PI*(1/pow(frequencies[count1]/50,attenuationcoeff))*frequencies[count1]*amplitude*cos(2*M_PI*(frequencies[count1]*currduration.toSec()+phases[count1]));
-		}
+		ros::Duration currduration = ros::Time::now() - trajtime_offset;
+		float anglearg = 2*M_PI*traj_freq*currduration.toSec();
+		//	float signal = 0, signalder = 0;
+
 		//cout<<"Signal: "<<signal<<"\t Signalder: "<<signalder<<endl;
-		switch(perturb_axis)
-		{
-			case 1:
-				//Adding sum of sines input given that the single sing input is done
-				diff_goal.setValue(signal, 0, 0);
-				diff_velgoal.setValue(signalder,0,0);
-				break;
-			case 2:
-				diff_goal.setValue(0,signal,0);
-				diff_velgoal.setValue(0,signalder,0);
-				break;
-			case 3:
-				diff_goal.setValue(0,0,signal);
-				diff_velgoal.setValue(0,0,signalder);
-				break;
-		}
+		diff_goal.setValue(traj_amp*cos(anglearg),0,traj_amp*traj_skew*sin(anglearg));//Can add axis for the trajectory too
+		diff_velgoal.setValue(-traj_amp*2*M_PI*traj_freq*sin(anglearg),0,traj_skew*traj_amp*2*M_PI*traj_freq*cos(anglearg));//Can make this ellipse/hyperbola by adding two more parameters a, b
 		tf::Vector3 final_goal = curr_goal + diff_goal;
 		ctrlrinst->setgoal(final_goal[0],final_goal[1],final_goal[2],goalyaw,diff_velgoal[0], diff_velgoal[1], diff_velgoal[2]);
 	}

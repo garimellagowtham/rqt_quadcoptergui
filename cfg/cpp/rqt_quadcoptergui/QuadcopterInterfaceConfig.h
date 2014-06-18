@@ -275,10 +275,10 @@ class DEFAULT
         if("yawg"==(*i)->name){yawg = boost::any_cast<double>(val);}
         if("throtbound"==(*i)->name){throtbound = boost::any_cast<double>(val);}
         if("rpbound"==(*i)->name){rpbound = boost::any_cast<double>(val);}
-        if("perturb_amp"==(*i)->name){perturb_amp = boost::any_cast<double>(val);}
-        if("perturb_freq"==(*i)->name){perturb_freq = boost::any_cast<double>(val);}
+        if("traj_amp"==(*i)->name){traj_amp = boost::any_cast<double>(val);}
+        if("traj_skew"==(*i)->name){traj_skew = boost::any_cast<double>(val);}
+        if("traj_freq"==(*i)->name){traj_freq = boost::any_cast<double>(val);}
         if("cmdrate_throttle"==(*i)->name){cmdrate_throttle = boost::any_cast<int>(val);}
-        if("perturb_axis"==(*i)->name){perturb_axis = boost::any_cast<int>(val);}
       }
     }
 
@@ -294,10 +294,10 @@ double zg;
 double yawg;
 double throtbound;
 double rpbound;
-double perturb_amp;
-double perturb_freq;
+double traj_amp;
+double traj_skew;
+double traj_freq;
 int cmdrate_throttle;
-int perturb_axis;
 
     bool state;
     std::string name;
@@ -332,13 +332,13 @@ int perturb_axis;
 //#line 259 "/opt/ros/fuerte/stacks/dynamic_reconfigure/src/dynamic_reconfigure/parameter_generator.py"
       double rpbound;
 //#line 259 "/opt/ros/fuerte/stacks/dynamic_reconfigure/src/dynamic_reconfigure/parameter_generator.py"
-      double perturb_amp;
+      double traj_amp;
 //#line 259 "/opt/ros/fuerte/stacks/dynamic_reconfigure/src/dynamic_reconfigure/parameter_generator.py"
-      double perturb_freq;
+      double traj_skew;
+//#line 259 "/opt/ros/fuerte/stacks/dynamic_reconfigure/src/dynamic_reconfigure/parameter_generator.py"
+      double traj_freq;
 //#line 259 "/opt/ros/fuerte/stacks/dynamic_reconfigure/src/dynamic_reconfigure/parameter_generator.py"
       int cmdrate_throttle;
-//#line 259 "/opt/ros/fuerte/stacks/dynamic_reconfigure/src/dynamic_reconfigure/parameter_generator.py"
-      int perturb_axis;
 //#line 255 "/opt/ros/fuerte/stacks/dynamic_reconfigure/templates/ConfigType.h"
 
     bool __fromMessage__(dynamic_reconfigure::Config &msg)
@@ -535,9 +535,9 @@ QuadcopterInterfaceConfig::GroupDescription<QuadcopterInterfaceConfig::DEFAULT, 
 //#line 259 "/opt/ros/fuerte/stacks/dynamic_reconfigure/src/dynamic_reconfigure/parameter_generator.py"
       __param_descriptions__.push_back(QuadcopterInterfaceConfig::AbstractParamDescriptionConstPtr(new QuadcopterInterfaceConfig::ParamDescription<int>("goalT", "int", 0, "Time to reach goal", "", &QuadcopterInterfaceConfig::goalT)));
 //#line 259 "/opt/ros/fuerte/stacks/dynamic_reconfigure/src/dynamic_reconfigure/parameter_generator.py"
-      __min__.xg = -3.0;
+      __min__.xg = 0.1;
 //#line 259 "/opt/ros/fuerte/stacks/dynamic_reconfigure/src/dynamic_reconfigure/parameter_generator.py"
-      __max__.xg = 3.0;
+      __max__.xg = 1.6;
 //#line 259 "/opt/ros/fuerte/stacks/dynamic_reconfigure/src/dynamic_reconfigure/parameter_generator.py"
       __default__.xg = 0.0;
 //#line 259 "/opt/ros/fuerte/stacks/dynamic_reconfigure/src/dynamic_reconfigure/parameter_generator.py"
@@ -545,9 +545,9 @@ QuadcopterInterfaceConfig::GroupDescription<QuadcopterInterfaceConfig::DEFAULT, 
 //#line 259 "/opt/ros/fuerte/stacks/dynamic_reconfigure/src/dynamic_reconfigure/parameter_generator.py"
       __param_descriptions__.push_back(QuadcopterInterfaceConfig::AbstractParamDescriptionConstPtr(new QuadcopterInterfaceConfig::ParamDescription<double>("xg", "double", 2, "Final xposn", "", &QuadcopterInterfaceConfig::xg)));
 //#line 259 "/opt/ros/fuerte/stacks/dynamic_reconfigure/src/dynamic_reconfigure/parameter_generator.py"
-      __min__.yg = -3.0;
+      __min__.yg = 0.0;
 //#line 259 "/opt/ros/fuerte/stacks/dynamic_reconfigure/src/dynamic_reconfigure/parameter_generator.py"
-      __max__.yg = 3.0;
+      __max__.yg = 0.9;
 //#line 259 "/opt/ros/fuerte/stacks/dynamic_reconfigure/src/dynamic_reconfigure/parameter_generator.py"
       __default__.yg = 0.0;
 //#line 259 "/opt/ros/fuerte/stacks/dynamic_reconfigure/src/dynamic_reconfigure/parameter_generator.py"
@@ -557,7 +557,7 @@ QuadcopterInterfaceConfig::GroupDescription<QuadcopterInterfaceConfig::DEFAULT, 
 //#line 259 "/opt/ros/fuerte/stacks/dynamic_reconfigure/src/dynamic_reconfigure/parameter_generator.py"
       __min__.zg = 0.0;
 //#line 259 "/opt/ros/fuerte/stacks/dynamic_reconfigure/src/dynamic_reconfigure/parameter_generator.py"
-      __max__.zg = 4.0;
+      __max__.zg = 1.9;
 //#line 259 "/opt/ros/fuerte/stacks/dynamic_reconfigure/src/dynamic_reconfigure/parameter_generator.py"
       __default__.zg = 0.0;
 //#line 259 "/opt/ros/fuerte/stacks/dynamic_reconfigure/src/dynamic_reconfigure/parameter_generator.py"
@@ -595,25 +595,35 @@ QuadcopterInterfaceConfig::GroupDescription<QuadcopterInterfaceConfig::DEFAULT, 
 //#line 259 "/opt/ros/fuerte/stacks/dynamic_reconfigure/src/dynamic_reconfigure/parameter_generator.py"
       __param_descriptions__.push_back(QuadcopterInterfaceConfig::AbstractParamDescriptionConstPtr(new QuadcopterInterfaceConfig::ParamDescription<double>("rpbound", "double", 0, "Max roll/pitch value in deg", "", &QuadcopterInterfaceConfig::rpbound)));
 //#line 259 "/opt/ros/fuerte/stacks/dynamic_reconfigure/src/dynamic_reconfigure/parameter_generator.py"
-      __min__.perturb_amp = 0.0;
+      __min__.traj_amp = 0.0;
 //#line 259 "/opt/ros/fuerte/stacks/dynamic_reconfigure/src/dynamic_reconfigure/parameter_generator.py"
-      __max__.perturb_amp = 0.3;
+      __max__.traj_amp = 0.3;
 //#line 259 "/opt/ros/fuerte/stacks/dynamic_reconfigure/src/dynamic_reconfigure/parameter_generator.py"
-      __default__.perturb_amp = 0.2;
+      __default__.traj_amp = 0.2;
 //#line 259 "/opt/ros/fuerte/stacks/dynamic_reconfigure/src/dynamic_reconfigure/parameter_generator.py"
-      Default.abstract_parameters.push_back(QuadcopterInterfaceConfig::AbstractParamDescriptionConstPtr(new QuadcopterInterfaceConfig::ParamDescription<double>("perturb_amp", "double", 0, "Amplitude of perturbation in m", "", &QuadcopterInterfaceConfig::perturb_amp)));
+      Default.abstract_parameters.push_back(QuadcopterInterfaceConfig::AbstractParamDescriptionConstPtr(new QuadcopterInterfaceConfig::ParamDescription<double>("traj_amp", "double", 0, "Amplitude of perturbation in m", "", &QuadcopterInterfaceConfig::traj_amp)));
 //#line 259 "/opt/ros/fuerte/stacks/dynamic_reconfigure/src/dynamic_reconfigure/parameter_generator.py"
-      __param_descriptions__.push_back(QuadcopterInterfaceConfig::AbstractParamDescriptionConstPtr(new QuadcopterInterfaceConfig::ParamDescription<double>("perturb_amp", "double", 0, "Amplitude of perturbation in m", "", &QuadcopterInterfaceConfig::perturb_amp)));
+      __param_descriptions__.push_back(QuadcopterInterfaceConfig::AbstractParamDescriptionConstPtr(new QuadcopterInterfaceConfig::ParamDescription<double>("traj_amp", "double", 0, "Amplitude of perturbation in m", "", &QuadcopterInterfaceConfig::traj_amp)));
 //#line 259 "/opt/ros/fuerte/stacks/dynamic_reconfigure/src/dynamic_reconfigure/parameter_generator.py"
-      __min__.perturb_freq = 0.0;
+      __min__.traj_skew = 0.0;
 //#line 259 "/opt/ros/fuerte/stacks/dynamic_reconfigure/src/dynamic_reconfigure/parameter_generator.py"
-      __max__.perturb_freq = 5.0;
+      __max__.traj_skew = 1.0;
 //#line 259 "/opt/ros/fuerte/stacks/dynamic_reconfigure/src/dynamic_reconfigure/parameter_generator.py"
-      __default__.perturb_freq = 1.0;
+      __default__.traj_skew = 1.0;
 //#line 259 "/opt/ros/fuerte/stacks/dynamic_reconfigure/src/dynamic_reconfigure/parameter_generator.py"
-      Default.abstract_parameters.push_back(QuadcopterInterfaceConfig::AbstractParamDescriptionConstPtr(new QuadcopterInterfaceConfig::ParamDescription<double>("perturb_freq", "double", 0, "Freq of perturbation in Hz", "", &QuadcopterInterfaceConfig::perturb_freq)));
+      Default.abstract_parameters.push_back(QuadcopterInterfaceConfig::AbstractParamDescriptionConstPtr(new QuadcopterInterfaceConfig::ParamDescription<double>("traj_skew", "double", 0, "Decreases amplitude of z wrt x", "", &QuadcopterInterfaceConfig::traj_skew)));
 //#line 259 "/opt/ros/fuerte/stacks/dynamic_reconfigure/src/dynamic_reconfigure/parameter_generator.py"
-      __param_descriptions__.push_back(QuadcopterInterfaceConfig::AbstractParamDescriptionConstPtr(new QuadcopterInterfaceConfig::ParamDescription<double>("perturb_freq", "double", 0, "Freq of perturbation in Hz", "", &QuadcopterInterfaceConfig::perturb_freq)));
+      __param_descriptions__.push_back(QuadcopterInterfaceConfig::AbstractParamDescriptionConstPtr(new QuadcopterInterfaceConfig::ParamDescription<double>("traj_skew", "double", 0, "Decreases amplitude of z wrt x", "", &QuadcopterInterfaceConfig::traj_skew)));
+//#line 259 "/opt/ros/fuerte/stacks/dynamic_reconfigure/src/dynamic_reconfigure/parameter_generator.py"
+      __min__.traj_freq = 0.0;
+//#line 259 "/opt/ros/fuerte/stacks/dynamic_reconfigure/src/dynamic_reconfigure/parameter_generator.py"
+      __max__.traj_freq = 5.0;
+//#line 259 "/opt/ros/fuerte/stacks/dynamic_reconfigure/src/dynamic_reconfigure/parameter_generator.py"
+      __default__.traj_freq = 1.0;
+//#line 259 "/opt/ros/fuerte/stacks/dynamic_reconfigure/src/dynamic_reconfigure/parameter_generator.py"
+      Default.abstract_parameters.push_back(QuadcopterInterfaceConfig::AbstractParamDescriptionConstPtr(new QuadcopterInterfaceConfig::ParamDescription<double>("traj_freq", "double", 0, "Freq of Trajectory in Hz", "", &QuadcopterInterfaceConfig::traj_freq)));
+//#line 259 "/opt/ros/fuerte/stacks/dynamic_reconfigure/src/dynamic_reconfigure/parameter_generator.py"
+      __param_descriptions__.push_back(QuadcopterInterfaceConfig::AbstractParamDescriptionConstPtr(new QuadcopterInterfaceConfig::ParamDescription<double>("traj_freq", "double", 0, "Freq of Trajectory in Hz", "", &QuadcopterInterfaceConfig::traj_freq)));
 //#line 259 "/opt/ros/fuerte/stacks/dynamic_reconfigure/src/dynamic_reconfigure/parameter_generator.py"
       __min__.cmdrate_throttle = 1;
 //#line 259 "/opt/ros/fuerte/stacks/dynamic_reconfigure/src/dynamic_reconfigure/parameter_generator.py"
@@ -624,16 +634,6 @@ QuadcopterInterfaceConfig::GroupDescription<QuadcopterInterfaceConfig::DEFAULT, 
       Default.abstract_parameters.push_back(QuadcopterInterfaceConfig::AbstractParamDescriptionConstPtr(new QuadcopterInterfaceConfig::ParamDescription<int>("cmdrate_throttle", "int", 0, "Reduce cmd publishing rate", "", &QuadcopterInterfaceConfig::cmdrate_throttle)));
 //#line 259 "/opt/ros/fuerte/stacks/dynamic_reconfigure/src/dynamic_reconfigure/parameter_generator.py"
       __param_descriptions__.push_back(QuadcopterInterfaceConfig::AbstractParamDescriptionConstPtr(new QuadcopterInterfaceConfig::ParamDescription<int>("cmdrate_throttle", "int", 0, "Reduce cmd publishing rate", "", &QuadcopterInterfaceConfig::cmdrate_throttle)));
-//#line 259 "/opt/ros/fuerte/stacks/dynamic_reconfigure/src/dynamic_reconfigure/parameter_generator.py"
-      __min__.perturb_axis = 1;
-//#line 259 "/opt/ros/fuerte/stacks/dynamic_reconfigure/src/dynamic_reconfigure/parameter_generator.py"
-      __max__.perturb_axis = 3;
-//#line 259 "/opt/ros/fuerte/stacks/dynamic_reconfigure/src/dynamic_reconfigure/parameter_generator.py"
-      __default__.perturb_axis = 1;
-//#line 259 "/opt/ros/fuerte/stacks/dynamic_reconfigure/src/dynamic_reconfigure/parameter_generator.py"
-      Default.abstract_parameters.push_back(QuadcopterInterfaceConfig::AbstractParamDescriptionConstPtr(new QuadcopterInterfaceConfig::ParamDescription<int>("perturb_axis", "int", 0, "Axis x,y,z(1,2,3)", "", &QuadcopterInterfaceConfig::perturb_axis)));
-//#line 259 "/opt/ros/fuerte/stacks/dynamic_reconfigure/src/dynamic_reconfigure/parameter_generator.py"
-      __param_descriptions__.push_back(QuadcopterInterfaceConfig::AbstractParamDescriptionConstPtr(new QuadcopterInterfaceConfig::ParamDescription<int>("perturb_axis", "int", 0, "Axis x,y,z(1,2,3)", "", &QuadcopterInterfaceConfig::perturb_axis)));
 //#line 233 "/opt/ros/fuerte/stacks/dynamic_reconfigure/src/dynamic_reconfigure/parameter_generator.py"
       Default.convertParams();
 //#line 233 "/opt/ros/fuerte/stacks/dynamic_reconfigure/src/dynamic_reconfigure/parameter_generator.py"

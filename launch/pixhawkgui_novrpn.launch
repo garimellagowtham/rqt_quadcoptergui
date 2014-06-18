@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<launch>
+	<arg name="port" default="/dev/ttyUSB0"/>
+	<arg name="dev" default="/dev/input/js1"/>
+  <rosparam command="load" file="$(find rqt_quadcoptergui)/params/pixhawkgui_params.yaml" />
+	<rosparam command="load" file="$(find rqt_quadcoptergui)/params/pixhawk_ctrlr.yaml"/>
+	<param name="baud" type="int" value="57600"/>
+	<param name="/gui/logdir" type="string" value="$(find rqt_quadcoptergui)/logfiles"/>
+  <node pkg="rqt_gui" type="rqt_gui" name="gui" output="screen"/>
+	<node pkg="mavlink_ros" name="serial_link" type="mavlink_ros_serial" args= "-p $(arg port)"/>
+	<node pkg="joy" type="joy_node" name="joy_node">
+		<param name="dev" type="string" value="$(arg dev)"/>
+	</node>
+</launch>

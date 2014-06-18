@@ -4,7 +4,7 @@
 %cd session12_May_2014_08_27_32_AM/ %Z posn
 %cd session12_May_2014_02_09_19_AM/ %Single sine with freq = (1/2*pi)Hz
 %cd session12_May_2014_06_29_38_AM/
- cd session12_May_2014_01_13_38_AM/
+ cd session22_May_2014_11_21_21_PM/
 RC_MIN = [1108,1103,1105,1101];
 RC_MAX = [1932,1929,1926,1926];
 cmd = importdata('cmd.dat','\t',1);
@@ -13,6 +13,9 @@ vrpn = importdata('vrpn.dat','\t',1);
 vrpntime = (vrpn.data(:,1) - vrpn.data(1,1))/1e9;
 %servotime = (servo.data(:,1) - vrpn.data(1,1))/1e9;
 vrpnrpy = quat2rpy([vrpn.data(:,8) vrpn.data(:,5:7)]);
+% for count1 = 1:3
+%     vrpnrpy(:,count1) = vrpnrpy(:,count1) - bias_vrpn(count1);
+% end
 figure(1), clf;
 subplot(2,2,1), plot(vrpntime,vrpn.data(:,2)), xlabel('time(sec)'), ylabel('x(t)');
 subplot(2,2,2), plot(vrpntime,vrpn.data(:,3)), xlabel('time(sec)'), ylabel('y(t)');
@@ -24,12 +27,12 @@ subplot(2,1,2), plot(vrpntime,vrpnrpy(:,3)*(180/pi)), xlabel('time(sec)'), ylabe
 if ~exist('imu.dat','file')
     return;
 end
-% imu = importdata('imu.dat','\t',1);
-% imutime = (imu.data(:,1) - vrpn.data(1,1))/1e9;
-% figure(2);
-% subplot(2,2,1),hold on, plot(imutime,imu.data(:,2)*(180/pi),'r');
-% subplot(2,2,2),hold on, plot(imutime,imu.data(:,3)*(180/pi),'r');
-% subplot(2,1,2),hold on, plot(imutime,imu.data(:,4)*(180/pi),'r');
+imu = importdata('imu.dat','\t',1);
+imutime = (imu.data(:,1) - vrpn.data(1,1))/1e9;
+figure(2);
+subplot(2,2,1),hold on, plot(imutime,imu.data(:,2)*(180/pi),'r');
+subplot(2,2,2),hold on, plot(imutime,imu.data(:,3)*(180/pi),'r');
+subplot(2,1,2),hold on, plot(imutime,imu.data(:,4)*(180/pi),'r');
 if sum(size(cmd.data)) > 0
     cmdtime = (cmd.data(:,1) - vrpn.data(1,1))/1e9;
     rcmd = mapouttoin([RC_MIN(1),RC_MAX(1),-pi/4,pi/4], cmd.data(:,2));
@@ -49,7 +52,7 @@ end
 ctrlr = importdata('ctrl.dat','\t',1);
 ctrlrtime = (ctrlr.data(:,1) - vrpn.data(1,1))/1e9;
 cd ..
-%% Frequency domain analysis:
+m%% Frequency domain analysis:
 %tstart = 52.18; tend = 90.16;%Can check periodicity later %20.3 %2_09
 %tstart = 18.91; tend = 63.58;%Could not get full window size will have
 %some problems 6_29

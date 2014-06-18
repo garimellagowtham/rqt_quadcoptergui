@@ -13,10 +13,10 @@
   <param name="yawg" type="double" value="0.0" />
   <param name="throtbound" type="double" value="0.2" />
   <param name="rpbound" type="double" value="20.0" />
-  <param name="perturb_amp" type="double" value="0.2" />
-  <param name="perturb_freq" type="double" value="1.0" />
+  <param name="traj_amp" type="double" value="0.2" />
+  <param name="traj_skew" type="double" value="1.0" />
+  <param name="traj_freq" type="double" value="1.0" />
   <param name="cmdrate_throttle" type="int" value="1" />
-  <param name="perturb_axis" type="int" value="1" />
 </node>
 \endverbatim
 
