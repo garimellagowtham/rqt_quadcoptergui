@@ -4,3 +4,4 @@ logfiles/
 build/
 lib/
 bin/
+*.ogv
