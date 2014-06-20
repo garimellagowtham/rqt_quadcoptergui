@@ -44,7 +44,7 @@
 #include <rqt_gui_cpp/plugin.h>
 #include <rqt_quadcoptergui/ui_QuadCopterwidget.h>
 
-#include "rqt_quadcoptergui/parser.h"
+#include "parsernode/parser.h"
 
 #include <boost/thread/mutex.hpp>
 
@@ -122,11 +122,11 @@ protected:
 	//bool refreshtext;
 
 	//Parser Library to communicate with quadcopter
-	boost::shared_ptr<pluginlib::ClassLoader<rqt_quadcoptergui::Parser> > parser_loader;
-	boost::shared_ptr<rqt_quadcoptergui::Parser> parserinstance;
+	boost::shared_ptr<pluginlib::ClassLoader<parsernode::Parser> > parser_loader;
+	boost::shared_ptr<parsernode::Parser> parserinstance;
 
 	char buffer[600];//buffer for creating Qstring data
-	rqt_quadcoptergui::common::quaddata data;//Quadcopter data from parser
+	parsernode::common::quaddata data;//Quadcopter data from parser
 	geometry_msgs::Quaternion goalposn;
 
 	boost::shared_ptr<SetptCtrl> ctrlrinst;

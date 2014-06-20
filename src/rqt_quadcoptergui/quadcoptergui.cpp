@@ -54,7 +54,7 @@ QuadcopterGui::QuadcopterGui() : rqt_gui_cpp::Plugin()
 	, targetPtr(new visualization_msgs::Marker())
 	{
 		setObjectName("QuadcopterGui");
-		parser_loader.reset(new pluginlib::ClassLoader<rqt_quadcoptergui::Parser>("rqt_quadcoptergui","rqt_quadcoptergui::Parser"));
+		parser_loader.reset(new pluginlib::ClassLoader<parsernode::Parser>("parsernode","parsernode::Parser"));
 		UV_O.setIdentity();
 		errorrpy.setValue(0,0,0);
 		target.setValue(0,0,0);//Initializing the target extraction point
@@ -195,7 +195,7 @@ void QuadcopterGui::initPlugin(qt_gui_cpp::PluginContext& context)
 	else
 	{
 		logdir = logdir + "/session";
-		string logdir_stamped = rqt_quadcoptergui::common::addtimestring(logdir);
+		string logdir_stamped = parsernode::common::addtimestring(logdir);
 		ROS_INFO("Creating Log dir: %s",logdir_stamped.c_str());
 		mkdir(logdir_stamped.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);//Create the directory see http://pubs.opengroup.org/onlinepubs/009695399/functions/mkdir.html
 		vrpnfile.open((logdir_stamped+"/vrpn.dat").c_str());//TODO add warning if we cannot open the file
