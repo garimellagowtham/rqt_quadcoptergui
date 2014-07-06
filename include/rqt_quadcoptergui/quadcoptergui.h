@@ -42,9 +42,9 @@
 #include <rqt_quadcoptergui/QuadcopterInterfaceConfig.h>
 #include <dynamic_reconfigure/server.h>
 #include <rqt_gui_cpp/plugin.h>
-#include <rqt_quadcoptergui/ui_QuadCopterwidget.h>
+#include <ui_QuadCopterwidget.h>
 
-#include "parsernode/parser.h"
+#include <parsernode/parser.h>
 
 #include <boost/thread/mutex.hpp>
 

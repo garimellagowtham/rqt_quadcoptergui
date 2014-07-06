@@ -30,7 +30,7 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "quadcoptergui.h"
+#include <rqt_quadcoptergui/quadcoptergui.h>
 
 #include <pluginlib/class_list_macros.h>
 
@@ -143,6 +143,7 @@ void QuadcopterGui::initPlugin(qt_gui_cpp::PluginContext& context)
 	catch(pluginlib::PluginlibException& ex)
 	{
 		ROS_ERROR("The plugin failed to load for some reason. Error: %s", ex.what());
+		return;
 	}
 
 	//Connect all the slots as needed
