@@ -60,6 +60,17 @@ QuadcopterGui::QuadcopterGui() : rqt_gui_cpp::Plugin()
 		target.setValue(0,0,0);//Initializing the target extraction point
 		quadtobase.setIdentity();
 		quadtobase.setOrigin(tf::Vector3(0.0732,0,-0.06));//The z distance needs to adjusted exactly
+		//Setting Camera in Quad frame
+		CAM_QUAD_transform.setOrigin(tf::Vector3(0.1,0, -0.05));
+		tf::Quaternion cam_quad_quat;
+		cam_quad_quat.setEulerZYX(M_PI,-M_PI/2,0);
+		CAM_QUAD_transform.setRotation(cam_quad_quat);
+		//Setting OBJ_MOD transform:
+		OBJ_MOD_transform.setIdentity();
+		tf::Quaternion obj_mod_quat;
+		obj_mod_quat.setEulerZYX(M_PI,-M_PI/2,0);
+		OBJ_MOD_transform.setRotation(obj_mod_quat);
+
 		//armpwm.resize(3);//Number of arms for now just hardcoded
 
 		targetPtr->id = 1;
@@ -87,9 +98,6 @@ QuadcopterGui::QuadcopterGui() : rqt_gui_cpp::Plugin()
 		trajectoryPtr->color.b = 1.0;
 		trajectoryPtr->color.a = 1.0;
 
-		//Indices:  2     3     5     7    11    17    23    37    61   101
-
-		//The sampling frequency is 103.289 and window freq = 0.020017 (Around 50 Sec)
 	}
 
 QuadcopterGui::~QuadcopterGui()
@@ -128,6 +136,9 @@ void QuadcopterGui::initPlugin(qt_gui_cpp::PluginContext& context)
 	nh.getParam("/ctrlr/targetx",target[0]);
 	nh.getParam("/ctrlr/targety",target[1]);
 	nh.getParam("/ctrlr/targetz",target[2]);
+
+	//Load UAV Name:  Used in setting tf frame id
+	nh.getParam("/gui/uav_name",uav_name);
 
 	try
 	{
@@ -168,11 +179,12 @@ void QuadcopterGui::initPlugin(qt_gui_cpp::PluginContext& context)
 	connect(ui_.enable_joycheckbox,SIGNAL(stateChanged(int)),this,SLOT(enable_disablemanualarmctrl(int)));
 	connect(ui_.integrator_checkbox,SIGNAL(stateChanged(int)),this,SLOT(integrator_control(int)));
 	connect(ui_.enable_controller,SIGNAL(stateChanged(int)),this,SLOT(enable_disablecontroller(int)));
+	connect(ui_.camcheckbox,SIGNAL(stateChanged(int)),this,SLOT(enable_disablecamctrl(int)));
 	//connect(ui_.ctrlcheckbox,SIGNAL(stateChanged(int)),this,SLOT(switchctrlr(int)));
 
 	//Create a controller instance from the controllers library:
 	//Get the parameter to know whether to test the controller or directly use it. In testing mode, the thrust value is set to be a very small value and roll and pitch are normal. This way you can move and see if it is doing what its supposed to do
-	ctrlrinst.reset(new SetptCtrl(nh));
+	ctrlrinst.reset(new CameraSetptCtrl(nh));
 	arminst.reset(new gcop::Arm);
 	arminst->l1 = 0.175;
 	//arminst->l2 = 0.35;
@@ -202,6 +214,10 @@ void QuadcopterGui::initPlugin(qt_gui_cpp::PluginContext& context)
 		vrpnfile.open((logdir_stamped+"/vrpn.dat").c_str());//TODO add warning if we cannot open the file
 		vrpnfile.precision(9);
 		vrpnfile<<"#Time \t Pos.X \t Pos.Y \t Pos.Z \t Quat.X \t Quat.Y \t Quat.Z \t Quat.W"<<endl;
+		//Camfile
+		camfile.open((logdir_stamped+"/campose.dat").c_str());//TODO add warning if we cannot open the file
+		camfile.precision(9);
+		camfile<<"#Time \t Pos.X \t Pos.Y \t Pos.Z \t Quat.X \t Quat.Y \t Quat.Z \t Quat.W"<<endl;
 		//cmdfile.open(logdir_stamped+"/cmd.dat");//TODO add warning if we cannot open the file
 		parserinstance->setlogdir(logdir_stamped);
 		ctrlrinst->setlogdir(logdir_stamped);
@@ -215,6 +231,7 @@ void QuadcopterGui::initPlugin(qt_gui_cpp::PluginContext& context)
 		return;
 	}
 	vrpndata_sub = nh.subscribe(uav_posename,1,&QuadcopterGui::cmdCallback,this);
+	camdata_sub = nh.subscribe("/campose",1,&QuadcopterGui::camcmdCallback,this);
 	joydata_sub = nh.subscribe("/joy",1,&QuadcopterGui::joyCallback,this);
 
 	desiredtraj_pub = nh.advertise<visualization_msgs::Marker>("desired_traj", 5);
@@ -371,6 +388,29 @@ void QuadcopterGui::enable_disablemanualarmctrl(int state) //This is also useful
 	if(parserinstance)
 		parserinstance->foldarm();//Just fold the arm whenever you switch between two modes
 }
+void QuadcopterGui::enable_disablecamctrl(int state) //To specify which controller to use either the camera one or the motion capture one
+{
+	if(!ctrlrinst)
+	{
+		ROS_WARN("Controller not instantiated");
+		return;
+	}
+	if(state == Qt::Checked)
+	{
+		enable_camctrl = true;
+		goaltimer.stop();
+		//Specify the goal as origin (i.e the object itself is the goal)
+		ctrlrinst->setgoal(0,0,0,0);//Set the goal to be same as the object the velgoal is by default 0
+	}
+	else
+	{
+		goaltimer.stop();
+		enable_camctrl = false;
+		//Also specify the goal as the current quad postion TODO
+		curr_goal = UV_O.getOrigin();//set the current goal to be same as the quadcopter origin we dont care abt the orientation as of now
+		ctrlrinst->setgoal(curr_goal[0],curr_goal[1],curr_goal[2],0);//Set the goal to be same as the current position of the quadcopter the velgoal is by default 0
+	}
+}
 
 void QuadcopterGui::Capture_Target()
 {
@@ -519,6 +559,7 @@ void QuadcopterGui::shutdownPlugin()
 	reconfigserver.reset();
 	goaltimer.stop();
 	vrpnfile.close();//Close the file
+	camfile.close();//Close the file
 	trajectoryPtr.reset();
 	targetPtr.reset();
 	desiredtraj_pub.shutdown();
@@ -570,16 +611,125 @@ void QuadcopterGui::joyCallback(const sensor_msgs::Joy::ConstPtr &joymsg)
 		}
 	}
 }
+//Camera callback listens to pose of object in Camera frame
+void QuadcopterGui::camcmdCallback(const geometry_msgs::TransformStamped::ConstPtr &currframe)
+{
+	static tf::TransformBroadcaster br;
+	if(!enable_camctrl)//Not Using Camera Control
+	{
+		return;
+	}
+	//Find the object pose in Quadcopter frame:
+	tf::Transform OBJ_CAM_transform;
+	transformMsgToTF(currframe->transform,OBJ_CAM_transform);//converts to the right format 
+	tf::Transform OBJ_QUAD_transform = CAM_QUAD_transform*OBJ_CAM_transform*OBJ_MOD_transform;
+	tf::StampedTransform OBJ_QUAD_stamptransform (OBJ_QUAD_transform, currframe->header.stamp,uav_name,"object");//CAM_QUAD is the pose of Camera in Quadcopter frame, OBJ_MOD is the transform needed to make the object parallel (in terms of roll, pitch) with the Inertial frame
+	if(!ctrlrinst)
+	{
+		ROS_WARN("Controller not instantiated");
+		return;
+	}
+	controllers::ctrl_command rescmd;
+	tf::Vector3 imurpy ;
+	vector3MsgToTF(data.rpydata , imurpy);
+	ctrlrinst->CamSet(OBJ_QUAD_stamptransform, imurpy, rescmd);
+	if(!parserinstance)
+	{
+		ROS_WARN("Parser not instantiated");
+		return;
+	}
+	rescmdmsg.x = rescmd.roll; rescmdmsg.y = rescmd.pitch; rescmdmsg.z = rescmd.rateyaw; rescmdmsg.w = rescmd.thrust;//For Display purposes
+	if(testctrlr)//When testing dont throttle too high 
+	{
+		rescmdmsg.w = 0.2*data.thrustbias;//Thrustbias comes from Parser
+	}
+	if(data.armed && startcontrol)
+	{
+		if((++ratecount) == throttlecmdrate)//Throttling down the rate of sending commands to the uav
+		{
+			ratecount = 0;
+			parserinstance->cmdrpythrust(rescmdmsg,true);//Also controlling yaw	
+			//ROS_INFO("Setting cmd");
+		}
+	}	
+	if(enable_logging)
+	{
+		geometry_msgs::TransformStamped objmsg;
+		transformStampedTFToMsg(OBJ_QUAD_stamptransform,objmsg);//converts to the right format 
+		//Logging save to file
+		//camfile<<(OBJ_QUAD_stamptransform.stamp_.toNSec())<<"\t"<<(objmsg.transform.translation.x)<<"\t"<<(objmsg.transform.translation.y)<<"\t"<<(objmsg.transform.translation.z)<<"\t"<<(objmsg.transform.rotation.x)<<"\t"<<(objmsg.transform.rotation.y)<<"\t"<<(objmsg.transform.rotation.z)<<"\t"<<(objmsg.transform.rotation.w)<<endl;
+		//DEBUG STATEMENT
+		cout<<(OBJ_QUAD_stamptransform.stamp_.toNSec())<<"\t"<<(objmsg.transform.translation.x)<<"\t"<<(objmsg.transform.translation.y)<<"\t"<<(objmsg.transform.translation.z)<<"\t"<<(objmsg.transform.rotation.x)<<"\t"<<(objmsg.transform.rotation.y)<<"\t"<<(objmsg.transform.rotation.z)<<"\t"<<(objmsg.transform.rotation.w)<<endl;
+	}
+}
+void QuadcopterGui::cmdCallback(const geometry_msgs::TransformStamped::ConstPtr &currframe)//Removed arm stuff from this
+{
+	/////Add a clause for doing this when camcallback is not running///////
+	//Call the ctrlr to set the ctrl and then send the command to the quadparser
+	if(enable_camctrl)
+	{
+		//Not Using motion capture:
+		return;
+	}
+	if(!ctrlrinst)
+	{
+		ROS_WARN("Controller not instantiated");
+		return;
+	}
+	controllers::ctrl_command rescmd;
+	transformStampedMsgToTF(*currframe,UV_O);//converts to the right format 
+	//Store the current position of the quadcopter for display
+	//ctrlrinst->Set(UV_O, rescmd);
+	ctrlrinst->Set(UV_O, errorrpy, rescmd);
+	if(!parserinstance)
+	{
+		ROS_WARN("Parser not instantiated");
+		return;
+	}
+	rescmdmsg.x = rescmd.roll; rescmdmsg.y = rescmd.pitch; rescmdmsg.z = rescmd.rateyaw; rescmdmsg.w = rescmd.thrust;
+	if(testctrlr)
+	{
+		rescmdmsg.w = 0.2*data.thrustbias;
+	}
+	if(data.armed && startcontrol)
+	{
+		if((++ratecount) == throttlecmdrate)//Throttling down the rate of sending commands to the uav
+		{
+			ratecount = 0;
+			parserinstance->cmdrpythrust(rescmdmsg,true);//Also controlling yaw	
+			//ROS_INFO("Setting cmd");
+		}
+	}	
+	if(enable_logging)
+	{
+		//Logging save to file
+		vrpnfile<<(UV_O.stamp_.toNSec())<<"\t"<<(currframe->transform.translation.x)<<"\t"<<(currframe->transform.translation.y)<<"\t"<<(currframe->transform.translation.z)<<"\t"<<(currframe->transform.rotation.x)<<"\t"<<(currframe->transform.rotation.y)<<"\t"<<(currframe->transform.rotation.z)<<"\t"<<(currframe->transform.rotation.w)<<endl;
+	}	
+	if(!data.armed)//Once the quadcopter is armed we do not set the goal position to quad's origin, the user will set the goal. But the goal will not move until u set the enable_control The user should not give random goal once it is initialized.
+	{
+		curr_goal = UV_O.getOrigin();//set the current goal to be same as the quadcopter origin we dont care abt the orientation as of now
+		ctrlrinst->setgoal(curr_goal[0],curr_goal[1],curr_goal[2],goalyaw);//Set the goal to be same as the current position of the quadcopter the velgoal is by default 0
+	}
+
+	//Set the altitude of the quadcopter in the data
+	parserinstance->setaltitude(currframe->transform.translation.z);
+	//#ifdef PRINT
+	//ROS_INFO("Rescmd: %f\t%f\t%f",rescmdmsg.x,rescmdmsg.y,rescmdmsg.w);
+	//#endif
+
+}
+/*
 void QuadcopterGui::cmdCallback(const geometry_msgs::TransformStamped::ConstPtr &currframe)
 {
 	//static tf::TransformBroadcaster br;
 	/////Add arm angle setting based on current posn and goal for the final tip TODO
-	/*	if(data.quadstate != "Flying")
+	//////////Previous Comment Begin Here ////////////////
+		if(data.quadstate != "Flying")
 			{
 			transformStampedMsgToTF(*currframe,UV_O);//converts to the right format 
 			return;
 			}
-	 */
+	//////////Previous Comment End Here ////////////////
 
 	//Call the ctrlr to set the ctrl and then send the command to the quadparser
 	if(!ctrlrinst)
@@ -669,6 +819,7 @@ void QuadcopterGui::cmdCallback(const geometry_msgs::TransformStamped::ConstPtr 
 	//ROS_INFO("Rescmd: %f\t%f\t%f",rescmdmsg.x,rescmdmsg.y,rescmdmsg.w);
 	//#endif
 }
+*/
 
 void QuadcopterGui::paramreqCallback(rqt_quadcoptergui::QuadcopterInterfaceConfig &config , uint32_t level)
 {

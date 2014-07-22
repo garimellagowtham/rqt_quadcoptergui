@@ -37,7 +37,7 @@
 #include <iostream>
 #include <fstream>
 #include <string>
-#include <controllers/SetptCtrl.h>
+#include <controllers/CamSetptCtrl.h>
 #include <controllers/arm.h>
 #include <rqt_quadcoptergui/QuadcopterInterfaceConfig.h>
 #include <dynamic_reconfigure/server.h>
@@ -105,6 +105,8 @@ protected:
 
 	ros::Subscriber vrpndata_sub;
 
+	ros::Subscriber camdata_sub;
+
 	ros::Subscriber joydata_sub;
 
 	ros::Publisher desiredtraj_pub;
@@ -129,12 +131,15 @@ protected:
 	parsernode::common::quaddata data;//Quadcopter data from parser
 	geometry_msgs::Quaternion goalposn;
 
-	boost::shared_ptr<SetptCtrl> ctrlrinst;
+	boost::shared_ptr<CameraSetptCtrl> ctrlrinst;
 	boost::shared_ptr<gcop::Arm> arminst;
 	ros::Timer goaltimer;
 	void cmdCallback(const geometry_msgs::TransformStamped::ConstPtr &currframe);
+	void camcmdCallback(const geometry_msgs::TransformStamped::ConstPtr &currframe);
 	void joyCallback(const sensor_msgs::Joy::ConstPtr &joymsg);
 	bool enable_joy;
+	bool enable_camctrl;
+
 
 	//Moving goal dynamically:
 	tf::Vector3 diff_goal;
@@ -163,6 +168,7 @@ protected:
 	tf::Vector3 target;//Extraction target point
 	double armpwm[3];//Arm pwm
 	double armangles[3];//The angles of the arm in radians in gcop convention
+	std::string uav_name;
 
 	//Reconfigure stuff:
 	boost::shared_ptr<dynamic_reconfigure::Server<rqt_quadcoptergui::QuadcopterInterfaceConfig> >reconfigserver;
@@ -173,6 +179,10 @@ protected:
 	//Storing the current frame along with time stamp:
 	tf::StampedTransform UV_O;
 
+	//Fixed Transforms  for converting Quad to Camera frame and object_mod transforms:
+	tf::Transform CAM_QUAD_transform;
+	tf::Transform OBJ_MOD_transform;
+
 	tf::Vector3 errorrpy;
 
 	//Storing the current command being set:
@@ -181,6 +191,7 @@ protected:
 	//Logger Stuff
 	//ofstream cmdfile;
 	ofstream vrpnfile;
+	ofstream camfile;
 	bool enable_logging;
 	bool reconfiginit;
 	int throttlecmdrate,ratecount;
@@ -199,6 +210,7 @@ protected:
 	virtual void follow_trajectory(int);
 	virtual void integrator_control(int);
 	virtual void enable_disablecontroller(int);
+	virtual void enable_disablecamctrl(int);
 	virtual void enable_disablelog(int);
 	virtual void enable_disablemanualarmctrl(int);
 	virtual void RefreshGui();
