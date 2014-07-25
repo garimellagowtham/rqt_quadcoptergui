@@ -71,6 +71,8 @@
 //#include <QMutex>
 #include <boost/thread/mutex.hpp>
 #include <QDockWidget>
+#include <tf/transform_listener.h>
+#include <tf/transform_broadcaster.h>
 
 namespace rqt_quadcoptergui {
 
@@ -180,8 +182,8 @@ protected:
 	tf::StampedTransform UV_O;
 
 	//Fixed Transforms  for converting Quad to Camera frame and object_mod transforms:
-	tf::Transform CAM_QUAD_transform;
-	tf::Transform OBJ_MOD_transform;
+	tf::StampedTransform CAM_QUAD_transform;
+	tf::StampedTransform OBJ_MOD_transform;
 
 	tf::Vector3 errorrpy;
 
@@ -191,7 +193,7 @@ protected:
 	//Logger Stuff
 	//ofstream cmdfile;
 	ofstream vrpnfile;
-	ofstream camfile;
+	//ofstream camfile;
 	bool enable_logging;
 	bool reconfiginit;
 	int throttlecmdrate,ratecount;
