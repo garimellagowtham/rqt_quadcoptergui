@@ -171,6 +171,9 @@ protected:
 	double armpwm[3];//Arm pwm
 	double armangles[3];//The angles of the arm in radians in gcop convention
 	std::string uav_name;
+	bool cam_partialcontrol;//Only use the object position to set the goal position 
+	double xoffset_object;//Offset of the object in x direction 
+	bool updategoal_dynreconfig;//Flag for updating the dynamic reconfigure goal parameters whenever it is triggered (This will write the values in dynreconfig instead of reading from it)
 
 	//Reconfigure stuff:
 	boost::shared_ptr<dynamic_reconfigure::Server<rqt_quadcoptergui::QuadcopterInterfaceConfig> >reconfigserver;
@@ -180,7 +183,8 @@ protected:
 
 	//Storing the current frame along with time stamp:
 	tf::StampedTransform UV_O;
-
+	//Storing the current object pose in Quadcopter frame
+	tf::StampedTransform OBJ_QUAD_stamptransform;
 	//Fixed Transforms  for converting Quad to Camera frame and object_mod transforms:
 	tf::StampedTransform CAM_QUAD_transform;
 	tf::StampedTransform OBJ_MOD_transform;
