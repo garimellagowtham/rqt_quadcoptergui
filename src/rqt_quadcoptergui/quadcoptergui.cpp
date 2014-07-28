@@ -650,7 +650,7 @@ void QuadcopterGui::joyCallback(const sensor_msgs::Joy::ConstPtr &joymsg)
 void QuadcopterGui::camcmdCallback(const geometry_msgs::TransformStamped::ConstPtr &currframe)
 {
 	//static tf::TransformBroadcaster br;
-	cout<<"Cam called"<<endl;
+	//cout<<"Cam called"<<endl;
 	//Find the object pose in Quadcopter frame:
 	tf::Transform OBJ_CAM_transform;
 	transformMsgToTF(currframe->transform,OBJ_CAM_transform);//converts to the right format 

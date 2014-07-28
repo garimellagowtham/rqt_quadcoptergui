@@ -137,7 +137,7 @@
     </rect>
    </property>
    <property name="text">
-    <string>disable_int</string>
+    <string>enable_int</string>
    </property>
   </widget>
   <widget class="QCheckBox" name="log_checkbox">
