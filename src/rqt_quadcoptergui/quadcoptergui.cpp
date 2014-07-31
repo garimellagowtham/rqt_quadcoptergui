@@ -45,14 +45,15 @@ QuadcopterGui::QuadcopterGui() : rqt_gui_cpp::Plugin()
 	, enable_logging(false)
 	, reconfiginit(false)
 	, throttlecmdrate(1), ratecount(0)
-	, enable_joy(true)
+	, enable_joy(true), enable_camctrl(false)
 	, armcmdrate(4), armratecount(0)
 	, followtraj(false), traj_amp(0), traj_freq(0), traj_skew(1)
 	, joymsg_prevbutton(0), buttoncount(0)
 	, joymsg_prevbutton1(0), buttoncount1(0)
-	, xoffset_object(0.3), updategoal_dynreconfig(false)
+	, yoffset_object(0.5), updategoal_dynreconfig(false), cam_partialcontrol(true)
 	, trajectoryPtr(new visualization_msgs::Marker())
 	, targetPtr(new visualization_msgs::Marker())
+	,broadcaster(new tf::TransformBroadcaster())
 	{
 		setObjectName("QuadcopterGui");
 		parser_loader.reset(new pluginlib::ClassLoader<parsernode::Parser>("parsernode","parsernode::Parser"));
@@ -208,7 +209,7 @@ void QuadcopterGui::initPlugin(qt_gui_cpp::PluginContext& context)
 
 	//Create a controller instance from the controllers library:
 	//Get the parameter to know whether to test the controller or directly use it. In testing mode, the thrust value is set to be a very small value and roll and pitch are normal. This way you can move and see if it is doing what its supposed to do
-	ctrlrinst.reset(new CameraSetptCtrl(nh));
+	ctrlrinst.reset(new CameraSetptCtrl(nh, broadcaster));
 	arminst.reset(new gcop::Arm);
 	arminst->l1 = 0.175;
 	//arminst->l2 = 0.35;
@@ -239,9 +240,9 @@ void QuadcopterGui::initPlugin(qt_gui_cpp::PluginContext& context)
 		vrpnfile.precision(9);
 		vrpnfile<<"#Time \t Pos.X \t Pos.Y \t Pos.Z \t Quat.X \t Quat.Y \t Quat.Z \t Quat.W"<<endl;
 		//Camfile
-		//camfile.open((logdir_stamped+"/campose.dat").c_str());//TODO add warning if we cannot open the file
-		//camfile.precision(9);
-		//camfile<<"#Time \t Pos.X \t Pos.Y \t Pos.Z \t Quat.X \t Quat.Y \t Quat.Z \t Quat.W"<<endl;
+		camfile.open((logdir_stamped+"/campose.dat").c_str());//TODO add warning if we cannot open the file
+		camfile.precision(9);
+		camfile<<"#Time \t Pos.X \t Pos.Y \t Pos.Z \t Quat.X \t Quat.Y \t Quat.Z \t Quat.W"<<endl;
 		//cmdfile.open(logdir_stamped+"/cmd.dat");//TODO add warning if we cannot open the file
 		parserinstance->setlogdir(logdir_stamped);
 		ctrlrinst->setlogdir(logdir_stamped);
@@ -254,6 +255,7 @@ void QuadcopterGui::initPlugin(qt_gui_cpp::PluginContext& context)
 		ROS_ERROR("Cannot load uav pose parameter");
 		return;
 	}
+	cout<<"Subscribing to uav pose topic on: "<<uav_posename<<endl;
 	vrpndata_sub = nh.subscribe(uav_posename,1,&QuadcopterGui::cmdCallback,this);
 	camdata_sub = nh.subscribe("/Pose_Est/objpose",1,&QuadcopterGui::camcmdCallback,this);
 	joydata_sub = nh.subscribe("/joy",1,&QuadcopterGui::joyCallback,this);
@@ -416,6 +418,7 @@ void QuadcopterGui::enable_disablemanualarmctrl(int state) //This is also useful
 }
 void QuadcopterGui::enable_disablecamctrl(int state) //To specify which controller to use either the camera one or the motion capture one
 {
+	//Testing only Optitrack
 	if(!ctrlrinst)
 	{
 		ROS_WARN("Controller not instantiated");
@@ -423,21 +426,30 @@ void QuadcopterGui::enable_disablecamctrl(int state) //To specify which controll
 	}
 	if(state == Qt::Checked)
 	{
+		//[DEBUG]
+		//cout<<"Ros Time: "<<ros::Time::now()<<"\t UV_O Time: "<<UV_O.stamp_<<endl;
 		enable_camctrl = true;
-		goaltimer.stop();
-		//Specify the goal as origin (i.e the object itself is the goal)
-		ctrlrinst->setgoal(0,0,0,0);//Set the goal to be same as the object the velgoal is by default 0
+		if(cam_partialcontrol)//If partial control to debug we have to see the output of the goal whenever the quad is tarted up
+			goaltimer.start();//Redundancy
+		else
+		{
+			goaltimer.stop();//in full cam ctrl we do not use goal timer, instead the goal is directly set by object controller 
+			//Specify the goal as origin (i.e the object itself is the goal)
+			ctrlrinst->setgoal(0,0,0,0);//Set the goal to be same as the object the velgoal is by default 0
+		}
 	}
 	else
 	{
+		/////////////////////////This cannot be used as a fallback without optitrack system //////////////
 		enable_camctrl = false;
 		//Also specify the goal as the current quad postion TODO
-		curr_goal = UV_O.getOrigin();//set the current goal to be same as the quadcopter origin we dont care abt the orientation as of now
-		ctrlrinst->setgoal(curr_goal[0],curr_goal[1],curr_goal[2],0);//Set the goal to be same as the current position of the quadcopter the velgoal is by default 0
+		//curr_goal = UV_O.getOrigin();//set the current goal to be same as the quadcopter origin we dont care abt the orientation as of now
+		tf::Vector3 centergoal(0.75, 0.9, 0.3);//Center of workspace and very low z easy to disarm
 		updategoal_dynreconfig = true;//Set the flag to make sure dynamic reconfigure reads the new goal
-		diff_goal.setValue(0,0,0);//Will set the goal back to the curr_goal without perturbations
+		goalcount = 20; //Set the goal back to the specified posn smoothly
+		diff_goal.setValue((-curr_goal[0] + centergoal[0])/goalcount, (-curr_goal[1] + centergoal[1])/goalcount,(-curr_goal[2] + centergoal[2])/goalcount);
 		diff_velgoal.setValue(0,0,0);//Will set the goal back to the curr_goal without perturbations
-		goaltimer.start();
+		goaltimer.start();//Redundancy
 	}
 }
 
@@ -594,7 +606,7 @@ void QuadcopterGui::shutdownPlugin()
 	reconfigserver.reset();
 	goaltimer.stop();
 	vrpnfile.close();//Close the file
-	//camfile.close();//Close the file
+	camfile.close();//Close the file
 	trajectoryPtr.reset();
 	targetPtr.reset();
 	desiredtraj_pub.shutdown();
@@ -660,6 +672,8 @@ void QuadcopterGui::camcmdCallback(const geometry_msgs::TransformStamped::ConstP
 	{
 		return;
 	}
+	//[DEBUG]
+	//cout<<"Entering camcmdCallback"<<endl;
 	if(!ctrlrinst)
 	{
 		ROS_WARN("Controller not instantiated");
@@ -671,18 +685,27 @@ void QuadcopterGui::camcmdCallback(const geometry_msgs::TransformStamped::ConstP
 		//Set the goal based on OBJ_QUAD transform 
 		tf::Transform OBJ_OPTITRACK_transform = UV_O*OBJ_QUAD_transform;
 		tf::Vector3 object_origin = OBJ_OPTITRACK_transform.getOrigin();
-		//Substract x offset (Assuming the object is to be approached in x dirxn) TODO Use object pose or some input dirxn of approach for grasping later//
-		object_origin[0] -= xoffset_object;
-		//Verify if the goal is in the workspace TODO
+		tf::Vector3 OBJ_QUAD_origin = OBJ_QUAD_transform.getOrigin();
+		tf::Vector3 OBJ_QUAD_origin_inoptitrackframe = quatRotate(UV_O.getRotation(),OBJ_QUAD_origin);//Get the object in quadcopters frame  written in optirack frame
+		//Substract y offset (Assuming the object is to be approached in y dirxn) TODO Use object pose or some input dirxn of approach for grasping later//
+		///object_origin[1] -= yoffset_object;
+		double object_offsetposny = object_origin[1] - yoffset_object;
 		//Fixed Workspace for now:
-		if(object_origin[0] < 1.6 && object_origin[0] > 0.1 && object_origin[1] < 0.9 && object_origin[1] > 0 && object_origin[2] < 1.9 && object_origin[2] > 0)
+		if(object_origin[0] < 1.4 && object_origin[0] > 0.1 && object_offsetposny < 1.6 && object_offsetposny > 0.2 && object_origin[2] < 1.6 && object_origin[2] > 0)
 		{
-			diff_goal.setValue((-curr_goal[0] + object_origin[0])/goalcount, (-curr_goal[1] + object_origin[1])/goalcount,(-curr_goal[2] + object_origin[2])/goalcount);
+			goalcount = 20;//TODO Figure out as a function of freq of goaltimer
+			//Set goalyaw also to face towards the object:
+			//[DEBUG]	cout<<"Goal Yaw: "<<atan2(OBJ_QUAD_origin_inoptitrackframe[1], OBJ_QUAD_origin_inoptitrackframe[0])<<endl; //atan2(y,x)
+			goalyaw = atan2(OBJ_QUAD_origin_inoptitrackframe[1], OBJ_QUAD_origin_inoptitrackframe[0]); 
+			cout<<"Goal Yaw: "<<goalyaw<<endl;
+			diff_goal.setValue((-curr_goal[0] + object_origin[0])/goalcount, (-curr_goal[1] + object_offsetposny)/goalcount,(-curr_goal[2] + object_origin[2])/goalcount);
 			diff_velgoal.setValue(0,0,0);
+			//cout<<"Goal posn in optitrack: "<<object_origin[0]<<"\t"<<object_origin[1]<<"\t"<<object_origin[2]<<endl;
 		}
 		else
 		{
-			cout<<"Object out of workspace: "<<object_origin[0]<<"\t"<<object_origin[1]<<"\t"<<object_origin[2]<<endl;
+			cout<<"Object out of workspace: "<<object_origin[0]<<"\t"<<object_offsetposny<<"\t"<<object_origin[2]<<endl;
+			cout<<"Object in Quad frame: \t"<<OBJ_QUAD_origin[0]<<"\t"<<OBJ_QUAD_origin[1]<<"\t"<<OBJ_QUAD_origin[2]<<endl;
 		}
 	}
 	else
@@ -715,8 +738,7 @@ void QuadcopterGui::camcmdCallback(const geometry_msgs::TransformStamped::ConstP
 			geometry_msgs::TransformStamped objmsg;
 			transformStampedTFToMsg(OBJ_QUAD_stamptransform,objmsg);//converts to the right format 
 			//Logging save to file
-			//camfile<<(OBJ_QUAD_stamptransform.stamp_.toNSec())<<"\t"<<(objmsg.transform.translation.x)<<"\t"<<(objmsg.transform.translation.y)<<"\t"<<(objmsg.transform.translation.z)<<"\t"<<(objmsg.transform.rotation.x)<<"\t"<<(objmsg.transform.rotation.y)<<"\t"<<(objmsg.transform.rotation.z)<<"\t"<<(objmsg.transform.rotation.w)<<endl;
-			//DEBUG STATEMENT
+			camfile<<(OBJ_QUAD_stamptransform.stamp_.toNSec())<<"\t"<<(objmsg.transform.translation.x)<<"\t"<<(objmsg.transform.translation.y)<<"\t"<<(objmsg.transform.translation.z)<<"\t"<<(objmsg.transform.rotation.x)<<"\t"<<(objmsg.transform.rotation.y)<<"\t"<<(objmsg.transform.rotation.z)<<"\t"<<(objmsg.transform.rotation.w)<<endl;
 		}
 	}
 }
@@ -724,11 +746,6 @@ void QuadcopterGui::cmdCallback(const geometry_msgs::TransformStamped::ConstPtr 
 {
 	/////Add a clause for doing this when camcallback is not running///////
 	//Call the ctrlr to set the ctrl and then send the command to the quadparser
-	if(enable_camctrl)
-	{
-		//Not Using motion capture:
-		return;
-	}
 	if(!ctrlrinst)
 	{
 		ROS_WARN("Controller not instantiated");
@@ -736,9 +753,15 @@ void QuadcopterGui::cmdCallback(const geometry_msgs::TransformStamped::ConstPtr 
 	}
 	controllers::ctrl_command rescmd;
 	transformStampedMsgToTF(*currframe,UV_O);//converts to the right format 
+	if(enable_camctrl && !cam_partialcontrol)//This implies we are doing full camera control
+	{
+		//Not Using motion capture But still need UV_O in partial cam ctrl so always useful to save the currframe when available if not available thats fine
+		return;
+	}
 	//Store the current position of the quadcopter for display
 	//ctrlrinst->Set(UV_O, rescmd);
 	ctrlrinst->Set(UV_O, errorrpy, rescmd);
+	//cout<<"Rescmd: "<<rescmd.roll <<"\t"<<rescmd.pitch <<"\t"<<rescmd.rateyaw <<"\t"<<rescmd.thrust <<"\t"<<endl;
 	if(!parserinstance)
 	{
 		ROS_WARN("Parser not instantiated");
@@ -763,6 +786,7 @@ void QuadcopterGui::cmdCallback(const geometry_msgs::TransformStamped::ConstPtr 
 		//Logging save to file
 		vrpnfile<<(UV_O.stamp_.toNSec())<<"\t"<<(currframe->transform.translation.x)<<"\t"<<(currframe->transform.translation.y)<<"\t"<<(currframe->transform.translation.z)<<"\t"<<(currframe->transform.rotation.x)<<"\t"<<(currframe->transform.rotation.y)<<"\t"<<(currframe->transform.rotation.z)<<"\t"<<(currframe->transform.rotation.w)<<endl;
 	}	
+	//[DEBUG] if(!startcontrol)
 	if(!data.armed)//Once the quadcopter is armed we do not set the goal position to quad's origin, the user will set the goal. But the goal will not move until u set the enable_control The user should not give random goal once it is initialized.
 	{
 		curr_goal = UV_O.getOrigin();//set the current goal to be same as the quadcopter origin we dont care abt the orientation as of now
@@ -914,16 +938,18 @@ void QuadcopterGui::paramreqCallback(rqt_quadcoptergui::QuadcopterInterfaceConfi
 	if(level&0x0002)
 	{
 		tf::Vector3 quadorigin = UV_O.getOrigin();
-		goalyaw = config.yawg;
 		if(updategoal_dynreconfig)//Read from the current goal if this flag is set
 		{
 			config.xg = curr_goal[0];
 			config.yg = curr_goal[1];
 			config.zg = curr_goal[2];
+			config.yawg = goalyaw;
 		}
 		else
 		{
+			goalyaw = config.yawg;
 			//Should not put anything else in level 2 #IMPORTANT
+			//[DEBUG]if(startcontrol)
 			if(data.armed)
 			{
 				goalcount = config.goalT*(5);//Just a hack to ensure the total time is ok TODO
@@ -970,7 +996,6 @@ void QuadcopterGui::goaltimerCallback(const ros::TimerEvent &event)
 		if(goalcount > 0)
 		{
 			curr_goal = curr_goal + diff_goal;
-			//cout<<curr_goal[0]<<"\t"<<curr_goal[1]<<"\t"<<curr_goal[2]<<endl;
 			if(!ctrlrinst)
 			{
 				ROS_WARN("Controller not instantiated");
@@ -980,6 +1005,15 @@ void QuadcopterGui::goaltimerCallback(const ros::TimerEvent &event)
 			goalcount--;
 		}
 		trajtime_offset = ros::Time::now();
+		if(cam_partialcontrol && enable_camctrl)
+		{
+			//[DEBUG]cout<<"Current Goal: "<<curr_goal[0]<<"\t"<<curr_goal[1]<<"\t"<<curr_goal[2]<<endl;
+			//Since setptctrl is not called we should publish the goal ourselves:
+			tf::Transform goal_frame;
+			goal_frame.setIdentity();
+			goal_frame.setOrigin(curr_goal);
+			broadcaster->sendTransform(tf::StampedTransform(goal_frame,ros::Time::now(),UV_O.frame_id_,"goal_posn"));
+		}
 	}
 	else
 	{ 

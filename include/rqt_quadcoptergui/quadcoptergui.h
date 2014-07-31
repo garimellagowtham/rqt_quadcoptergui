@@ -172,7 +172,7 @@ protected:
 	double armangles[3];//The angles of the arm in radians in gcop convention
 	std::string uav_name;
 	bool cam_partialcontrol;//Only use the object position to set the goal position 
-	double xoffset_object;//Offset of the object in x direction 
+	double yoffset_object;//Offset of the object in x direction 
 	bool updategoal_dynreconfig;//Flag for updating the dynamic reconfigure goal parameters whenever it is triggered (This will write the values in dynreconfig instead of reading from it)
 
 	//Reconfigure stuff:
@@ -197,7 +197,7 @@ protected:
 	//Logger Stuff
 	//ofstream cmdfile;
 	ofstream vrpnfile;
-	//ofstream camfile;
+	ofstream camfile;
 	bool enable_logging;
 	bool reconfiginit;
 	int throttlecmdrate,ratecount;
@@ -206,7 +206,7 @@ protected:
 	boost::shared_ptr<visualization_msgs::Marker> targetPtr;
 	//boost::shared_ptr<visualization_msgs::Marker> finaltipPtr; TODO add final tip frame to see
 	tf::Transform quadtobase;
-
+  boost::shared_ptr<tf::TransformBroadcaster> broadcaster;//Transform Broadcaster
 
 	protected slots:
 	virtual void wrappertakeoff();
