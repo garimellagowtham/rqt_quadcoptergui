@@ -706,7 +706,7 @@ void QuadcopterGui::camcmdCallback(const geometry_msgs::TransformStamped::ConstP
 			/*************** ARM CODE *********************/
 			//Computing the arm angles
 			//double yawdiff = atan2(OBJ_QUAD_origin[1], OBJ_QUAD_origin[0]);  Will try to improve the offset later
-			armlocaltarget[0] = OBJ_QUAD_origin[0]+obj_armoffset[0]; armlocaltarget[1] = OBJ_QUAD_origin[1] + obj_armoffset[1]; armlocaltarget[2] = OBJ_QUAD_origin[2] + obj_armoffset[2];
+			armlocaltarget[0] = OBJ_QUAD_origin[0]+object_armoffset[0]; armlocaltarget[1] = OBJ_QUAD_origin[1] + object_armoffset[1]; armlocaltarget[2] = OBJ_QUAD_origin[2] + object_armoffset[2];
 			//This offset is done in local frame which does not make sense always have to see what this amounts to
 			double armres = arminst->Ik(as,armlocaltarget);
 			int solnindex = 1;//When localtargetz < 0 //For now only choosing lower elbow Later can specify which one to pick TODO
