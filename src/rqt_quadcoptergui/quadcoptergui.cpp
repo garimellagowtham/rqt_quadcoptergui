@@ -765,13 +765,13 @@ void QuadcopterGui::camcmdCallback(const geometry_msgs::TransformStamped::ConstP
 				//ROS_INFO("Setting cmd");
 			}
 		}	
-		if(enable_logging)
-		{
-			geometry_msgs::TransformStamped objmsg;
-			transformStampedTFToMsg(OBJ_QUAD_stamptransform,objmsg);//converts to the right format 
-			//Logging save to file
-			camfile<<(OBJ_QUAD_stamptransform.stamp_.toNSec())<<"\t"<<(objmsg.transform.translation.x)<<"\t"<<(objmsg.transform.translation.y)<<"\t"<<(objmsg.transform.translation.z)<<"\t"<<(objmsg.transform.rotation.x)<<"\t"<<(objmsg.transform.rotation.y)<<"\t"<<(objmsg.transform.rotation.z)<<"\t"<<(objmsg.transform.rotation.w)<<endl;
-		}
+	}
+	if(enable_logging)
+	{
+		geometry_msgs::TransformStamped objmsg;
+		transformStampedTFToMsg(OBJ_QUAD_stamptransform,objmsg);//converts to the right format 
+		//Logging save to file
+		camfile<<(OBJ_QUAD_stamptransform.stamp_.toNSec())<<"\t"<<(objmsg.transform.translation.x)<<"\t"<<(objmsg.transform.translation.y)<<"\t"<<(objmsg.transform.translation.z)<<"\t"<<(objmsg.transform.rotation.x)<<"\t"<<(objmsg.transform.rotation.y)<<"\t"<<(objmsg.transform.rotation.z)<<"\t"<<(objmsg.transform.rotation.w)<<endl;
 	}
 }
 void QuadcopterGui::cmdCallback(const geometry_msgs::TransformStamped::ConstPtr &currframe)//Removed arm stuff from this
