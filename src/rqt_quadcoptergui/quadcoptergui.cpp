@@ -88,7 +88,8 @@ QuadcopterGui::QuadcopterGui() : rqt_gui_cpp::Plugin()
 		trajectoryPtr->scale.x = 0.05;//Need thick line
 		trajectoryPtr->color.b = 1.0;
 		trajectoryPtr->color.a = 1.0;
-
+		//For now default value of object_offset:
+		object_armoffset = tf::Vector3(-0.05,0,-0.05);//5 cm forward and  5 cm down
 	}
 
 QuadcopterGui::~QuadcopterGui()
@@ -701,43 +702,46 @@ void QuadcopterGui::camcmdCallback(const geometry_msgs::TransformStamped::ConstP
 			diff_goal.setValue((-curr_goal[0] + object_origin[0])/goalcount, (-curr_goal[1] + object_offsetposny)/goalcount,(-curr_goal[2] + object_origin[2])/goalcount);
 			diff_velgoal.setValue(0,0,0);
 			//cout<<"Goal posn in optitrack: "<<object_origin[0]<<"\t"<<object_origin[1]<<"\t"<<object_origin[2]<<endl;
+
+			/*************** ARM CODE *********************/
+			//Computing the arm angles
+			//double yawdiff = atan2(OBJ_QUAD_origin[1], OBJ_QUAD_origin[0]);  Will try to improve the offset later
+			armlocaltarget[0] = OBJ_QUAD_origin[0]+obj_armoffset[0]; armlocaltarget[1] = OBJ_QUAD_origin[1] + obj_armoffset[1]; armlocaltarget[2] = OBJ_QUAD_origin[2] + obj_armoffset[2];
+			//This offset is done in local frame which does not make sense always have to see what this amounts to
+			double armres = arminst->Ik(as,armlocaltarget);
+			int solnindex = 1;//When localtargetz < 0 //For now only choosing lower elbow Later can specify which one to pick TODO
+			//Convert the angles into right frame i.e the arm angles = 0 means it is x+ straightened
+			armangles[0] = as[solnindex][1]>(-M_PI/2)?as[solnindex][1]-M_PI/2:as[solnindex][1]+1.5*M_PI;
+			//armangles[1] = as[solnindex][2]>(-M_PI/2)?as[solnindex][2]-M_PI/2:as[solnindex][2]+1.5*M_PI;
+			armangles[1] = as[solnindex][2];//Relative angle wrt to first joint no transformation needed
+			armangles[2] = armpwm[2];//Using the joystick for gripping  
+			//cout<<"Resulting arm angles"<<as[solnindex][0]<<"\t"<<armangles[0]<<"\t"<<armangles[1]<<endl;
+
+			if(!enable_joy)
+			{
+				if((++armratecount == armcmdrate))//default makes it 60/4 = 15Hz
+				{
+					armratecount = 0;
+					if(arminst && parserinstance) //Can also add startcontrol flag for starting this only when controller has started TODO
+					{
+						if(armres > -0.1) //Check if in reachable workspace
+						{
+							//Set the goal yaw of the quadcopter goalyaw
+							//goalyaw = as[solnindex][0];//Target yaw for Quadcopter This is already done above dont need to do it here
+							parserinstance->setarmangles(armangles);
+						}
+						else
+						{
+							parserinstance->foldarm();
+						}
+					}
+				}
+			}
 		}
 		else
 		{
 			cout<<"Object out of workspace: "<<object_origin[0]<<"\t"<<object_offsetposny<<"\t"<<object_origin[2]<<endl;
 			cout<<"Object in Quad frame: \t"<<OBJ_QUAD_origin[0]<<"\t"<<OBJ_QUAD_origin[1]<<"\t"<<OBJ_QUAD_origin[2]<<endl;
-		}
-		/*************** ARM CODE *********************/
-		//Computing the arm angles
-		armlocaltarget[0] = OBJ_QUAD_origin[0]; armlocaltarget[1] = OBJ_QUAD_origin[1]; armlocaltarget[2] = OBJ_QUAD_origin[2];
-		double armres = arminst->Ik(as,armlocaltarget);
-		int solnindex = 1;//When localtargetz < 0 //For now only choosing lower elbow Later can specify which one to pick TODO
-		//Convert the angles into right frame i.e the arm angles = 0 means it is x+ straightened
-		armangles[0] = as[solnindex][1]>(-M_PI/2)?as[solnindex][1]-M_PI/2:as[solnindex][1]+1.5*M_PI;
-		//armangles[1] = as[solnindex][2]>(-M_PI/2)?as[solnindex][2]-M_PI/2:as[solnindex][2]+1.5*M_PI;
-		armangles[1] = as[solnindex][2];//Relative angle wrt to first joint no transformation needed
-		armangles[2] = armpwm[2];//Using the joystick for gripping  
-		//cout<<"Resulting arm angles"<<as[solnindex][0]<<"\t"<<armangles[0]<<"\t"<<armangles[1]<<endl;
-
-		if(!enable_joy)
-		{
-			if((++armratecount == armcmdrate))//default makes it 60/4 = 15Hz
-			{
-				armratecount = 0;
-				if(arminst && parserinstance) //Can also add startcontrol flag for starting this only when controller has started TODO
-				{
-					if(armres > -0.1) //Check if in reachable workspace
-					{
-						//Set the goal yaw of the quadcopter goalyaw
-						//goalyaw = as[solnindex][0];//Target yaw for Quadcopter This is already done above dont need to do it here
-						parserinstance->setarmangles(armangles);
-					}
-					else
-					{
-						parserinstance->foldarm();
-					}
-				}
-			}
 		}
 	}
 	else//Full Camera Control

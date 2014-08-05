@@ -202,6 +202,7 @@ protected:
 	bool reconfiginit;
 	int throttlecmdrate,ratecount;
 	int armcmdrate,armratecount;
+	tf::Vector3  object_armoffset;//Offset for object when arm has to catch it
 	boost::shared_ptr<visualization_msgs::Marker> trajectoryPtr;
 	boost::shared_ptr<visualization_msgs::Marker> targetPtr;
 	//boost::shared_ptr<visualization_msgs::Marker> finaltipPtr; TODO add final tip frame to see
