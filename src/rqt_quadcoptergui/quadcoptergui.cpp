@@ -699,7 +699,7 @@ void QuadcopterGui::camcmdCallback(const geometry_msgs::TransformStamped::ConstP
 			//[DEBUG]	cout<<"Goal Yaw: "<<atan2(OBJ_QUAD_origin_inoptitrackframe[1], OBJ_QUAD_origin_inoptitrackframe[0])<<endl; //atan2(y,x)
 			goalyaw = atan2(OBJ_QUAD_origin_inoptitrackframe[1], OBJ_QUAD_origin_inoptitrackframe[0]); 
 			cout<<"Goal Yaw: "<<goalyaw<<endl;
-			diff_goal.setValue((-curr_goal[0] + object_origin[0])/goalcount, (-curr_goal[1] + object_offsetposny)/goalcount,(-curr_goal[2] + object_origin[2])/goalcount);
+			diff_goal.setValue((-curr_goal[0] + object_origin[0])/goalcount, (-curr_goal[1] + object_offsetposny)/goalcount,(-curr_goal[2] + object_origin[2])/goalcount);//Adding offset in y posn assuming that is the dirxn of approach later have to use that from the object pose
 			diff_velgoal.setValue(0,0,0);
 			//cout<<"Goal posn in optitrack: "<<object_origin[0]<<"\t"<<object_origin[1]<<"\t"<<object_origin[2]<<endl;
 
@@ -724,6 +724,12 @@ void QuadcopterGui::camcmdCallback(const geometry_msgs::TransformStamped::ConstP
 					armratecount = 0;
 					if(arminst && parserinstance) //Can also add startcontrol flag for starting this only when controller has started TODO
 					{
+						//Verify the value of armres when we are like 5 cm from the goal posn. We will use that to calibrate the arm to open
+						//Once it is opened, we note the time and put a timeout of 5 sec and then disable the cam to get a different trajectory
+						if(OBJ_QUAD_origin.length2() < yoffset_object*yoffset_object)//The distance object to quad is less than 0.5 m yoffset
+						{
+							ROS_INFO("Obj_quad_in_optframe: [%f]\t[%f] \tArmres: [%f]",OBJ_QUAD_origin[0], OBJ_QUAD_origin[1], armres);
+						}
 						if(armres > -0.1) //Check if in reachable workspace
 						{
 							//Set the goal yaw of the quadcopter goalyaw
