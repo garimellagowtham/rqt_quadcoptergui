@@ -223,7 +223,7 @@ void QuadcopterGui::initPlugin(qt_gui_cpp::PluginContext& context)
 	nh.getParam("/bias_vrpnroll",bias_vrpn[0]);
 	nh.getParam("/bias_vrpnpitch",bias_vrpn[1]);
 	nh.getParam("/bias_vrpnyaw",bias_vrpn[2]);
-	bias_count = 200;//Initial bias so we dont vary mean very much
+	bias_count = 100;//Initial bias so we dont vary mean very much
 
 	// Logger
 	string logdir = "/home/gowtham";//Default name
@@ -802,7 +802,7 @@ void QuadcopterGui::cmdCallback(const geometry_msgs::TransformStamped::ConstPtr 
 	}
 	//Store the current position of the quadcopter for display
 	//ctrlrinst->Set(UV_O, rescmd);
-	ctrlrinst->Set(UV_O, errorrpy, rescmd);
+	ctrlrinst->Set(UV_O, errorrpy, rescmd);//By default no filtering if needed can add filter data
 	//cout<<"Rescmd: "<<rescmd.roll <<"\t"<<rescmd.pitch <<"\t"<<rescmd.rateyaw <<"\t"<<rescmd.thrust <<"\t"<<endl;
 	if(!parserinstance)
 	{
