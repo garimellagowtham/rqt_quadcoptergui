@@ -53,7 +53,8 @@ QuadcopterGui::QuadcopterGui() : rqt_gui_cpp::Plugin()
 	, yoffset_object(0.5), updategoal_dynreconfig(false), cam_partialcontrol(true)
 	, trajectoryPtr(new visualization_msgs::Marker())
 	, targetPtr(new visualization_msgs::Marker())
-	,broadcaster(new tf::TransformBroadcaster())
+	, broadcaster(new tf::TransformBroadcaster())
+	, timeout_grabbing(3)
 	{
 		setObjectName("QuadcopterGui");
 		parser_loader.reset(new pluginlib::ClassLoader<parsernode::Parser>("parsernode","parsernode::Parser"));
@@ -89,7 +90,7 @@ QuadcopterGui::QuadcopterGui() : rqt_gui_cpp::Plugin()
 		trajectoryPtr->color.b = 1.0;
 		trajectoryPtr->color.a = 1.0;
 		//For now default value of object_offset:
-		object_armoffset = tf::Vector3(-0.05,0,-0.05);//5 cm forward and  5 cm down
+		object_armoffset = tf::Vector3(-0.1,0,-0.1);//5 cm forward and  5 cm down
 	}
 
 QuadcopterGui::~QuadcopterGui()
@@ -129,6 +130,7 @@ void QuadcopterGui::initPlugin(qt_gui_cpp::PluginContext& context)
 	nh.getParam("/ctrlr/targety",target[1]);
 	nh.getParam("/ctrlr/targetz",target[2]);
 	nh.getParam("/ctrlr/partialcam_control",cam_partialcontrol);
+	nh.getParam("/ctrlr/timeout_grabbing",timeout_grabbing);
 
 	//Load UAV Name:  Used in setting tf frame id
 	nh.getParam("/gui/uav_name",uav_name);
@@ -443,9 +445,12 @@ void QuadcopterGui::enable_disablecamctrl(int state) //To specify which controll
 	{
 		/////////////////////////This cannot be used as a fallback without optitrack system //////////////
 		enable_camctrl = false;
+		//Fold arm:
+		if(parserinstance)
+			parserinstance->foldarm();
 		//Also specify the goal as the current quad postion TODO
 		//curr_goal = UV_O.getOrigin();//set the current goal to be same as the quadcopter origin we dont care abt the orientation as of now
-		tf::Vector3 centergoal(0.75, 0.9, 0.3);//Center of workspace and very low z easy to disarm
+		tf::Vector3 centergoal(0.75, 0.9, 0.5);//Center of workspace and very low z easy to disarm
 		updategoal_dynreconfig = true;//Set the flag to make sure dynamic reconfigure reads the new goal
 		goalcount = 20; //Set the goal back to the specified posn smoothly
 		diff_goal.setValue((-curr_goal[0] + centergoal[0])/goalcount, (-curr_goal[1] + centergoal[1])/goalcount,(-curr_goal[2] + centergoal[2])/goalcount);
@@ -706,7 +711,8 @@ void QuadcopterGui::camcmdCallback(const geometry_msgs::TransformStamped::ConstP
 			/*************** ARM CODE *********************/
 			//Computing the arm angles
 			//double yawdiff = atan2(OBJ_QUAD_origin[1], OBJ_QUAD_origin[0]);  Will try to improve the offset later
-			armlocaltarget[0] = OBJ_QUAD_origin[0]+object_armoffset[0]; armlocaltarget[1] = OBJ_QUAD_origin[1] + object_armoffset[1]; armlocaltarget[2] = OBJ_QUAD_origin[2] + object_armoffset[2];
+			tf::Vector3 target_location = OBJ_QUAD_origin + quatRotate(UV_O.getRotation().inverse(),object_armoffset);//Find the object location in local quad frame
+			armlocaltarget[0] = target_location[0]; armlocaltarget[1] = target_location[1]; armlocaltarget[2] = target_location[2];
 			//This offset is done in local frame which does not make sense always have to see what this amounts to
 			double armres = arminst->Ik(as,armlocaltarget);
 			int solnindex = 1;//When localtargetz < 0 //For now only choosing lower elbow Later can specify which one to pick TODO
@@ -726,18 +732,30 @@ void QuadcopterGui::camcmdCallback(const geometry_msgs::TransformStamped::ConstP
 					{
 						//Verify the value of armres when we are like 5 cm from the goal posn. We will use that to calibrate the arm to open
 						//Once it is opened, we note the time and put a timeout of 5 sec and then disable the cam to get a different trajectory
-						if(OBJ_QUAD_origin.length2() < yoffset_object*yoffset_object)//The distance object to quad is less than 0.5 m yoffset
+						/*if(OBJ_QUAD_origin.length2() <  (yoffset_object+0.1)*(yoffset_object))//The distance object to quad is less than 0.5 m yoffset
 						{
-							ROS_INFO("Obj_quad_in_optframe: [%f]\t[%f] \tArmres: [%f]",OBJ_QUAD_origin[0], OBJ_QUAD_origin[1], armres);
+							ROS_INFO("Obj_quad_in_optframe: [%f]\t[%f] \tArmres: [%f]",OBJ_QUAD_origin_inoptitrackframe[0], OBJ_QUAD_origin_inoptitrackframe[1], armres);
 						}
+						*/
 						if(armres > -0.1) //Check if in reachable workspace
 						{
-							//Set the goal yaw of the quadcopter goalyaw
-							//goalyaw = as[solnindex][0];//Target yaw for Quadcopter This is already done above dont need to do it here
-							parserinstance->setarmangles(armangles);
+							ros::Duration time_since_grabbing = ros::Time::now() - start_grabbing;
+							if(time_since_grabbing.toSec() > timeout_grabbing)
+							{
+								//Disable_Camera and fold arm:
+								ui_.camcheckbox->setCheckState(Qt::Unchecked);
+								//parserinstance->foldarm();
+							}
+							else
+							{
+								//Set the goal yaw of the quadcopter goalyaw
+								//goalyaw = as[solnindex][0];//Target yaw for Quadcopter This is already done above dont need to do it here
+								parserinstance->setarmangles(armangles);
+							}
 						}
 						else
 						{
+							start_grabbing = ros::Time::now();
 							parserinstance->foldarm();
 						}
 					}
@@ -986,6 +1004,7 @@ void QuadcopterGui::paramreqCallback(rqt_quadcoptergui::QuadcopterInterfaceConfi
 			config.yg = curr_goal[1];
 			config.zg = curr_goal[2];
 			config.yawg = goalyaw;
+			updategoal_dynreconfig = false;
 		}
 		else
 		{

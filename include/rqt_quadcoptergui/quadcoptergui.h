@@ -208,6 +208,8 @@ protected:
 	//boost::shared_ptr<visualization_msgs::Marker> finaltipPtr; TODO add final tip frame to see
 	tf::Transform quadtobase;
   boost::shared_ptr<tf::TransformBroadcaster> broadcaster;//Transform Broadcaster
+	ros::Time start_grabbing;
+	double timeout_grabbing;//Timeout for waiting to grab object usually a very short time to just stay for few seconds
 
 	protected slots:
 	virtual void wrappertakeoff();
