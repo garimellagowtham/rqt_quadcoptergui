@@ -147,7 +147,8 @@ protected:
 	tf::Vector3 diff_goal;
 	tf::Vector3 diff_velgoal;
 	tf::Vector3 curr_goal;
-	tf::Vector3 bias_vrpn;//This is right now estimated offline. But will add this online through a checkbox soon TODO
+	tf::Vector3 bias_vrpn;
+	tf::Vector3 vrpnrpy;//Latest vrpnrpy
 	float bias_count;
 	//The point is that if there is a bias in vrpn data then, the quadcopter will oscillate not about the actual position but around some angle which
 	//is the  bias in vrpn

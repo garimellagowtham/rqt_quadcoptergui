@@ -50,7 +50,7 @@ QuadcopterGui::QuadcopterGui() : rqt_gui_cpp::Plugin()
 	, followtraj(false), traj_amp(0), traj_freq(0), traj_skew(1)
 	, joymsg_prevbutton(0), buttoncount(0)
 	, joymsg_prevbutton1(0), buttoncount1(0)
-	, yoffset_object(0.5), updategoal_dynreconfig(false), cam_partialcontrol(true)
+	, yoffset_object(0.55), updategoal_dynreconfig(false), cam_partialcontrol(true)
 	, trajectoryPtr(new visualization_msgs::Marker())
 	, targetPtr(new visualization_msgs::Marker())
 	, broadcaster(new tf::TransformBroadcaster())
@@ -90,7 +90,7 @@ QuadcopterGui::QuadcopterGui() : rqt_gui_cpp::Plugin()
 		trajectoryPtr->color.b = 1.0;
 		trajectoryPtr->color.a = 1.0;
 		//For now default value of object_offset:
-		object_armoffset = tf::Vector3(-0.1,0,-0.1);//5 cm forward and  5 cm down
+		object_armoffset = tf::Vector3(-0.1,0,-0.1);//relative to the markers
 	}
 
 QuadcopterGui::~QuadcopterGui()
@@ -225,7 +225,7 @@ void QuadcopterGui::initPlugin(qt_gui_cpp::PluginContext& context)
 	nh.getParam("/bias_vrpnroll",bias_vrpn[0]);
 	nh.getParam("/bias_vrpnpitch",bias_vrpn[1]);
 	nh.getParam("/bias_vrpnyaw",bias_vrpn[2]);
-	bias_count = 100;//Initial bias so we dont vary mean very much
+	bias_count = 200;//Initial bias so we dont vary mean very much
 
 	// Logger
 	string logdir = "/home/gowtham";//Default name
@@ -282,15 +282,12 @@ void QuadcopterGui::RefreshGui()
 		return;
 	}
 	parserinstance->getquaddata(data);
-	Matrix3x3 rotmat = UV_O.getBasis();
-	tf::Vector3 vrpnrpy;
-	rotmat.getEulerYPR(vrpnrpy[2],vrpnrpy[1],vrpnrpy[0]);
 	if(ui_.bias_estcheckbox->isChecked())
 	{
 		bias_vrpn += (1/(bias_count+1))*(vrpnrpy - bias_vrpn);
 		bias_count += 1;//Increase the count
 	}
-	errorrpy = (vrpnrpy - bias_vrpn) - tf::Vector3(data.rpydata.x, data.rpydata.y,data.rpydata.z);
+	//cout<<"Bias :"<<bias_vrpn[0]<<"\t"<<bias_vrpn[1]<<"\t"<<bias_vrpn[2]<<"\t"<<endl;
 	//errorrpy.setValue(0,0,0);
 	tf::Vector3 quadorigin = UV_O.getOrigin();
 	tf::Vector3 obj_origin = OBJ_QUAD_stamptransform.getOrigin();
@@ -450,7 +447,7 @@ void QuadcopterGui::enable_disablecamctrl(int state) //To specify which controll
 			parserinstance->foldarm();
 		//Also specify the goal as the current quad postion TODO
 		//curr_goal = UV_O.getOrigin();//set the current goal to be same as the quadcopter origin we dont care abt the orientation as of now
-		tf::Vector3 centergoal(0.75, 0.9, 0.5);//Center of workspace and very low z easy to disarm
+		tf::Vector3 centergoal(0.75, 0.9, 1.4);//Center of workspace with same height
 		updategoal_dynreconfig = true;//Set the flag to make sure dynamic reconfigure reads the new goal
 		goalcount = 20; //Set the goal back to the specified posn smoothly
 		diff_goal.setValue((-curr_goal[0] + centergoal[0])/goalcount, (-curr_goal[1] + centergoal[1])/goalcount,(-curr_goal[2] + centergoal[2])/goalcount);
@@ -813,6 +810,9 @@ void QuadcopterGui::cmdCallback(const geometry_msgs::TransformStamped::ConstPtr 
 	}
 	controllers::ctrl_command rescmd;
 	transformStampedMsgToTF(*currframe,UV_O);//converts to the right format 
+	Matrix3x3 rotmat = UV_O.getBasis();
+	rotmat.getEulerYPR(vrpnrpy[2],vrpnrpy[1],vrpnrpy[0]);
+	errorrpy = (vrpnrpy - bias_vrpn) - tf::Vector3(data.rpydata.x, data.rpydata.y,data.rpydata.z);
 	if(enable_camctrl && !cam_partialcontrol)//This implies we are doing full camera control
 	{
 		//Not Using motion capture But still need UV_O in partial cam ctrl so always useful to save the currframe when available if not available thats fine
