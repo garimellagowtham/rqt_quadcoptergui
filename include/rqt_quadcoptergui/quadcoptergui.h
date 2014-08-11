@@ -74,6 +74,8 @@
 #include <tf/transform_listener.h>
 #include <tf/transform_broadcaster.h>
 
+#include <dynamixelsdk/arm_helper.h>
+
 namespace rqt_quadcoptergui {
 
 class QuadcopterGui
@@ -135,6 +137,7 @@ protected:
 
 	boost::shared_ptr<CameraSetptCtrl> ctrlrinst;
 	boost::shared_ptr<gcop::Arm> arminst;
+	boost::shared_ptr<dynamixelsdk::DynamixelArm> arm_hardwareinst;
 	ros::Timer goaltimer;
 	void cmdCallback(const geometry_msgs::TransformStamped::ConstPtr &currframe);
 	void camcmdCallback(const geometry_msgs::TransformStamped::ConstPtr &currframe);
@@ -175,6 +178,8 @@ protected:
 	bool cam_partialcontrol;//Only use the object position to set the goal position 
 	double yoffset_object;//Offset of the object in x direction 
 	bool updategoal_dynreconfig;//Flag for updating the dynamic reconfigure goal parameters whenever it is triggered (This will write the values in dynreconfig instead of reading from it)
+	double actual_armangles[2];//The angles obtained from dynamixelsdk
+  double tip_position[3];//Tip Position
 
 	//Reconfigure stuff:
 	boost::shared_ptr<dynamic_reconfigure::Server<rqt_quadcoptergui::QuadcopterInterfaceConfig> >reconfigserver;
@@ -224,7 +229,7 @@ protected:
 	virtual void enable_disablelog(int);
 	virtual void enable_disablemanualarmctrl(int);
 	virtual void RefreshGui();
-	virtual void Capture_Target();
+	//virtual void Capture_Target();
 };
 
 }

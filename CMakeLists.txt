@@ -9,6 +9,7 @@ find_package(catkin REQUIRED COMPONENTS
   controllers
   dynamic_reconfigure
   parsernode
+	dynamixelsdk
   roscpp
   rqt_gui
   rqt_gui_cpp
