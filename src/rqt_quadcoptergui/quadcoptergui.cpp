@@ -40,7 +40,7 @@ QuadcopterGui::QuadcopterGui() : rqt_gui_cpp::Plugin()
   , context_(0)
   , widget_(0)
 	, goalcount(0),goalyaw(0)
-	,startcontrol(false) ,testctrlr(true)
+	, startcontrol(false) ,testctrlr(true)
 	, corrected_thrustbias(0)
 	, enable_logging(false)
 	, reconfiginit(false)
@@ -198,7 +198,7 @@ void QuadcopterGui::initPlugin(qt_gui_cpp::PluginContext& context)
 	if(testctrlr)
 		ROS_INFO("In Test Controller Mode");
 	connect(ui_.Takeoffbutton, SIGNAL(clicked()), this, SLOT(wrappertakeoff()));
-	connect(ui_.TargetCapturebutton, SIGNAL(clicked()), this, SLOT(Capture_Target()));
+	//connect(ui_.TargetCapturebutton, SIGNAL(clicked()), this, SLOT(Capture_Target()));
 	connect(ui_.Landbutton, SIGNAL(clicked()), this, SLOT(wrapperLand()));
 	connect(ui_.Disarmbutton, SIGNAL(clicked()), this, SLOT(wrapperDisarm()));
 	connect(ui_.imucheckbox,SIGNAL(stateChanged(int)),this,SLOT(wrapperimu_recalib(int)));
@@ -214,6 +214,11 @@ void QuadcopterGui::initPlugin(qt_gui_cpp::PluginContext& context)
 	//Get the parameter to know whether to test the controller or directly use it. In testing mode, the thrust value is set to be a very small value and roll and pitch are normal. This way you can move and see if it is doing what its supposed to do
 	ctrlrinst.reset(new CameraSetptCtrl(nh, broadcaster));
 	arminst.reset(new gcop::Arm);
+	int dyn_deviceInd = 1;//Defaults
+	int dyn_baudnum = 57600;
+	nh.getParam("/dynamixel/deviceIndex",dyn_deviceInd);
+	nh.getParam("/dynamixel/baudrate",dyn_baudnum);
+	arm_hardwareinst.reset(new dynamixelsdk::DynamixelArm(dyn_deviceInd, dyn_baudnum));
 	arminst->l1 = 0.175;
 	//arminst->l2 = 0.35;
 	arminst->l2 = 0.35;
@@ -416,8 +421,12 @@ void QuadcopterGui::enable_disablemanualarmctrl(int state) //This is also useful
 	{
 		enable_joy = false;
 	}
-	if(parserinstance)
-		parserinstance->foldarm();//Just fold the arm whenever you switch between two modes
+  if(arm_hardwareinst && parserinstance)
+	{
+		arm_hardwareinst->foldarm();//Just fold the arm whenever you switch between two modes
+		if(!enable_joy)
+			parserinstance->grip(1);//Open gripper position in automatic position so that it will grip it automatically
+	}
 }
 void QuadcopterGui::enable_disablecamctrl(int state) //To specify which controller to use either the camera one or the motion capture one
 {
@@ -432,8 +441,13 @@ void QuadcopterGui::enable_disablecamctrl(int state) //To specify which controll
 		//[DEBUG]
 		//cout<<"Ros Time: "<<ros::Time::now()<<"\t UV_O Time: "<<UV_O.stamp_<<endl;
 		enable_camctrl = true;
+		//Open the gripper :
+		if(parserinstance)
+			parserinstance->grip(-1);//Open We changed open to be more energy efficient by increasing pwm width
 		if(cam_partialcontrol)//If partial control to debug we have to see the output of the goal whenever the quad is tarted up
+		{
 			goaltimer.start();//Redundancy
+		}
 		else
 		{
 			goaltimer.stop();//in full cam ctrl we do not use goal timer, instead the goal is directly set by object controller 
@@ -446,8 +460,8 @@ void QuadcopterGui::enable_disablecamctrl(int state) //To specify which controll
 		/////////////////////////This cannot be used as a fallback without optitrack system //////////////
 		enable_camctrl = false;
 		//Fold arm:
-		if(parserinstance)
-			parserinstance->foldarm();
+		if(arm_hardwareinst)
+			arm_hardwareinst->foldarm();
 		//Also specify the goal as the current quad postion TODO
 		//curr_goal = UV_O.getOrigin();//set the current goal to be same as the quadcopter origin we dont care abt the orientation as of now
 		tf::Vector3 centergoal(0.75, 0.9, 0.5);//Center of workspace and very low z easy to disarm
@@ -458,8 +472,8 @@ void QuadcopterGui::enable_disablecamctrl(int state) //To specify which controll
 		goaltimer.start();//Redundancy
 	}
 }
-
-void QuadcopterGui::Capture_Target()
+/*
+void QuadcopterGui::Capture_Target()//Removed as it is not useful anymore once camera is there
 {
 	if(!ctrlrinst || !parserinstance || !arminst)
 	{
@@ -475,7 +489,8 @@ void QuadcopterGui::Capture_Target()
 		armangles[0] = 0;
 		armangles[1] = 0;
 		armangles[2] = 0;//Neutral This is not an angle
-		parserinstance->setarmangles(armangles);//Set the angles
+		if(arm_hardwareinst)
+			arm_hardwareinst->setarmangles(armangles);//Set the angles
 	}
 	else if(buttoncount1 == 0)
 	{
@@ -491,9 +506,11 @@ void QuadcopterGui::Capture_Target()
 		ROS_INFO("Target Position: %f\t%f\t%f",terminal_pos[0],terminal_pos[1],terminal_pos[2]);
 
 		//Done setting the target folding back the arm
-		parserinstance->foldarm();
+		if(arm_hardwareinst)
+			arm_hardwareinst->foldarm();
 	}
 }
+*/
 
 void QuadcopterGui::enable_disablelog(int state)
 {
@@ -636,11 +653,11 @@ void QuadcopterGui::joyCallback(const sensor_msgs::Joy::ConstPtr &joymsg)
 	}
 	joymsg_prevbutton = joymsg->buttons[0];
 	if(buttoncount == 0)//Three state gripper
-		armpwm[2] = 0;//Neutral
+		parserinstance->grip(0);//Neutral
 	else if(buttoncount == 1)
-		armpwm[2] = -0.3; //Hold
+		parserinstance->grip(-0.3);//Hold
 	else if(buttoncount == 2)
-		armpwm[2] = 0.3;//Release
+		parserinstance->grip(0.3);//Release
 	//For starting to move arm:
 
 	if(enable_joy)//If the joystick is not enable return
@@ -655,12 +672,14 @@ void QuadcopterGui::joyCallback(const sensor_msgs::Joy::ConstPtr &joymsg)
 		{
 			armpwm[0] = joymsg->axes[1];
 			armpwm[1] = joymsg->axes[0];//Will convert them also into angles later
-			parserinstance->setarmpwm(armpwm);
+			if(arm_hardwareinst)
+				arm_hardwareinst->setarmpwm(armpwm);
 			cout<<"Settting armpwm"<<endl;
 		}
 		else
 		{
-			parserinstance->foldarm();
+			if(arm_hardwareinst)
+				arm_hardwareinst->foldarm();
 		}
 	}
 }
@@ -728,7 +747,7 @@ void QuadcopterGui::camcmdCallback(const geometry_msgs::TransformStamped::ConstP
 				if((++armratecount == armcmdrate))//default makes it 60/4 = 15Hz
 				{
 					armratecount = 0;
-					if(arminst && parserinstance) //Can also add startcontrol flag for starting this only when controller has started TODO
+					if(arminst && parserinstance && arm_hardwareinst) //Can also add startcontrol flag for starting this only when controller has started TODO
 					{
 						//Verify the value of armres when we are like 5 cm from the goal posn. We will use that to calibrate the arm to open
 						//Once it is opened, we note the time and put a timeout of 5 sec and then disable the cam to get a different trajectory
@@ -750,13 +769,23 @@ void QuadcopterGui::camcmdCallback(const geometry_msgs::TransformStamped::ConstP
 							{
 								//Set the goal yaw of the quadcopter goalyaw
 								//goalyaw = as[solnindex][0];//Target yaw for Quadcopter This is already done above dont need to do it here
-								parserinstance->setarmangles(armangles);
+									//Check if the tip is on the object:
+									arm_hardwareinst->getcurrentangles((double*)actual_armangles);
+									arminst->Fk(tip_position, actual_armangles, false);
+									double abssum_error = abs(tip_position[0] - armlocaltarget[0]) + abs(tip_position[1] - armlocaltarget[1]) + abs(tip_position[2] - armlocaltarget[2]);
+									//[DEBUG]
+									cout<<"Error in tip position: EX ["<<(tip_position[0] - armlocaltarget[0])<<"] EY ["<<(tip_position[1] - armlocaltarget[1])<<"] EZ ["<<(tip_position[2] - armlocaltarget[2])<<"]"<<endl;
+									if(abssum_error < 0.09)// we will calibrate it better later
+									{
+										parserinstance->grip(1);//Parser does not control arm directly anymore it only controls gripper
+									}
+									arm_hardwareinst->setarmangles(armangles);
 							}
 						}
 						else
 						{
 							start_grabbing = ros::Time::now();
-							parserinstance->foldarm();
+								arm_hardwareinst->foldarm();
 						}
 					}
 				}
@@ -860,108 +889,6 @@ void QuadcopterGui::cmdCallback(const geometry_msgs::TransformStamped::ConstPtr 
 	//#endif
 
 }
-/*
-	 void QuadcopterGui::cmdCallback(const geometry_msgs::TransformStamped::ConstPtr &currframe)
-	 {
-//static tf::TransformBroadcaster br;
-/////Add arm angle setting based on current posn and goal for the final tip TODO
-//////////Previous Comment Begin Here ////////////////
-if(data.quadstate != "Flying")
-{
-transformStampedMsgToTF(*currframe,UV_O);//converts to the right format 
-return;
-}
-//////////Previous Comment End Here ////////////////
-
-//Call the ctrlr to set the ctrl and then send the command to the quadparser
-if(!ctrlrinst)
-{
-ROS_WARN("Controller not instantiated");
-return;
-}
-controllers::ctrl_command rescmd;
-transformStampedMsgToTF(*currframe,UV_O);//converts to the right format 
-//Store the current position of the quadcopter for display
-//ctrlrinst->Set(UV_O, rescmd);
-ctrlrinst->Set(UV_O, errorrpy, rescmd);
-if(!parserinstance)
-{
-ROS_WARN("Parser not instantiated");
-return;
-}
-rescmdmsg.x = rescmd.roll; rescmdmsg.y = rescmd.pitch; rescmdmsg.z = rescmd.rateyaw; rescmdmsg.w = rescmd.thrust;
-if(testctrlr)
-{
-rescmdmsg.w = 0.2*data.thrustbias;
-}
-//Computing the arm angles
-//Convert the extraction point into local frame:
-tf::Vector3 localtarget = (UV_O*quadtobase).inverse()*target;
-//cout<<"Local Target: "<<localtarget[0]<<"\t"<<localtarget[1]<<"\t"<<localtarget[2]<<endl;
-armlocaltarget[0] = localtarget[0]; armlocaltarget[1] = localtarget[1]; armlocaltarget[2] = localtarget[2];
-double armres = arminst->Ik(as,armlocaltarget);
-//cout<<"Metric for in workspace or not: "<<armres<<endl;
-//Workspace constraints are not considered but joint constraints are considered in pixhawk
-//No need to map angles just pass them directly
-//Use always lower elbow solution i.e second one in the above soln
-//armangles[2] this is gripper will have to see how to close gripper too
-//int solnindex = 0;//Upper Elbow when localtargetz > 0
-//if(localtarget[2] < 0)
-int	solnindex = 1;//When localtargetz < 0 //For now only choosing lower elbow
-//Convert the angles into right frame i.e the arm angles = 0 means it is x+ straightened
-armangles[0] = as[solnindex][1]>(-M_PI/2)?as[solnindex][1]-M_PI/2:as[solnindex][1]+1.5*M_PI;
-//armangles[1] = as[solnindex][2]>(-M_PI/2)?as[solnindex][2]-M_PI/2:as[solnindex][2]+1.5*M_PI;
-armangles[1] = as[solnindex][2];//Relative angle wrt to first joint no transformation needed
-armangles[2] = armpwm[2];//Using the joystick for gripping	
-//cout<<"Resulting arm angles"<<as[solnindex][0]<<"\t"<<armangles[0]<<"\t"<<armangles[1]<<endl;
-
-if(!enable_joy)
-{
-if((++armratecount == armcmdrate))//default makes it 25 Hz
-{
-armratecount = 0;
-if(arminst && parserinstance) //Can also add startcontrol flag for starting this only when controller has started TODO
-{
-if(armres > -0.1) //Check if in reachable workspace
-{
-//Set the goal yaw of the quadcopter goalyaw
-goalyaw = as[solnindex][0];//Target yaw for Quadcopter
-parserinstance->setarmangles(armangles);
-}
-else
-{
-parserinstance->foldarm();
-}
-}
-}
-}
-if(data.armed && startcontrol)
-{
-	if((++ratecount) == throttlecmdrate)//Throttling down the rate of sending commands to the uav
-	{
-		ratecount = 0;
-		parserinstance->cmdrpythrust(rescmdmsg,true);//Also controlling yaw	
-		//ROS_INFO("Setting cmd");
-	}
-}	
-if(enable_logging)
-{
-	//Logging save to file
-	vrpnfile<<(UV_O.stamp_.toNSec())<<"\t"<<(currframe->transform.translation.x)<<"\t"<<(currframe->transform.translation.y)<<"\t"<<(currframe->transform.translation.z)<<"\t"<<(currframe->transform.rotation.x)<<"\t"<<(currframe->transform.rotation.y)<<"\t"<<(currframe->transform.rotation.z)<<"\t"<<(currframe->transform.rotation.w)<<endl;
-}	
-if(!data.armed)//Once the quadcopter is armed we do not set the goal position to quad's origin, the user will set the goal. But the goal will not move until u set the enable_control The user should not give random goal once it is initialized.
-{
-	curr_goal = UV_O.getOrigin();//set the current goal to be same as the quadcopter origin we dont care abt the orientation as of now
-	ctrlrinst->setgoal(curr_goal[0],curr_goal[1],curr_goal[2],goalyaw);//Set the goal to be same as the current position of the quadcopter the velgoal is by default 0
-}
-
-//Set the altitude of the quadcopter in the data
-parserinstance->setaltitude(currframe->transform.translation.z);
-//#ifdef PRINT
-//ROS_INFO("Rescmd: %f\t%f\t%f",rescmdmsg.x,rescmdmsg.y,rescmdmsg.w);
-//#endif
-}
-*/
 
 void QuadcopterGui::paramreqCallback(rqt_quadcoptergui::QuadcopterInterfaceConfig &config , uint32_t level)
 {
@@ -1041,7 +968,10 @@ void QuadcopterGui::paramreqCallback(rqt_quadcoptergui::QuadcopterInterfaceConfi
 	targetPtr->pose.position.z = target[2];
 	desiredtraj_pub.publish(trajectoryPtr);
 	desiredtraj_pub.publish(targetPtr);
-
+	if(parserinstance)
+	{
+		parserinstance->grip(config.gripper_state);
+	}
 	//traj_axis = config.traj_axis;
 	//corrected_thrustbias = config.add_thrustbias + data.thrustbias;
 	//ctrlrinst->setextbias(corrected_thrustbias);//Set the corrected thrustbias
