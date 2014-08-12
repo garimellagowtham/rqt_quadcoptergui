@@ -214,7 +214,7 @@ void QuadcopterGui::initPlugin(qt_gui_cpp::PluginContext& context)
 	//Get the parameter to know whether to test the controller or directly use it. In testing mode, the thrust value is set to be a very small value and roll and pitch are normal. This way you can move and see if it is doing what its supposed to do
 	ctrlrinst.reset(new CameraSetptCtrl(nh, broadcaster));
 	arminst.reset(new gcop::Arm);
-	int dyn_deviceInd = 1;//Defaults
+	int dyn_deviceInd = 0;//Defaults
 	int dyn_baudnum = 57600;
 	nh.getParam("/dynamixel/deviceIndex",dyn_deviceInd);
 	nh.getParam("/dynamixel/baudrate",dyn_baudnum);
@@ -251,6 +251,10 @@ void QuadcopterGui::initPlugin(qt_gui_cpp::PluginContext& context)
 		camfile.open((logdir_stamped+"/campose.dat").c_str());//TODO add warning if we cannot open the file
 		camfile.precision(9);
 		camfile<<"#Time \t Pos.X \t Pos.Y \t Pos.Z \t Quat.X \t Quat.Y \t Quat.Z \t Quat.W"<<endl;
+		//Arm Tip file
+		tipfile.open((logdir_stamped+"/tippos.dat").c_str());//TODO add warning if we cannot open the file
+		tipfile.precision(9);
+		tipfile<<"#Time \t Pos.X \t Pos.Y \t Pos.Z"<<endl;
 		//cmdfile.open(logdir_stamped+"/cmd.dat");//TODO add warning if we cannot open the file
 		parserinstance->setlogdir(logdir_stamped);
 		ctrlrinst->setlogdir(logdir_stamped);
@@ -286,11 +290,19 @@ void QuadcopterGui::RefreshGui()
 		ROS_ERROR("No parser instance created");
 		return;
 	}
+	//parserinstance->grip(-1);//Open arm [DEBUG]
 	parserinstance->getquaddata(data);
 	if(ui_.bias_estcheckbox->isChecked())
 	{
 		bias_vrpn += (1/(bias_count+1))*(vrpnrpy - bias_vrpn);
 		bias_count += 1;//Increase the count
+	}
+	//Get the Arm angles for Tip Position:
+	if(!enable_camctrl)//If camera is enabled the angles are checked over there already
+	{
+		arm_hardwareinst->getcurrentangles((double*)actual_armangles);
+		if(arminst)//Simple Check to avoid errors
+			arminst->Fk(tip_position, actual_armangles, false);
 	}
 	//cout<<"Bias :"<<bias_vrpn[0]<<"\t"<<bias_vrpn[1]<<"\t"<<bias_vrpn[2]<<"\t"<<endl;
 	//errorrpy.setValue(0,0,0);
@@ -298,7 +310,7 @@ void QuadcopterGui::RefreshGui()
 	tf::Vector3 obj_origin = OBJ_QUAD_stamptransform.getOrigin();
 	// Create a Text message based on the data from the Parser class
 	sprintf(buffer,
-			"Battery Percent: %2.2f\t\nTemperature: %2.2f\tPressure: %2.2f\tWindspeed: %2.2f\tAltitude: %2.2f\t\nRoll: %2.2f\tPitch %2.2f\tYaw %2.2f\nMagx: %2.2f\tMagy %2.2f\tMagz %2.2f\naccx: %2.2f\taccy %2.2f\taccz %2.2f\nvelx: %2.2f\tvely %2.2f\tvelz %2.2f\nposx: %2.2f\tposy: %2.2f\tposz: %2.2f\nvrpnr: %2.2f\tvrpnp: %2.2f\tvrpny: %2.2f\nErrorr: %2.2f\tErrorrp: %2.2f\tErrory: %2.2f\nresr: %2.2f\tresp: %2.2f\tresy: %2.2f\trest: %2.2f\nbias_r: %2.2f\tbias_p: %2.2f\tbias_y: %2.2f\nObjx: %2.2f\tObjy: %2.2f\tObjz: %2.2f\t\nMass: %2.2f\tTimestamp: %2.2f\t\nQuadState: %s", 
+			"Battery Percent: %2.2f\t\nTemperature: %2.2f\tPressure: %2.2f\tWindspeed: %2.2f\tAltitude: %2.2f\t\nRoll: %2.2f\tPitch %2.2f\tYaw %2.2f\nMagx: %2.2f\tMagy %2.2f\tMagz %2.2f\naccx: %2.2f\taccy %2.2f\taccz %2.2f\nvelx: %2.2f\tvely %2.2f\tvelz %2.2f\nposx: %2.2f\tposy: %2.2f\tposz: %2.2f\nvrpnr: %2.2f\tvrpnp: %2.2f\tvrpny: %2.2f\nErrorr: %2.2f\tErrorrp: %2.2f\tErrory: %2.2f\nresr: %2.2f\tresp: %2.2f\tresy: %2.2f\trest: %2.2f\nbias_r: %2.2f\tbias_p: %2.2f\tbias_y: %2.2f\nObjx: %2.2f\tObjy: %2.2f\tObjz: %2.2f\t\nTipx: %2.2f\tTipy: %2.2f\tTipz: %2.2f\t\nMass: %2.2f\tTimestamp: %2.2f\t\nQuadState: %s", 
 			data.batterypercent
 			,data.temperature,data.pressure
 			,data.wind_speed, data.altitude
@@ -312,6 +324,7 @@ void QuadcopterGui::RefreshGui()
 			,(rescmdmsg.x)*(180/M_PI), (rescmdmsg.y)*(180/M_PI), rescmdmsg.z, rescmdmsg.w
 			,bias_vrpn[0]*(180/M_PI),bias_vrpn[1]*(180/M_PI),bias_vrpn[2]*(180/M_PI)
 			,obj_origin[0], obj_origin[1], obj_origin[2]
+			,tip_position[0], tip_position[1], tip_position[2]
 			,data.mass,data.timestamp,data.quadstate.c_str());
 	//, (rescmdmsg.x-data.rpydata.x)*(180/M_PI), (rescmdmsg.y-data.rpydata.y)*(180/M_PI), rescmdmsg.z*(180/M_PI), rescmdmsg.w
 
@@ -440,7 +453,7 @@ void QuadcopterGui::enable_disablecamctrl(int state) //To specify which controll
 		enable_camctrl = true;
 		//Open the gripper :
 		if(parserinstance)
-			parserinstance->grip(-1);//Open We changed open to be more energy efficient by increasing pwm width
+			parserinstance->grip(-1);//Open We changed open to be more energy efficient by increasing pwm width TODO/Done but not uploaded
 		if(cam_partialcontrol)//If partial control to debug we have to see the output of the goal whenever the quad is tarted up
 		{
 			goaltimer.start();//Redundancy
@@ -622,11 +635,13 @@ void QuadcopterGui::shutdownPlugin()
 	parser_loader.reset();
 	ctrlrinst.reset();
 	arminst.reset();
+	arm_hardwareinst.reset();
 	vrpndata_sub.shutdown();
 	reconfigserver.reset();
 	goaltimer.stop();
 	vrpnfile.close();//Close the file
 	camfile.close();//Close the file
+	tipfile.close();//Close the file
 	trajectoryPtr.reset();
 	targetPtr.reset();
 	desiredtraj_pub.shutdown();
@@ -652,9 +667,9 @@ void QuadcopterGui::joyCallback(const sensor_msgs::Joy::ConstPtr &joymsg)
 	if(buttoncount == 0)//Three state gripper
 		parserinstance->grip(0);//Neutral
 	else if(buttoncount == 1)
-		parserinstance->grip(-0.3);//Hold
+		parserinstance->grip(1);//Hold
 	else if(buttoncount == 2)
-		parserinstance->grip(0.3);//Release
+		parserinstance->grip(-1);//Release
 	//For starting to move arm:
 
 	if(enable_joy)//If the joystick is not enable return
@@ -671,7 +686,7 @@ void QuadcopterGui::joyCallback(const sensor_msgs::Joy::ConstPtr &joymsg)
 			armpwm[1] = joymsg->axes[0];//Will convert them also into angles later
 			if(arm_hardwareinst)
 				arm_hardwareinst->setarmpwm(armpwm);
-			cout<<"Settting armpwm"<<endl;
+			//cout<<"Settting armpwm"<<endl;
 		}
 		else
 		{
@@ -701,6 +716,13 @@ void QuadcopterGui::camcmdCallback(const geometry_msgs::TransformStamped::ConstP
 		ROS_WARN("Controller not instantiated");
 		return;
 	}
+	// Find the current tip Position (this is common whether we use full or partial cam control)
+	arm_hardwareinst->getcurrentangles((double*)actual_armangles);
+	arminst->Fk(tip_position, actual_armangles, false);
+	if(enable_logging)
+	{
+		tipfile<<	tip_position[0]<<"\t"<<tip_position[1]<<"\t"<<tip_position[2]<<"\t"<<endl;
+	}
 	//If using partialcontrol should not directly control quadcopter instead just set the goal in optitrack frame and use the optitrack controller to do the job:
 	if(cam_partialcontrol)
 	{
@@ -719,7 +741,7 @@ void QuadcopterGui::camcmdCallback(const geometry_msgs::TransformStamped::ConstP
 			//Set goalyaw also to face towards the object:
 			//[DEBUG]	cout<<"Goal Yaw: "<<atan2(OBJ_QUAD_origin_inoptitrackframe[1], OBJ_QUAD_origin_inoptitrackframe[0])<<endl; //atan2(y,x)
 			goalyaw = atan2(OBJ_QUAD_origin_inoptitrackframe[1], OBJ_QUAD_origin_inoptitrackframe[0]); 
-			cout<<"Goal Yaw: "<<goalyaw<<endl;
+			//cout<<"Goal Yaw: "<<goalyaw<<endl;
 			diff_goal.setValue((-curr_goal[0] + object_origin[0])/goalcount, (-curr_goal[1] + object_offsetposny)/goalcount,(-curr_goal[2] + object_origin[2])/goalcount);//Adding offset in y posn assuming that is the dirxn of approach later have to use that from the object pose
 			diff_velgoal.setValue(0,0,0);
 			//cout<<"Goal posn in optitrack: "<<object_origin[0]<<"\t"<<object_origin[1]<<"\t"<<object_origin[2]<<endl;
@@ -767,8 +789,6 @@ void QuadcopterGui::camcmdCallback(const geometry_msgs::TransformStamped::ConstP
 								//Set the goal yaw of the quadcopter goalyaw
 								//goalyaw = as[solnindex][0];//Target yaw for Quadcopter This is already done above dont need to do it here
 									//Check if the tip is on the object:
-									arm_hardwareinst->getcurrentangles((double*)actual_armangles);
-									arminst->Fk(tip_position, actual_armangles, false);
 									double abssum_error = abs(tip_position[0] - armlocaltarget[0]) + abs(tip_position[1] - armlocaltarget[1]) + abs(tip_position[2] - armlocaltarget[2]);
 									//[DEBUG]
 									cout<<"Error in tip position: EX ["<<(tip_position[0] - armlocaltarget[0])<<"] EY ["<<(tip_position[1] - armlocaltarget[1])<<"] EZ ["<<(tip_position[2] - armlocaltarget[2])<<"]"<<endl;

@@ -204,6 +204,7 @@ protected:
 	//ofstream cmdfile;
 	ofstream vrpnfile;
 	ofstream camfile;
+	ofstream tipfile;
 	bool enable_logging;
 	bool reconfiginit;
 	int throttlecmdrate,ratecount;
