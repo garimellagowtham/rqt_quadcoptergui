@@ -631,6 +631,8 @@ void QuadcopterGui::follow_trajectory(int state)
 
 void QuadcopterGui::shutdownPlugin()
 {
+	//Poweroff arm:
+	arm_hardwareinst->power(false);
 	parserinstance.reset();
 	parser_loader.reset();
 	ctrlrinst.reset();
