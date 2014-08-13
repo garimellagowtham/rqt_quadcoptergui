@@ -62,7 +62,7 @@ QuadcopterGui::QuadcopterGui() : rqt_gui_cpp::Plugin()
 		errorrpy.setValue(0,0,0);
 		target.setValue(0,0,0);//Initializing the target extraction point
 		quadtobase.setIdentity();
-		quadtobase.setOrigin(tf::Vector3(0.0732,0,-0.06));//The z distance needs to adjusted exactly
+		quadtobase.setOrigin(tf::Vector3(0.0732,0,-0.07));//The z distance needs to adjusted exactly
 		//armpwm.resize(3);//Number of arms for now just hardcoded
 
 		targetPtr->id = 1;
@@ -90,7 +90,7 @@ QuadcopterGui::QuadcopterGui() : rqt_gui_cpp::Plugin()
 		trajectoryPtr->color.b = 1.0;
 		trajectoryPtr->color.a = 1.0;
 		//For now default value of object_offset:
-		object_armoffset = tf::Vector3(-0.1,0,-0.1);//relative to the markers
+		object_armoffset = tf::Vector3(0,0.05,-0.07);//relative to the markers in Optitrack frame //For full camera control this SHOULD BE IN Object/Inertial Frame
 	}
 
 QuadcopterGui::~QuadcopterGui()
@@ -131,6 +131,8 @@ void QuadcopterGui::initPlugin(qt_gui_cpp::PluginContext& context)
 	nh.getParam("/ctrlr/targetz",target[2]);
 	nh.getParam("/ctrlr/partialcam_control",cam_partialcontrol);
 	nh.getParam("/ctrlr/timeout_grabbing",timeout_grabbing);
+	//For now fixed value later will set this as a parameter:
+	arm_basewrtquad.setValue(0.0732, 0, -0.1);
 
 	//Load UAV Name:  Used in setting tf frame id
 	nh.getParam("/gui/uav_name",uav_name);
@@ -221,7 +223,7 @@ void QuadcopterGui::initPlugin(qt_gui_cpp::PluginContext& context)
 	arm_hardwareinst.reset(new dynamixelsdk::DynamixelArm(dyn_deviceInd, dyn_baudnum));
 	arminst->l1 = 0.175;
 	//arminst->l2 = 0.35;
-	arminst->l2 = 0.35;
+	arminst->l2 = 0.42;
 	arminst->x1 = 0.025;//Need to change this after measuring again TODO
 	parserinstance->getquaddata(data);
 	ctrlrinst->setextbias(data.thrustbias); //Fext initial guess comes from the parser. We will need to estimate it for some quadcopters if its used in commanding it.
@@ -301,6 +303,14 @@ void QuadcopterGui::RefreshGui()
 	if(!enable_camctrl)//If camera is enabled the angles are checked over there already
 	{
 		arm_hardwareinst->getcurrentangles((double*)actual_armangles);
+		//cout<<"Actual Arm Angles_ -1: "<<actual_armangles[0]<<"\t"<<actual_armangles[1]<<endl;
+		actual_armangles[0] = parsernode::common::map_angle(actual_armangles[0]);
+		//cout<<"Actual Arm Angles_ 0: "<<actual_armangles[0]<<"\t"<<actual_armangles[1]<<endl;
+		//Map to the right frame as explained in previous comments
+		actual_armangles[0] = actual_armangles[0] < (M_PI/2)? actual_armangles[0]+M_PI/2:actual_armangles[0] - 1.5*M_PI;
+		//[DEBUG]
+		//cout<<"Actual Arm Angles: "<<actual_armangles[0]<<"\t"<<actual_armangles[1]<<endl;
+
 		if(arminst)//Simple Check to avoid errors
 			arminst->Fk(tip_position, actual_armangles, false);
 	}
@@ -467,6 +477,7 @@ void QuadcopterGui::enable_disablecamctrl(int state) //To specify which controll
 	}
 	else
 	{
+		cout<<"Disabling_Camctrl"<<endl;
 		/////////////////////////This cannot be used as a fallback without optitrack system //////////////
 		enable_camctrl = false;
 		//Fold arm:
@@ -632,7 +643,7 @@ void QuadcopterGui::follow_trajectory(int state)
 void QuadcopterGui::shutdownPlugin()
 {
 	//Poweroff arm:
-	arm_hardwareinst->power(false);
+	arm_hardwareinst->powermotors(false);
 	parserinstance.reset();
 	parser_loader.reset();
 	ctrlrinst.reset();
@@ -720,10 +731,16 @@ void QuadcopterGui::camcmdCallback(const geometry_msgs::TransformStamped::ConstP
 	}
 	// Find the current tip Position (this is common whether we use full or partial cam control)
 	arm_hardwareinst->getcurrentangles((double*)actual_armangles);
+	actual_armangles[0] = parsernode::common::map_angle(actual_armangles[0]);
+	//cout<<"Actual Arm Angles_ 0: "<<actual_armangles[0]<<"\t"<<actual_armangles[1]<<endl;
+	//Map to the right frame i.e when all angles are 0, the arm is facing perpendicular and down with x axis also being down
+	actual_armangles[0] = actual_armangles[0] < (M_PI/2)? actual_armangles[0]+M_PI/2:actual_armangles[0] - 1.5*M_PI;
+	//[DEBUG]
+	//cout<<"Actual Arm Angles: "<<actual_armangles[0]<<"\t"<<actual_armangles[1]<<endl;
 	arminst->Fk(tip_position, actual_armangles, false);
 	if(enable_logging)
 	{
-		tipfile<<	tip_position[0]<<"\t"<<tip_position[1]<<"\t"<<tip_position[2]<<"\t"<<endl;
+		tipfile<<(ros::Time::now().toNSec())<<"\t"<<	tip_position[0]<<"\t"<<tip_position[1]<<"\t"<<tip_position[2]<<"\t"<<endl;//Later will change this to include timestamp when the serial data is got in a parallel thread TODO
 	}
 	//If using partialcontrol should not directly control quadcopter instead just set the goal in optitrack frame and use the optitrack controller to do the job:
 	if(cam_partialcontrol)
@@ -751,12 +768,12 @@ void QuadcopterGui::camcmdCallback(const geometry_msgs::TransformStamped::ConstP
 			/*************** ARM CODE *********************/
 			//Computing the arm angles
 			//double yawdiff = atan2(OBJ_QUAD_origin[1], OBJ_QUAD_origin[0]);  Will try to improve the offset later
-			tf::Vector3 target_location = OBJ_QUAD_origin + quatRotate(UV_O.getRotation().inverse(),object_armoffset);//Find the object location in local quad frame
+			tf::Vector3 target_location = (OBJ_QUAD_origin + quatRotate(UV_O.getRotation().inverse(),object_armoffset)) - arm_basewrtquad;//Find the object location in local quad frame
 			armlocaltarget[0] = target_location[0]; armlocaltarget[1] = target_location[1]; armlocaltarget[2] = target_location[2];
 			//This offset is done in local frame which does not make sense always have to see what this amounts to
 			double armres = arminst->Ik(as,armlocaltarget);
 			int solnindex = 1;//When localtargetz < 0 //For now only choosing lower elbow Later can specify which one to pick TODO
-			//Convert the angles into right frame i.e the arm angles = 0 means it is x+ straightened
+			//Convert the angles into right frame i.e when all as is all zero that means the arm is perpendicular and facing down
 			armangles[0] = as[solnindex][1]>(-M_PI/2)?as[solnindex][1]-M_PI/2:as[solnindex][1]+1.5*M_PI;
 			//armangles[1] = as[solnindex][2]>(-M_PI/2)?as[solnindex][2]-M_PI/2:as[solnindex][2]+1.5*M_PI;
 			armangles[1] = as[solnindex][2];//Relative angle wrt to first joint no transformation needed
@@ -777,6 +794,8 @@ void QuadcopterGui::camcmdCallback(const geometry_msgs::TransformStamped::ConstP
 							ROS_INFO("Obj_quad_in_optframe: [%f]\t[%f] \tArmres: [%f]",OBJ_QUAD_origin_inoptitrackframe[0], OBJ_QUAD_origin_inoptitrackframe[1], armres);
 						}
 						*/
+						cout<<"Armres: "<<armres<<endl;
+						cout<<"Arm angles: "<<armangles[0]<<"\t"<<armangles[1]<<endl;
 						if(armres > -0.1) //Check if in reachable workspace
 						{
 							ros::Duration time_since_grabbing = ros::Time::now() - start_grabbing;
@@ -791,20 +810,26 @@ void QuadcopterGui::camcmdCallback(const geometry_msgs::TransformStamped::ConstP
 								//Set the goal yaw of the quadcopter goalyaw
 								//goalyaw = as[solnindex][0];//Target yaw for Quadcopter This is already done above dont need to do it here
 									//Check if the tip is on the object:
-									double abssum_error = abs(tip_position[0] - armlocaltarget[0]) + abs(tip_position[1] - armlocaltarget[1]) + abs(tip_position[2] - armlocaltarget[2]);
+									//double abssum_error = abs(tip_position[0] - armlocaltarget[0]) + abs(tip_position[1] - armlocaltarget[1]) + abs(tip_position[2] - armlocaltarget[2]);
 									//[DEBUG]
 									cout<<"Error in tip position: EX ["<<(tip_position[0] - armlocaltarget[0])<<"] EY ["<<(tip_position[1] - armlocaltarget[1])<<"] EZ ["<<(tip_position[2] - armlocaltarget[2])<<"]"<<endl;
-									if(abssum_error < 0.09)// we will calibrate it better later
+									cout<<"tip position: TX ["<<(tip_position[0])<<"] TY ["<<(tip_position[1])<<"] TZ ["<<(tip_position[2])<<"]"<<endl;
+									cout<<"Local Target: LX ["<<(armlocaltarget[0])<<"] LY ["<<( armlocaltarget[1])<<"] LZ ["<<(armlocaltarget[2])<<"]"<<endl;
+									if( (abs(tip_position[0] - armlocaltarget[0])< 0.05) && (abs(tip_position[1] - armlocaltarget[1]) < 0.05) && (abs(tip_position[2] - armlocaltarget[2]) < 0.02) )// we will calibrate it better later //Add these as params TODO
 									{
 										parserinstance->grip(1);//Parser does not control arm directly anymore it only controls gripper
+										//Add oneshot timer to relax grip TODO
+										ui_.camcheckbox->setCheckState(Qt::Unchecked);
+										return;
 									}
 									arm_hardwareinst->setarmangles(armangles);
 							}
 						}
 						else
 						{
-							start_grabbing = ros::Time::now();
+								start_grabbing = ros::Time::now();
 								arm_hardwareinst->foldarm();
+								parserinstance->grip(0);//Neutral
 						}
 					}
 				}
@@ -993,6 +1018,10 @@ void QuadcopterGui::paramreqCallback(rqt_quadcoptergui::QuadcopterInterfaceConfi
 	if(parserinstance)
 	{
 		parserinstance->grip(config.gripper_state);
+	}
+	if(arm_hardwareinst)
+	{
+		arm_hardwareinst->powermotors(config.power_motors);
 	}
 	//traj_axis = config.traj_axis;
 	//corrected_thrustbias = config.add_thrustbias + data.thrustbias;

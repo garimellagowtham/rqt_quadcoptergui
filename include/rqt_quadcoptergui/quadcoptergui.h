@@ -172,6 +172,7 @@ protected:
 	double armlocaltarget[3];//Arm goal (Where the object is to grab)
 	//double delta_armgoal[3];//Arm Goal in the Frame of the Quadcopter
 	tf::Vector3 target;//Extraction target point
+	tf::Vector3 arm_basewrtquad;
 	double armpwm[3];//Arm pwm
 	double armangles[3];//The angles of the arm in radians in gcop convention
 	std::string uav_name;
