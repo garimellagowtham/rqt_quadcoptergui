@@ -34,6 +34,8 @@
 
 #include <pluginlib/class_list_macros.h>
 
+//#define ARM_ENABLED
+
 namespace rqt_quadcoptergui {
 
 QuadcopterGui::QuadcopterGui() : rqt_gui_cpp::Plugin()
@@ -223,7 +225,9 @@ void QuadcopterGui::initPlugin(qt_gui_cpp::PluginContext& context)
 	int dyn_baudnum = 57600;
 	nh.getParam("/dynamixel/deviceIndex",dyn_deviceInd);
 	nh.getParam("/dynamixel/baudrate",dyn_baudnum);
+#ifdef ARM_ENABLED
 	arm_hardwareinst.reset(new dynamixelsdk::DynamixelArm(dyn_deviceInd, dyn_baudnum));
+#endif
 	arminst->l1 = 0.175;
 	//arminst->l2 = 0.35;
 	arminst->l2 = 0.42;
@@ -305,6 +309,7 @@ void QuadcopterGui::RefreshGui()
 		bias_count += 1;//Increase the count
 	}
 	//Get the Arm angles for Tip Position:
+#ifdef ARM_ENABLED
 	if(!enable_camctrl)//If camera is enabled the angles are checked over there already
 	{
 		arm_hardwareinst->getcurrentangles((double*)actual_armangles);
@@ -319,6 +324,7 @@ void QuadcopterGui::RefreshGui()
 		if(arminst)//Simple Check to avoid errors
 			arminst->Fk(tip_position, actual_armangles, false);
 	}
+#endif
 	//cout<<"Bias :"<<bias_vrpn[0]<<"\t"<<bias_vrpn[1]<<"\t"<<bias_vrpn[2]<<"\t"<<endl;
 	//errorrpy.setValue(0,0,0);
 	tf::Vector3 quadorigin = UV_O.getOrigin();
@@ -446,12 +452,14 @@ void QuadcopterGui::enable_disablemanualarmctrl(int state) //This is also useful
 	{
 		enable_joy = false;
 	}
+#ifdef ARM_ENABLED
   if(arm_hardwareinst && parserinstance)
 	{
 		arm_hardwareinst->foldarm();//Just fold the arm whenever you switch between two modes
 		if(!enable_joy)
 			parserinstance->grip(-1);//Open gripper position in automatic position so that it will grip it automatically
 	}
+#endif
 }
 void QuadcopterGui::enable_disablecamctrl(int state) //To specify which controller to use either the camera one or the motion capture one
 {
@@ -648,12 +656,16 @@ void QuadcopterGui::follow_trajectory(int state)
 void QuadcopterGui::shutdownPlugin()
 {
 	//Poweroff arm:
+#ifdef ARM_ENABLED
 	arm_hardwareinst->powermotors(false);
+#endif
 	parserinstance.reset();
 	parser_loader.reset();
 	ctrlrinst.reset();
 	arminst.reset();
+#ifdef ARM_ENABLED
 	arm_hardwareinst.reset();
+#endif
 	vrpndata_sub.shutdown();
 	reconfigserver.reset();
 	goaltimer.stop();
@@ -702,14 +714,18 @@ void QuadcopterGui::joyCallback(const sensor_msgs::Joy::ConstPtr &joymsg)
 		{
 			armpwm[0] = joymsg->axes[1];
 			armpwm[1] = joymsg->axes[0];//Will convert them also into angles later
+#ifdef ARM_ENABLED
 			if(arm_hardwareinst)
 				arm_hardwareinst->setarmpwm(armpwm);
+#endif
 			//cout<<"Settting armpwm"<<endl;
 		}
 		else
 		{
+#ifdef ARM_ENABLED
 			if(arm_hardwareinst)
 				arm_hardwareinst->foldarm();
+#endif
 		}
 	}
 }
@@ -717,11 +733,13 @@ void QuadcopterGui::joyCallback(const sensor_msgs::Joy::ConstPtr &joymsg)
 void QuadcopterGui::ClosingafterGrabbing(const ros::TimerEvent &event)
 {
 	ROS_INFO("Closing the arm and grabbing target");
+#ifdef ARM_ENABLED
 	if(arm_hardwareinst && parserinstance)
 	{
 								arm_hardwareinst->foldarm();
 								parserinstance->grip(0);//Neutral
 	}
+#endif
 }
 //Camera callback listens to pose of object in Camera frame
 void QuadcopterGui::camcmdCallback(const geometry_msgs::TransformStamped::ConstPtr &currframe)
@@ -745,6 +763,7 @@ void QuadcopterGui::camcmdCallback(const geometry_msgs::TransformStamped::ConstP
 		return;
 	}
 	// Find the current tip Position (this is common whether we use full or partial cam control)
+#ifdef ARM_ENABLED
 	arm_hardwareinst->getcurrentangles((double*)actual_armangles);
 	actual_armangles[0] = parsernode::common::map_angle(actual_armangles[0]);
 	//cout<<"Actual Arm Angles_ 0: "<<actual_armangles[0]<<"\t"<<actual_armangles[1]<<endl;
@@ -753,6 +772,7 @@ void QuadcopterGui::camcmdCallback(const geometry_msgs::TransformStamped::ConstP
 	//[DEBUG]
 	//cout<<"Actual Arm Angles: "<<actual_armangles[0]<<"\t"<<actual_armangles[1]<<endl;
 	arminst->Fk(tip_position, actual_armangles, false);
+#endif
 	if(enable_logging)
 	{
 		tipfile<<(ros::Time::now().toNSec())<<"\t"<<	tip_position[0]<<"\t"<<tip_position[1]<<"\t"<<tip_position[2]<<"\t"<<endl;//Later will change this to include timestamp when the serial data is got in a parallel thread TODO
@@ -800,6 +820,7 @@ void QuadcopterGui::camcmdCallback(const geometry_msgs::TransformStamped::ConstP
 				if((++armratecount == armcmdrate))//default makes it 60/4 = 15Hz
 				{
 					armratecount = 0;
+#ifdef ARM_ENABLED
 					if(arminst && parserinstance && arm_hardwareinst) //Can also add startcontrol flag for starting this only when controller has started TODO
 					{
 						//Verify the value of armres when we are like 5 cm from the goal posn. We will use that to calibrate the arm to open
@@ -847,6 +868,7 @@ void QuadcopterGui::camcmdCallback(const geometry_msgs::TransformStamped::ConstP
 								start_grabbing = ros::Time::now();
 						}
 					}
+#endif
 				}
 			}
 		}
@@ -1034,10 +1056,12 @@ void QuadcopterGui::paramreqCallback(rqt_quadcoptergui::QuadcopterInterfaceConfi
 	{
 		parserinstance->grip(config.gripper_state);
 	}
+#ifdef ARM_ENABLED
 	if(arm_hardwareinst)
 	{
 		arm_hardwareinst->powermotors(config.power_motors);
 	}
+#endif
 	//traj_axis = config.traj_axis;
 	//corrected_thrustbias = config.add_thrustbias + data.thrustbias;
 	//ctrlrinst->setextbias(corrected_thrustbias);//Set the corrected thrustbias
