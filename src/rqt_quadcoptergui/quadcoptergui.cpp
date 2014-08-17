@@ -187,6 +187,9 @@ void QuadcopterGui::initPlugin(qt_gui_cpp::PluginContext& context)
 		return;
 	}
 
+	//Set gripper state to neutral in the beginning:
+	parserinstance->grip(0);
+
 	//Connect all the slots as needed
 
 	//Setup the timer:
@@ -283,6 +286,8 @@ void QuadcopterGui::initPlugin(qt_gui_cpp::PluginContext& context)
 	//Create timer for moving Goal Dynamically:
 	goaltimer = nh.createTimer(ros::Duration(0.02), &QuadcopterGui::goaltimerCallback,this);//50Hz So the goal can go upto 25 Hz  Nyquist rate
 	goaltimer.stop();
+	timer_grabbing = nh.createTimer(ros::Duration(4), &QuadcopterGui::ClosingafterGrabbing, this, true);//One shot timer
+	timer_grabbing.stop();
 }
 
 void QuadcopterGui::RefreshGui()
@@ -445,7 +450,7 @@ void QuadcopterGui::enable_disablemanualarmctrl(int state) //This is also useful
 	{
 		arm_hardwareinst->foldarm();//Just fold the arm whenever you switch between two modes
 		if(!enable_joy)
-			parserinstance->grip(1);//Open gripper position in automatic position so that it will grip it automatically
+			parserinstance->grip(-1);//Open gripper position in automatic position so that it will grip it automatically
 	}
 }
 void QuadcopterGui::enable_disablecamctrl(int state) //To specify which controller to use either the camera one or the motion capture one
@@ -481,8 +486,8 @@ void QuadcopterGui::enable_disablecamctrl(int state) //To specify which controll
 		/////////////////////////This cannot be used as a fallback without optitrack system //////////////
 		enable_camctrl = false;
 		//Fold arm:
-		if(arm_hardwareinst)
-			arm_hardwareinst->foldarm();
+		//if(arm_hardwareinst)
+			//arm_hardwareinst->foldarm();
 		//Also specify the goal as the current quad postion TODO
 		//curr_goal = UV_O.getOrigin();//set the current goal to be same as the quadcopter origin we dont care abt the orientation as of now
 		tf::Vector3 centergoal(0.75, 0.9, 1.4);//Center of workspace with same height
@@ -708,6 +713,16 @@ void QuadcopterGui::joyCallback(const sensor_msgs::Joy::ConstPtr &joymsg)
 		}
 	}
 }
+
+void QuadcopterGui::ClosingafterGrabbing(const ros::TimerEvent &event)
+{
+	ROS_INFO("Closing the arm and grabbing target");
+	if(arm_hardwareinst && parserinstance)
+	{
+								arm_hardwareinst->foldarm();
+								parserinstance->grip(0);//Neutral
+	}
+}
 //Camera callback listens to pose of object in Camera frame
 void QuadcopterGui::camcmdCallback(const geometry_msgs::TransformStamped::ConstPtr &currframe)
 {
@@ -818,7 +833,9 @@ void QuadcopterGui::camcmdCallback(const geometry_msgs::TransformStamped::ConstP
 									if( (abs(tip_position[0] - armlocaltarget[0])< 0.05) && (abs(tip_position[1] - armlocaltarget[1]) < 0.05) && (abs(tip_position[2] - armlocaltarget[2]) < 0.02) )// we will calibrate it better later //Add these as params TODO
 									{
 										parserinstance->grip(1);//Parser does not control arm directly anymore it only controls gripper
-										//Add oneshot timer to relax grip TODO
+										//Add oneshot timer to relax grip
+										timer_grabbing.setPeriod(ros::Duration(5));//5 seconds
+										timer_grabbing.start();//Start oneshot timer;
 										ui_.camcheckbox->setCheckState(Qt::Unchecked);
 										return;
 									}
@@ -828,8 +845,6 @@ void QuadcopterGui::camcmdCallback(const geometry_msgs::TransformStamped::ConstP
 						else
 						{
 								start_grabbing = ros::Time::now();
-								arm_hardwareinst->foldarm();
-								parserinstance->grip(0);//Neutral
 						}
 					}
 				}

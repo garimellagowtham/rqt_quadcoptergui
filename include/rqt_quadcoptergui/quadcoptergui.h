@@ -140,6 +140,7 @@ protected:
 	boost::shared_ptr<dynamixelsdk::DynamixelArm> arm_hardwareinst;
 	ros::Timer goaltimer;
 	void cmdCallback(const geometry_msgs::TransformStamped::ConstPtr &currframe);
+	void ClosingafterGrabbing(const ros::TimerEvent &); //Timer Callback for Closing after grabbing an object
 	void camcmdCallback(const geometry_msgs::TransformStamped::ConstPtr &currframe);
 	void joyCallback(const sensor_msgs::Joy::ConstPtr &joymsg);
 	bool enable_joy;
@@ -188,6 +189,7 @@ protected:
 
 	void paramreqCallback(rqt_quadcoptergui::QuadcopterInterfaceConfig &config , uint32_t level);
 
+
 	//Storing the current frame along with time stamp:
 	tf::StampedTransform UV_O;
 	//Storing the current object pose in Quadcopter frame
@@ -218,6 +220,7 @@ protected:
   boost::shared_ptr<tf::TransformBroadcaster> broadcaster;//Transform Broadcaster
 	ros::Time start_grabbing;
 	double timeout_grabbing;//Timeout for waiting to grab object usually a very short time to just stay for few seconds
+	ros::Timer timer_grabbing;//Used to fold arm and set gripper to neutral after grabbing
 
 	protected slots:
 	virtual void wrappertakeoff();
