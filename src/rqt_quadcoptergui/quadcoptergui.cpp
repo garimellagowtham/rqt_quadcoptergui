@@ -627,16 +627,16 @@ void QuadcopterGui::integrator_control(int state)
 	}
 	if(testctrlr)//If testing the controller, do not integrate the thrust 
 	{
-		ctrlrinst->integratethrust(false);//Redundancy 
+		ctrlrinst->integrate(false);//Redundancy 
 		return;
 	}
 	if(state == Qt::Checked)
 	{
-		ctrlrinst->integratethrust(true);
+		ctrlrinst->integrate(true);
 	}
 	else if(state == Qt::Unchecked)
 	{
-		ctrlrinst->integratethrust(false);
+		ctrlrinst->integrate(false);
 	}
 }
 
