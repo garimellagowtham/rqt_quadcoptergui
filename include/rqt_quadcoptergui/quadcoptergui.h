@@ -178,10 +178,10 @@ protected:
 	double armangles[3];//The angles of the arm in radians in gcop convention
 	std::string uav_name;
 	bool cam_partialcontrol;//Only use the object position to set the goal position 
-	double yoffset_object;//Offset of the object in x direction 
 	bool updategoal_dynreconfig;//Flag for updating the dynamic reconfigure goal parameters whenever it is triggered (This will write the values in dynreconfig instead of reading from it)
 	double actual_armangles[2];//The angles obtained from dynamixelsdk
   double tip_position[3];//Tip Position
+	bool gripped_already; //Used to avoid restarting the timer if it already gripped the target once just waits for 5 secs before returning
 
 	//Reconfigure stuff:
 	boost::shared_ptr<dynamic_reconfigure::Server<rqt_quadcoptergui::QuadcopterInterfaceConfig> >reconfigserver;
@@ -213,6 +213,8 @@ protected:
 	int throttlecmdrate,ratecount;
 	int armcmdrate,armratecount;
 	tf::Vector3  object_armoffset;//Offset for object when arm has to catch it
+	tf::Vector3 quadoffset_object;//Offset of the quadcopter from markers
+	//tf::Vector3  manual_offset;//Offset for object when arm has to catch it
 	boost::shared_ptr<visualization_msgs::Marker> trajectoryPtr;
 	boost::shared_ptr<visualization_msgs::Marker> targetPtr;
 	//boost::shared_ptr<visualization_msgs::Marker> finaltipPtr; TODO add final tip frame to see

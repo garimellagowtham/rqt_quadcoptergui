@@ -52,7 +52,7 @@ QuadcopterGui::QuadcopterGui() : rqt_gui_cpp::Plugin()
 	, followtraj(false), traj_amp(0), traj_freq(0), traj_skew(1)
 	, joymsg_prevbutton(0), buttoncount(0)
 	, joymsg_prevbutton1(0), buttoncount1(0)
-	, yoffset_object(0.55), updategoal_dynreconfig(false), cam_partialcontrol(true)
+	, updategoal_dynreconfig(false), cam_partialcontrol(true), gripped_already(false)
 	, trajectoryPtr(new visualization_msgs::Marker())
 	, targetPtr(new visualization_msgs::Marker())
 	, broadcaster(new tf::TransformBroadcaster())
@@ -93,6 +93,8 @@ QuadcopterGui::QuadcopterGui() : rqt_gui_cpp::Plugin()
 		trajectoryPtr->color.a = 1.0;
 		//For now default value of object_offset:
 		object_armoffset = tf::Vector3(0,0.05,-0.07);//relative to the markers in Optitrack frame //For full camera control this SHOULD BE IN Object/Inertial Frame
+		quadoffset_object = tf::Vector3(0, -0.5, 0.07);//Where the quadcopter should stay relative to the markers This is manually adjusted based on the accuracy of the quadcopter
+		//manual_offset = tf::Vector3(0,0.1,0);//This is the bias in estimation of the object. We have to find an automatic way of finding this
 	}
 
 QuadcopterGui::~QuadcopterGui()
@@ -306,6 +308,7 @@ void QuadcopterGui::RefreshGui()
 	if(ui_.bias_estcheckbox->isChecked())
 	{
 		bias_vrpn += (1/(bias_count+1))*(vrpnrpy - bias_vrpn);
+		bias_vrpn[2] = 0;//This is overriding yaw bias as there is no yaw bias
 		bias_count += 1;//Increase the count
 	}
 	//Get the Arm angles for Tip Position:
@@ -455,7 +458,7 @@ void QuadcopterGui::enable_disablemanualarmctrl(int state) //This is also useful
 #ifdef ARM_ENABLED
   if(arm_hardwareinst && parserinstance)
 	{
-		arm_hardwareinst->foldarm();//Just fold the arm whenever you switch between two modes
+		arm_hardwareinst->foldarm();//Just fold the arm whenever you switch between two modes Robustness
 		if(!enable_joy)
 			parserinstance->grip(-1);//Open gripper position in automatic position so that it will grip it automatically
 	}
@@ -734,12 +737,15 @@ void QuadcopterGui::ClosingafterGrabbing(const ros::TimerEvent &event)
 {
 	ROS_INFO("Closing the arm and grabbing target");
 #ifdef ARM_ENABLED
+  gripped_already = false;//Reset gripped already to false after one trial
 	if(arm_hardwareinst && parserinstance)
 	{
-								arm_hardwareinst->foldarm();
-								parserinstance->grip(0);//Neutral
+		arm_hardwareinst->foldarm();
+		parserinstance->grip(0);//Neutral
 	}
 #endif
+	//Disabling Cam checkbox here
+	ui_.camcheckbox->setCheckState(Qt::Unchecked);
 }
 //Camera callback listens to pose of object in Camera frame
 void QuadcopterGui::camcmdCallback(const geometry_msgs::TransformStamped::ConstPtr &currframe)
@@ -750,6 +756,7 @@ void QuadcopterGui::camcmdCallback(const geometry_msgs::TransformStamped::ConstP
 	tf::Transform OBJ_CAM_transform;
 	transformMsgToTF(currframe->transform,OBJ_CAM_transform);//converts to the right format 
 	tf::Transform OBJ_QUAD_transform = CAM_QUAD_transform*OBJ_CAM_transform*OBJ_MOD_transform;
+	//+ quatRotate(UV_O.getRotation(),manual_offset) //Will incorporate it later
 	OBJ_QUAD_stamptransform  = tf::StampedTransform(OBJ_QUAD_transform, currframe->header.stamp,uav_name,"object");//CAM_QUAD is the pose of Camera in Quadcopter frame, OBJ_MOD is the transform needed to make the object parallel (in terms of roll, pitch) with the Inertial frame
 	if(!enable_camctrl)//Not Using Camera Control
 	{
@@ -787,16 +794,17 @@ void QuadcopterGui::camcmdCallback(const geometry_msgs::TransformStamped::ConstP
 		tf::Vector3 OBJ_QUAD_origin_inoptitrackframe = quatRotate(UV_O.getRotation(),OBJ_QUAD_origin);//Get the object in quadcopters frame  written in optirack frame
 		//Substract y offset (Assuming the object is to be approached in y dirxn) TODO Use object pose or some input dirxn of approach for grasping later//
 		///object_origin[1] -= yoffset_object;
-		double object_offsetposny = object_origin[1] - yoffset_object;
+		//double object_offsetposny = object_origin[1] - yoffset_object;
+		tf::Vector3 offset_quadposn = object_origin + quadoffset_object;
 		//Fixed Workspace for now:
-		if(object_origin[0] < 1.4 && object_origin[0] > 0.1 && object_offsetposny < 1.6 && object_offsetposny > 0.2 && object_origin[2] < 1.6 && object_origin[2] > 0)
+		if(offset_quadposn[0] < 1.4 && offset_quadposn[0] > 0.1 && offset_quadposn[1] < 1.6 && offset_quadposn[1] > 0.2 && offset_quadposn[2] < 1.7 && offset_quadposn[2] > 0)
 		{
 			goalcount = 20;//TODO Figure out as a function of freq of goaltimer
 			//Set goalyaw also to face towards the object:
 			//[DEBUG]	cout<<"Goal Yaw: "<<atan2(OBJ_QUAD_origin_inoptitrackframe[1], OBJ_QUAD_origin_inoptitrackframe[0])<<endl; //atan2(y,x)
 			goalyaw = atan2(OBJ_QUAD_origin_inoptitrackframe[1], OBJ_QUAD_origin_inoptitrackframe[0]); 
 			//cout<<"Goal Yaw: "<<goalyaw<<endl;
-			diff_goal.setValue((-curr_goal[0] + object_origin[0])/goalcount, (-curr_goal[1] + object_offsetposny)/goalcount,(-curr_goal[2] + object_origin[2])/goalcount);//Adding offset in y posn assuming that is the dirxn of approach later have to use that from the object pose
+			diff_goal.setValue((-curr_goal[0] + offset_quadposn[0])/goalcount, (-curr_goal[1] + offset_quadposn[1])/goalcount,(-curr_goal[2] + offset_quadposn[2])/goalcount);//Adding offset in y posn assuming that is the dirxn of approach later have to use that from the object pose
 			diff_velgoal.setValue(0,0,0);
 			//cout<<"Goal posn in optitrack: "<<object_origin[0]<<"\t"<<object_origin[1]<<"\t"<<object_origin[2]<<endl;
 
@@ -838,8 +846,8 @@ void QuadcopterGui::camcmdCallback(const geometry_msgs::TransformStamped::ConstP
 							if(time_since_grabbing.toSec() > timeout_grabbing)
 							{
 								//Disable_Camera and fold arm:
+								arm_hardwareinst->foldarm();//Can replace this with oneshot timer if needed TODO
 								ui_.camcheckbox->setCheckState(Qt::Unchecked);
-								//parserinstance->foldarm();
 							}
 							else
 							{
@@ -851,13 +859,13 @@ void QuadcopterGui::camcmdCallback(const geometry_msgs::TransformStamped::ConstP
 									cout<<"Error in tip position: EX ["<<(tip_position[0] - armlocaltarget[0])<<"] EY ["<<(tip_position[1] - armlocaltarget[1])<<"] EZ ["<<(tip_position[2] - armlocaltarget[2])<<"]"<<endl;
 									cout<<"tip position: TX ["<<(tip_position[0])<<"] TY ["<<(tip_position[1])<<"] TZ ["<<(tip_position[2])<<"]"<<endl;
 									cout<<"Local Target: LX ["<<(armlocaltarget[0])<<"] LY ["<<( armlocaltarget[1])<<"] LZ ["<<(armlocaltarget[2])<<"]"<<endl;
-									if( (abs(tip_position[0] - armlocaltarget[0])< 0.05) && (abs(tip_position[1] - armlocaltarget[1]) < 0.05) && (abs(tip_position[2] - armlocaltarget[2]) < 0.02) )// we will calibrate it better later //Add these as params TODO
+									if( (abs(tip_position[0] - armlocaltarget[0])< 0.05) && (abs(tip_position[1] - armlocaltarget[1]) < 0.05) && (abs(tip_position[2] - armlocaltarget[2]) < 0.02) && (!gripped_already))// we will calibrate it better later //Add these as params TODO
 									{
+										gripped_already = true;//Stops gripping after once
 										parserinstance->grip(1);//Parser does not control arm directly anymore it only controls gripper
-										//Add oneshot timer to relax grip
-										timer_grabbing.setPeriod(ros::Duration(5));//5 seconds
+										//Adding oneshot timer to relax grip
+										timer_grabbing.setPeriod(ros::Duration(4));//5 seconds
 										timer_grabbing.start();//Start oneshot timer;
-										ui_.camcheckbox->setCheckState(Qt::Unchecked);
 										return;
 									}
 									arm_hardwareinst->setarmangles(armangles);
@@ -874,7 +882,7 @@ void QuadcopterGui::camcmdCallback(const geometry_msgs::TransformStamped::ConstP
 		}
 		else
 		{
-			cout<<"Object out of workspace: "<<object_origin[0]<<"\t"<<object_offsetposny<<"\t"<<object_origin[2]<<endl;
+			cout<<"Object out of workspace: "<<offset_quadposn[0]<<"\t"<<offset_quadposn[1]<<"\t"<<offset_quadposn[2]<<endl;
 			cout<<"Object in Quad frame: \t"<<OBJ_QUAD_origin[0]<<"\t"<<OBJ_QUAD_origin[1]<<"\t"<<OBJ_QUAD_origin[2]<<endl;
 		}
 	}
@@ -923,9 +931,14 @@ void QuadcopterGui::cmdCallback(const geometry_msgs::TransformStamped::ConstPtr 
 	}
 	controllers::ctrl_command rescmd;
 	transformStampedMsgToTF(*currframe,UV_O);//converts to the right format 
+
 	Matrix3x3 rotmat = UV_O.getBasis();
 	rotmat.getEulerYPR(vrpnrpy[2],vrpnrpy[1],vrpnrpy[0]);
 	errorrpy = (vrpnrpy - bias_vrpn) - tf::Vector3(data.rpydata.x, data.rpydata.y,data.rpydata.z);
+
+	tf::Vector3 &quadorigin = UV_O.getOrigin();
+	quadorigin[2] -= 0.05;//This is to offset the quad position in z dirxn for 5 cm
+
 	if(enable_camctrl && !cam_partialcontrol)//This implies we are doing full camera control
 	{
 		//Not Using motion capture But still need UV_O in partial cam ctrl so always useful to save the currframe when available if not available thats fine
