@@ -943,7 +943,7 @@ void QuadcopterGui::cmdCallback(const geometry_msgs::TransformStamped::ConstPtr 
 
 	Matrix3x3 rotmat = UV_O.getBasis();
 	rotmat.getEulerYPR(vrpnrpy[2],vrpnrpy[1],vrpnrpy[0]);
-	errorrpy = (vrpnrpy - bias_vrpn) - tf::Vector3(data.rpydata.x, data.rpydata.y,data.rpydata.z);
+	//errorrpy = (vrpnrpy - bias_vrpn) - tf::Vector3(data.rpydata.x, data.rpydata.y,data.rpydata.z);// No Need to do this since we are resetting imu to vrpn every 10 Hz
 
 	tf::Vector3 &quadorigin = UV_O.getOrigin();
 	quadorigin[2] -= 0.05;//This is to offset the quad position in z dirxn for 5 cm
@@ -955,7 +955,7 @@ void QuadcopterGui::cmdCallback(const geometry_msgs::TransformStamped::ConstPtr 
 	}
 	//Store the current position of the quadcopter for display
 	//ctrlrinst->Set(UV_O, rescmd);
-	ctrlrinst->Set(UV_O, errorrpy, rescmd);//By default no filtering if needed can add filter data
+	ctrlrinst->Set(UV_O, rescmd);//By default no filtering if needed can add filter data
 	//cout<<"Rescmd: "<<rescmd.roll <<"\t"<<rescmd.pitch <<"\t"<<rescmd.rateyaw <<"\t"<<rescmd.thrust <<"\t"<<endl;
 	if(!parserinstance)
 	{
