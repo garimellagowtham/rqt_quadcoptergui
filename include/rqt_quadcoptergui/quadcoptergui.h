@@ -159,6 +159,7 @@ protected:
 
 	void goaltimerCallback(const ros::TimerEvent&);
 	int goalcount;
+	int reset_imu_count;
 	float goalyaw;
 	bool startcontrol, testctrlr;
 	float corrected_thrustbias;

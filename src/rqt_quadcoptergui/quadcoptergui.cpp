@@ -41,7 +41,7 @@ namespace rqt_quadcoptergui {
 QuadcopterGui::QuadcopterGui() : rqt_gui_cpp::Plugin()
   , context_(0)
   , widget_(0)
-	, goalcount(0),goalyaw(0)
+	, goalcount(0), reset_imu_count(0), goalyaw(0)
 	, startcontrol(false) ,testctrlr(true)
 	, corrected_thrustbias(0)
 	, enable_logging(false)
@@ -328,6 +328,15 @@ void QuadcopterGui::RefreshGui()
 			arminst->Fk(tip_position, actual_armangles, false);
 	}
 #endif
+	//Reset attitude on IMU every 10 Hz
+	if(++reset_imu_count == 5)
+	{
+		reset_imu_count = 0;
+		if(parserinstance)
+		{
+			parserinstance->reset_attitude(vrpnrpy[0], vrpnrpy[1], vrpnrpy[2]);
+		}
+	}
 	//cout<<"Bias :"<<bias_vrpn[0]<<"\t"<<bias_vrpn[1]<<"\t"<<bias_vrpn[2]<<"\t"<<endl;
 	//errorrpy.setValue(0,0,0);
 	tf::Vector3 quadorigin = UV_O.getOrigin();
