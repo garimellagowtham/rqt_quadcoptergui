@@ -7,7 +7,7 @@
 	<rosparam command="load" file="$(find rqt_quadcoptergui)/params/pixhawk_serial.yaml"/>
 	<rosparam command="load" file="$(find rqt_quadcoptergui)/params/pixhawk_dynamixel.yaml"/>
 	<param name="/gui/logdir" type="string" value="$(find rqt_quadcoptergui)/logfiles"/>
-	<include file="$(find gcop_ros_est)/launch/estimator1.launch"/>
+	<!--include file="$(find gcop_ros_est)/launch/estimator1.launch"/-->
 	<node pkg="rqt_gui" type="rqt_gui" name="gui" output="screen"/>
 	<node pkg="tf2_ros" type="static_transform_publisher" name="pixhawk_to_cam" args="0.088 0 -0.032 0.5 0.5 0.5 0.5 pixhawk camera" />
 	<!--node pkg="tf2_ros" type="static_transform_publisher" name="pixhawk_to_cam" args="0.0882 0 -0.032 -0.5 0.5 -0.5 0.5 pixhawk camera" /-->

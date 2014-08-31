@@ -34,7 +34,7 @@
 
 #include <pluginlib/class_list_macros.h>
 
-//#define ARM_ENABLED
+#define ARM_ENABLED
 
 namespace rqt_quadcoptergui {
 
@@ -235,12 +235,20 @@ void QuadcopterGui::initPlugin(qt_gui_cpp::PluginContext& context)
 	arminst->l2 = 0.42;
 	arminst->x1 = 0.025;//Need to change this after measuring again TODO
 	parserinstance->getquaddata(data);
-	ctrlrinst->setextbias(data.thrustbias); //Fext initial guess comes from the parser. We will need to estimate it for some quadcopters if its used in commanding it.
+	if(ctrlrinst)
+	{
+		//double xbias, ybias;
+		//nh.getParam("/bias_vrpnx",xbias);
+		//nh.getParam("/bias_vrpny",ybias);
+		//ctrlrinst->setextbias(data.thrustbias, xbias, ybias);
+		ctrlrinst->setextbias(data.thrustbias); //Fext initial guess comes from the parser. We will need to estimate it for some quadcopters if its used in commanding it.
+	}
 	//bias_vrpn.setValue(2.33*(M_PI/180),-0.3*(M_PI/180),0);
 	bias_vrpn.setValue(0,0,0);
 	nh.getParam("/bias_vrpnroll",bias_vrpn[0]);
 	nh.getParam("/bias_vrpnpitch",bias_vrpn[1]);
 	nh.getParam("/bias_vrpnyaw",bias_vrpn[2]);
+	bias_vrpn = (M_PI/180.0)*bias_vrpn;//Convert degrees to radians
 	bias_count = 200;//Initial bias so we dont vary mean very much
 
 	// Logger
@@ -257,7 +265,7 @@ void QuadcopterGui::initPlugin(qt_gui_cpp::PluginContext& context)
 		mkdir(logdir_stamped.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);//Create the directory see http://pubs.opengroup.org/onlinepubs/009695399/functions/mkdir.html
 		vrpnfile.open((logdir_stamped+"/vrpn.dat").c_str());//TODO add warning if we cannot open the file
 		vrpnfile.precision(9);
-		vrpnfile<<"#Time \t Pos.X \t Pos.Y \t Pos.Z \t Quat.X \t Quat.Y \t Quat.Z \t Quat.W"<<endl;
+		vrpnfile<<"#Time \t Pos.X \t Pos.Y \t Pos.Z \t Quat.X \t Quat.Y \t Quat.Z \t Quat.W \t Bias_R \t Bias_P"<<endl;
 		//Camfile
 		camfile.open((logdir_stamped+"/campose.dat").c_str());//TODO add warning if we cannot open the file
 		camfile.precision(9);
@@ -305,12 +313,7 @@ void QuadcopterGui::RefreshGui()
 	}
 	//parserinstance->grip(-1);//Open arm [DEBUG]
 	parserinstance->getquaddata(data);
-	if(ui_.bias_estcheckbox->isChecked())
-	{
-		bias_vrpn += (1/(bias_count+1))*(vrpnrpy - bias_vrpn);
-		bias_vrpn[2] = 0;//This is overriding yaw bias as there is no yaw bias
-		bias_count += 1;//Increase the count
-	}
+	
 	//Get the Arm angles for Tip Position:
 #ifdef ARM_ENABLED
 	if(!enable_camctrl)//If camera is enabled the angles are checked over there already
@@ -341,9 +344,18 @@ void QuadcopterGui::RefreshGui()
 	//errorrpy.setValue(0,0,0);
 	tf::Vector3 quadorigin = UV_O.getOrigin();
 	tf::Vector3 obj_origin = OBJ_QUAD_stamptransform.getOrigin();
+	if(ui_.bias_estcheckbox->isChecked())
+	{
+		bias_vrpn[0] += -0.0005*(quadorigin[1] - curr_goal[1]);
+		bias_vrpn[1] += 0.0005*(quadorigin[0] - curr_goal[0]);
+		/*bias_vrpn += (1/(bias_count+1))*(vrpnrpy - bias_vrpn);
+		bias_vrpn[2] = 0;//Set Vrpn yaw bias to 0
+		bias_count += 1;//Increase the count
+		*/
+	}
 	// Create a Text message based on the data from the Parser class
 	sprintf(buffer,
-			"Battery Percent: %2.2f\t\nTemperature: %2.2f\tPressure: %2.2f\tWindspeed: %2.2f\tAltitude: %2.2f\t\nRoll: %2.2f\tPitch %2.2f\tYaw %2.2f\nMagx: %2.2f\tMagy %2.2f\tMagz %2.2f\naccx: %2.2f\taccy %2.2f\taccz %2.2f\nvelx: %2.2f\tvely %2.2f\tvelz %2.2f\nposx: %2.2f\tposy: %2.2f\tposz: %2.2f\nvrpnr: %2.2f\tvrpnp: %2.2f\tvrpny: %2.2f\nErrorr: %2.2f\tErrorrp: %2.2f\tErrory: %2.2f\nresr: %2.2f\tresp: %2.2f\tresy: %2.2f\trest: %2.2f\nbias_r: %2.2f\tbias_p: %2.2f\tbias_y: %2.2f\nObjx: %2.2f\tObjy: %2.2f\tObjz: %2.2f\t\nTipx: %2.2f\tTipy: %2.2f\tTipz: %2.2f\t\nMass: %2.2f\tTimestamp: %2.2f\t\nQuadState: %s", 
+			"Battery Percent: %2.2f\t\nTemperature: %2.2f\tPressure: %2.2f\tWindspeed: %2.2f\tAltitude: %2.2f\t\nRoll: %2.2f\tPitch %2.2f\tYaw %2.2f\nMagx: %2.2f\tMagy %2.2f\tMagz %2.2f\naccx: %2.2f\taccy %2.2f\taccz %2.2f\nvelx: %2.2f\tvely %2.2f\tvelz %2.2f\nposx: %2.2f\tposy: %2.2f\tposz: %2.2f\nvrpnr: %2.2f\tvrpnp: %2.2f\tvrpny: %2.2f\nErrorr: %2.2f\tErrorrp: %2.2f\tErrory: %2.2f\nresr: %2.2f\tresp: %2.2f\tresy: %2.2f\trest: %2.2f\nbias_roll: %2.2f\tbias_pitch: %2.2f\tbias_yaw: %2.2f\nObjx: %2.2f\tObjy: %2.2f\tObjz: %2.2f\t\nTipx: %2.2f\tTipy: %2.2f\tTipz: %2.2f\t\nMass: %2.2f\tTimestamp: %2.2f\t\nQuadState: %s", 
 			data.batterypercent
 			,data.temperature,data.pressure
 			,data.wind_speed, data.altitude
@@ -943,10 +955,12 @@ void QuadcopterGui::cmdCallback(const geometry_msgs::TransformStamped::ConstPtr 
 
 	Matrix3x3 rotmat = UV_O.getBasis();
 	rotmat.getEulerYPR(vrpnrpy[2],vrpnrpy[1],vrpnrpy[0]);
+	vrpnrpy = vrpnrpy - bias_vrpn;//Adjusting for the bias here itself
 	//errorrpy = (vrpnrpy - bias_vrpn) - tf::Vector3(data.rpydata.x, data.rpydata.y,data.rpydata.z);// No Need to do this since we are resetting imu to vrpn every 10 Hz
+	//errorrpy = -bias_vrpn;//Since error is substracted from the cmd and bias should be substracted from the cmd value
+	//- is used for previous method remove it when using new method
 
 	tf::Vector3 &quadorigin = UV_O.getOrigin();
-	quadorigin[2] -= 0.05;//This is to offset the quad position in z dirxn for 5 cm
 
 	if(enable_camctrl && !cam_partialcontrol)//This implies we are doing full camera control
 	{
@@ -954,8 +968,8 @@ void QuadcopterGui::cmdCallback(const geometry_msgs::TransformStamped::ConstPtr 
 		return;
 	}
 	//Store the current position of the quadcopter for display
-	//ctrlrinst->Set(UV_O, rescmd);
-	ctrlrinst->Set(UV_O, rescmd);//By default no filtering if needed can add filter data
+	ctrlrinst->Set(UV_O, rescmd);//Since imu is corrected using unbiased vrpn data we can send commands which are unbiased too
+	//ctrlrinst->Set(UV_O,errorrpy, rescmd);//By default no filtering if needed can add filter data
 	//cout<<"Rescmd: "<<rescmd.roll <<"\t"<<rescmd.pitch <<"\t"<<rescmd.rateyaw <<"\t"<<rescmd.thrust <<"\t"<<endl;
 	if(!parserinstance)
 	{
@@ -979,7 +993,7 @@ void QuadcopterGui::cmdCallback(const geometry_msgs::TransformStamped::ConstPtr 
 	if(enable_logging)
 	{
 		//Logging save to file
-		vrpnfile<<(UV_O.stamp_.toNSec())<<"\t"<<(currframe->transform.translation.x)<<"\t"<<(currframe->transform.translation.y)<<"\t"<<(currframe->transform.translation.z)<<"\t"<<(currframe->transform.rotation.x)<<"\t"<<(currframe->transform.rotation.y)<<"\t"<<(currframe->transform.rotation.z)<<"\t"<<(currframe->transform.rotation.w)<<endl;
+		vrpnfile<<(UV_O.stamp_.toNSec())<<"\t"<<(currframe->transform.translation.x)<<"\t"<<(currframe->transform.translation.y)<<"\t"<<(currframe->transform.translation.z)<<"\t"<<(currframe->transform.rotation.x)<<"\t"<<(currframe->transform.rotation.y)<<"\t"<<(currframe->transform.rotation.z)<<"\t"<<(currframe->transform.rotation.w)<<"\t"<<bias_vrpn[0]<<"\t"<<bias_vrpn[1]<<endl;
 	}	
 	//[DEBUG] if(!startcontrol)
 	if(!data.armed)//Once the quadcopter is armed we do not set the goal position to quad's origin, the user will set the goal. But the goal will not move until u set the enable_control The user should not give random goal once it is initialized.
@@ -1017,9 +1031,11 @@ void QuadcopterGui::paramreqCallback(rqt_quadcoptergui::QuadcopterInterfaceConfi
 		ros::param::get("/ctrlr/cmdrate_throttle",config.cmdrate_throttle);
 		ros::param::get("/ctrlr/traj_amp",config.traj_amp);
 		ros::param::get("/ctrlr/traj_freq",config.traj_freq);
+		config.roll_bias = bias_vrpn[0]*(180.0/M_PI);
+		config.pitch_bias = bias_vrpn[1]*(180.0/M_PI);
 		reconfiginit = true;
 	}
-	ctrlrinst->setgains(config.kpr, config.kdr, config.kpt, config.kdt, config.kit);
+	ctrlrinst->setgains(config.kpr, config.kdr, config.kpt, config.kdt, config.kit);//Need to add kpy and kiy TODO
 	ctrlrinst->setbounds(config.throtbound, (M_PI/180.0)*config.rpbound);//This throttle bound is different from throttle bias which needs to be estimated for some quadcopters. This just cuts off the throttle values that are beyond thrustbias +/- throtbound
 
 	throttlecmdrate = config.cmdrate_throttle;
@@ -1084,6 +1100,8 @@ void QuadcopterGui::paramreqCallback(rqt_quadcoptergui::QuadcopterInterfaceConfi
 		arm_hardwareinst->powermotors(config.power_motors);
 	}
 #endif
+	bias_vrpn[0] = config.roll_bias*(M_PI/180.0);
+	bias_vrpn[1] = config.pitch_bias*(M_PI/180.0);
 	//traj_axis = config.traj_axis;
 	//corrected_thrustbias = config.add_thrustbias + data.thrustbias;
 	//ctrlrinst->setextbias(corrected_thrustbias);//Set the corrected thrustbias
