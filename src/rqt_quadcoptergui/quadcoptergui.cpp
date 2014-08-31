@@ -968,7 +968,8 @@ void QuadcopterGui::cmdCallback(const geometry_msgs::TransformStamped::ConstPtr 
 		return;
 	}
 	//Store the current position of the quadcopter for display
-	ctrlrinst->Set(UV_O, rescmd);//Since imu is corrected using unbiased vrpn data we can send commands which are unbiased too
+	//Using kalman filter
+	ctrlrinst->Set(UV_O, rescmd, true);//Since imu is corrected using unbiased vrpn data we can send commands which are unbiased too 
 	//ctrlrinst->Set(UV_O,errorrpy, rescmd);//By default no filtering if needed can add filter data
 	//cout<<"Rescmd: "<<rescmd.roll <<"\t"<<rescmd.pitch <<"\t"<<rescmd.rateyaw <<"\t"<<rescmd.thrust <<"\t"<<endl;
 	if(!parserinstance)
