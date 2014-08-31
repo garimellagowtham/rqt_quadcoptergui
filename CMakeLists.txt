@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 2.8.3)
 project(rqt_quadcoptergui)
 
 add_definitions( -DPRINT -std=c++0x)
+set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
@@ -23,6 +24,10 @@ find_package(catkin REQUIRED COMPONENTS
 # find_package(Boost REQUIRED COMPONENTS system)
 find_package(Qt4 COMPONENTS QtCore QtGui REQUIRED)
 include(${QT_USE_FILE})
+find_package(GCOP REQUIRED est systems)
+find_package(Eigen3 REQUIRED)
+find_package(OpenCV REQUIRED core highgui imgproc calib3d)
+find_package(TinyXML REQUIRED)
 
 ## Uncomment this if the package has a setup.py. This macro ensures
 ## modules and global scripts declared therein get installed
@@ -129,7 +134,7 @@ catkin_package(
 ## Your package locations should be listed before other locations
 # include_directories(include)
 include_directories(
-  ${rqt_quadcoptergui_INCLUDE_DIRECTORIES} ${catkin_INCLUDE_DIRS}
+  ${rqt_quadcoptergui_INCLUDE_DIRECTORIES} ${catkin_INCLUDE_DIRS} ${EIGEN3_INCLUDE_DIR} ${OpenCV_INCLUDE_DIRS} ${TINYXML_INCLUDE_DIR}
 )
 
 #Plugin for QT
@@ -146,7 +151,8 @@ add_library(${PROJECT_NAME} ${rqt_quadcoptergui_SRCS} ${rqt_quadcoptergui_MOCS} 
 find_package(class_loader)
 class_loader_hide_library_symbols(${PROJECT_NAME})
 
-target_link_libraries(${PROJECT_NAME} ${catkin_LIBRARIES})
+message("GCOP LIBS: ${GCOP_LIBRARIES}")
+target_link_libraries(${PROJECT_NAME} ${catkin_LIBRARIES}  ${GCOP_LIBRARIES} ${OpenCV_LIBS} ${TINYXML_LIBRARIES})
 
 ## Declare a cpp executable
 # add_executable(rqt_quadcoptergui_node src/rqt_quadcoptergui_node.cpp)
