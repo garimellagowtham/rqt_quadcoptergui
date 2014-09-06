@@ -9,4 +9,4 @@ ctrlr/targetx: 1.63
 ctrlr/targety: 0.7834
 ctrlr/targetz: 1.26
 ctrlr/partialcam_control: true
-ctrlr/timeout_grabbing: 10
+ctrlr/timeout_grabbing: 20

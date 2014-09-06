@@ -35,6 +35,7 @@
 #include <pluginlib/class_list_macros.h>
 
 #define ARM_ENABLED
+//#define LOG_DEBUG
 
 namespace rqt_quadcoptergui {
 
@@ -63,8 +64,8 @@ QuadcopterGui::QuadcopterGui() : rqt_gui_cpp::Plugin()
 		UV_O.setIdentity();
 		errorrpy.setValue(0,0,0);
 		target.setValue(0,0,0);//Initializing the target extraction point
-		quadtobase.setIdentity();
-		quadtobase.setOrigin(tf::Vector3(0.0732,0,-0.07));//The z distance needs to adjusted exactly
+		//quadtobase.setIdentity();
+		//quadtobase.setOrigin(tf::Vector3(0.0732,0,-0.07));//The z distance needs to adjusted exactly
 		//armpwm.resize(3);//Number of arms for now just hardcoded
 
 		targetPtr->id = 1;
@@ -92,8 +93,9 @@ QuadcopterGui::QuadcopterGui() : rqt_gui_cpp::Plugin()
 		trajectoryPtr->color.b = 1.0;
 		trajectoryPtr->color.a = 1.0;
 		//For now default value of object_offset:
-		object_armoffset = tf::Vector3(0,0.05,-0.07);//relative to the markers in Optitrack frame //For full camera control this SHOULD BE IN Object/Inertial Frame
-		quadoffset_object = tf::Vector3(0, -0.5, 0.07);//Where the quadcopter should stay relative to the markers This is manually adjusted based on the accuracy of the quadcopter
+		object_armoffset = tf::Vector3(0,0.08,-0.18);//relative to the markers in Optitrack frame //For full camera control this SHOULD BE IN Object/Inertial Frame
+		//-0.07 was prev guess
+		quadoffset_object = tf::Vector3(0, -0.5, 0.0);//Where the quadcopter should stay relative to the markers This is manually adjusted based on the accuracy of the quadcopter
 		//manual_offset = tf::Vector3(0,0.1,0);//This is the bias in estimation of the object. We have to find an automatic way of finding this
 	}
 
@@ -237,11 +239,13 @@ void QuadcopterGui::initPlugin(qt_gui_cpp::PluginContext& context)
 	parserinstance->getquaddata(data);
 	if(ctrlrinst)
 	{
-		//double xbias, ybias;
-		//nh.getParam("/bias_vrpnx",xbias);
-		//nh.getParam("/bias_vrpny",ybias);
-		//ctrlrinst->setextbias(data.thrustbias, xbias, ybias);
-		ctrlrinst->setextbias(data.thrustbias); //Fext initial guess comes from the parser. We will need to estimate it for some quadcopters if its used in commanding it.
+		double xbias, ybias, rateyawbias;
+		nh.getParam("/bias_vrpnx",xbias);
+		nh.getParam("/bias_vrpny",ybias);
+		nh.getParam("/bias_rateyaw",rateyawbias);
+		ctrlrinst->setextbias(data.thrustbias, xbias, ybias, rateyawbias);
+		ROS_INFO("X,Y, RateYaw Bias: %f\t%f\t%f",xbias, ybias, rateyawbias);
+		//ctrlrinst->setextbias(data.thrustbias); //Fext initial guess comes from the parser. We will need to estimate it for some quadcopters if its used in commanding it.
 	}
 	//bias_vrpn.setValue(2.33*(M_PI/180),-0.3*(M_PI/180),0);
 	bias_vrpn.setValue(0,0,0);
@@ -269,11 +273,11 @@ void QuadcopterGui::initPlugin(qt_gui_cpp::PluginContext& context)
 		//Camfile
 		camfile.open((logdir_stamped+"/campose.dat").c_str());//TODO add warning if we cannot open the file
 		camfile.precision(9);
-		camfile<<"#Time \t Pos.X \t Pos.Y \t Pos.Z \t Quat.X \t Quat.Y \t Quat.Z \t Quat.W"<<endl;
+		camfile<<"#Time \t Pos.X \t Pos.Y \t Pos.Z \t Quat.X \t Quat.Y \t Quat.Z \t Quat.W\t Curr_goal.x\t Curr_goal.y\t Curr_goal.z\t Obj_origin.x\t Obj_origin.y\t Obj_origin.z"<<endl;
 		//Arm Tip file
 		tipfile.open((logdir_stamped+"/tippos.dat").c_str());//TODO add warning if we cannot open the file
 		tipfile.precision(9);
-		tipfile<<"#Time \t Pos.X \t Pos.Y \t Pos.Z"<<endl;
+		tipfile<<"#Time \t Pos.X \t Pos.Y \t Pos.Z\t DesPos.X\t DesPos.Y\t DesPos.Z\t Act_armangle0\t Act_armangle1\t Des_armangle0\t Des_armangle1"<<endl;
 		//cmdfile.open(logdir_stamped+"/cmd.dat");//TODO add warning if we cannot open the file
 		parserinstance->setlogdir(logdir_stamped);
 		ctrlrinst->setlogdir(logdir_stamped);
@@ -475,13 +479,16 @@ void QuadcopterGui::enable_disablemanualarmctrl(int state) //This is also useful
 	else
 	{
 		enable_joy = false;
+#ifndef LOG_DEBUG
+		start_grabbing = ros::Time::now();//When we enter reachable workspace and disable joy then this should dictates when to start counting timeout for grabbing target
+#endif
 	}
 #ifdef ARM_ENABLED
   if(arm_hardwareinst && parserinstance)
 	{
 		arm_hardwareinst->foldarm();//Just fold the arm whenever you switch between two modes Robustness
-		if(!enable_joy)
-			parserinstance->grip(-1);//Open gripper position in automatic position so that it will grip it automatically
+		//if(!enable_joy)
+		//	parserinstance->grip(-1);//Open gripper position in automatic position so that it will grip it automatically
 	}
 #endif
 }
@@ -774,12 +781,19 @@ void QuadcopterGui::camcmdCallback(const geometry_msgs::TransformStamped::ConstP
 	//static tf::TransformBroadcaster br;
 	//cout<<"Cam called"<<endl;
 	//Find the object pose in Quadcopter frame:
-	tf::Transform OBJ_CAM_transform;
-	transformMsgToTF(currframe->transform,OBJ_CAM_transform);//converts to the right format 
-	tf::Transform OBJ_QUAD_transform = CAM_QUAD_transform*OBJ_CAM_transform*OBJ_MOD_transform;
-	//+ quatRotate(UV_O.getRotation(),manual_offset) //Will incorporate it later
-	OBJ_QUAD_stamptransform  = tf::StampedTransform(OBJ_QUAD_transform, currframe->header.stamp,uav_name,"object");//CAM_QUAD is the pose of Camera in Quadcopter frame, OBJ_MOD is the transform needed to make the object parallel (in terms of roll, pitch) with the Inertial frame
-	if(!enable_camctrl)//Not Using Camera Control
+#ifndef LOG_DEBUG
+	//if(enable_joy)
+	//{
+#endif
+		tf::Transform OBJ_CAM_transform;
+		transformMsgToTF(currframe->transform,OBJ_CAM_transform);//converts to the right format 
+		tf::Transform OBJ_QUAD_transform = CAM_QUAD_transform*OBJ_CAM_transform*OBJ_MOD_transform;
+		//+ quatRotate(UV_O.getRotation(),manual_offset) //Will incorporate it later
+		OBJ_QUAD_stamptransform  = tf::StampedTransform(OBJ_QUAD_transform, currframe->header.stamp,uav_name,"object");//CAM_QUAD is the pose of Camera in Quadcopter frame, OBJ_MOD is the transform needed to make the object parallel (in terms of roll, pitch) with the Inertial frame
+#ifndef LOG_DEBUG
+	//}
+#endif
+	if(!enable_camctrl)//Not Using Camera Control [VERY IMPORTANT] {Bad Coding fix TODO}
 	{
 		return;
 	}
@@ -801,17 +815,16 @@ void QuadcopterGui::camcmdCallback(const geometry_msgs::TransformStamped::ConstP
 	//cout<<"Actual Arm Angles: "<<actual_armangles[0]<<"\t"<<actual_armangles[1]<<endl;
 	arminst->Fk(tip_position, actual_armangles, false);
 #endif
-	if(enable_logging)
-	{
-		tipfile<<(ros::Time::now().toNSec())<<"\t"<<	tip_position[0]<<"\t"<<tip_position[1]<<"\t"<<tip_position[2]<<"\t"<<endl;//Later will change this to include timestamp when the serial data is got in a parallel thread TODO
-	}
+	tf::Vector3 object_origin;
+	tf::Vector3 target_location;//Needed for logging purposes
+	
 	//If using partialcontrol should not directly control quadcopter instead just set the goal in optitrack frame and use the optitrack controller to do the job:
 	if(cam_partialcontrol)
 	{
 		//Set the goal based on OBJ_QUAD transform 
-		tf::Transform OBJ_OPTITRACK_transform = UV_O*OBJ_QUAD_transform;
-		tf::Vector3 object_origin = OBJ_OPTITRACK_transform.getOrigin();
-		tf::Vector3 OBJ_QUAD_origin = OBJ_QUAD_transform.getOrigin();
+		tf::Transform OBJ_OPTITRACK_transform = UV_O*OBJ_QUAD_stamptransform;
+		object_origin = OBJ_OPTITRACK_transform.getOrigin();
+		tf::Vector3 OBJ_QUAD_origin = OBJ_QUAD_stamptransform.getOrigin();
 		tf::Vector3 OBJ_QUAD_origin_inoptitrackframe = quatRotate(UV_O.getRotation(),OBJ_QUAD_origin);//Get the object in quadcopters frame  written in optirack frame
 		//Substract y offset (Assuming the object is to be approached in y dirxn) TODO Use object pose or some input dirxn of approach for grasping later//
 		///object_origin[1] -= yoffset_object;
@@ -823,16 +836,23 @@ void QuadcopterGui::camcmdCallback(const geometry_msgs::TransformStamped::ConstP
 			goalcount = 20;//TODO Figure out as a function of freq of goaltimer
 			//Set goalyaw also to face towards the object:
 			//[DEBUG]	cout<<"Goal Yaw: "<<atan2(OBJ_QUAD_origin_inoptitrackframe[1], OBJ_QUAD_origin_inoptitrackframe[0])<<endl; //atan2(y,x)
-			goalyaw = atan2(OBJ_QUAD_origin_inoptitrackframe[1], OBJ_QUAD_origin_inoptitrackframe[0]); 
-			//cout<<"Goal Yaw: "<<goalyaw<<endl;
-			diff_goal.setValue((-curr_goal[0] + offset_quadposn[0])/goalcount, (-curr_goal[1] + offset_quadposn[1])/goalcount,(-curr_goal[2] + offset_quadposn[2])/goalcount);//Adding offset in y posn assuming that is the dirxn of approach later have to use that from the object pose
-			diff_velgoal.setValue(0,0,0);
+#ifndef LOG_DEBUG
+			if(enable_joy)
+			{
+#endif
+				goalyaw = atan2(OBJ_QUAD_origin_inoptitrackframe[1], OBJ_QUAD_origin_inoptitrackframe[0]); 
+				//cout<<"Goal Yaw: "<<goalyaw<<endl;
+				diff_goal.setValue((-curr_goal[0] + offset_quadposn[0])/goalcount, (-curr_goal[1] + offset_quadposn[1])/goalcount,(-curr_goal[2] + offset_quadposn[2])/goalcount);//Adding offset in y posn assuming that is the dirxn of approach later have to use that from the object pose
+				diff_velgoal.setValue(0,0,0);
+#ifndef LOG_DEBUG
+			}
+#endif
 			//cout<<"Goal posn in optitrack: "<<object_origin[0]<<"\t"<<object_origin[1]<<"\t"<<object_origin[2]<<endl;
 
 			/*************** ARM CODE *********************/
 			//Computing the arm angles
 			//double yawdiff = atan2(OBJ_QUAD_origin[1], OBJ_QUAD_origin[0]);  Will try to improve the offset later
-			tf::Vector3 target_location = (OBJ_QUAD_origin + quatRotate(UV_O.getRotation().inverse(),object_armoffset)) - arm_basewrtquad;//Find the object location in local quad frame
+			target_location = (OBJ_QUAD_origin + quatRotate(UV_O.getRotation().inverse(),object_armoffset)) - arm_basewrtquad;//Find the object location in local quad frame
 			armlocaltarget[0] = target_location[0]; armlocaltarget[1] = target_location[1]; armlocaltarget[2] = target_location[2];
 			//This offset is done in local frame which does not make sense always have to see what this amounts to
 			double armres = arminst->Ik(as,armlocaltarget);
@@ -880,13 +900,15 @@ void QuadcopterGui::camcmdCallback(const geometry_msgs::TransformStamped::ConstP
 									cout<<"Error in tip position: EX ["<<(tip_position[0] - armlocaltarget[0])<<"] EY ["<<(tip_position[1] - armlocaltarget[1])<<"] EZ ["<<(tip_position[2] - armlocaltarget[2])<<"]"<<endl;
 									cout<<"tip position: TX ["<<(tip_position[0])<<"] TY ["<<(tip_position[1])<<"] TZ ["<<(tip_position[2])<<"]"<<endl;
 									cout<<"Local Target: LX ["<<(armlocaltarget[0])<<"] LY ["<<( armlocaltarget[1])<<"] LZ ["<<(armlocaltarget[2])<<"]"<<endl;
-									if( (abs(tip_position[0] - armlocaltarget[0])< 0.05) && (abs(tip_position[1] - armlocaltarget[1]) < 0.05) && (abs(tip_position[2] - armlocaltarget[2]) < 0.02) && (!gripped_already))// we will calibrate it better later //Add these as params TODO
+									if( (abs(tip_position[0] - armlocaltarget[0])< 0.03) && (abs(tip_position[1] - armlocaltarget[1]) < 0.05) && (abs(tip_position[2] - armlocaltarget[2]) < 0.02) && (!gripped_already))// we will calibrate it better later //Add these as params TODO
 									{
 										gripped_already = true;//Stops gripping after once
+#ifndef LOG_DEBUG
 										parserinstance->grip(1);//Parser does not control arm directly anymore it only controls gripper
 										//Adding oneshot timer to relax grip
-										timer_grabbing.setPeriod(ros::Duration(4));//5 seconds
+										timer_grabbing.setPeriod(ros::Duration(2));//5 seconds
 										timer_grabbing.start();//Start oneshot timer;
+#endif
 										return;
 									}
 									arm_hardwareinst->setarmangles(armangles);
@@ -938,7 +960,9 @@ void QuadcopterGui::camcmdCallback(const geometry_msgs::TransformStamped::ConstP
 		geometry_msgs::TransformStamped objmsg;
 		transformStampedTFToMsg(OBJ_QUAD_stamptransform,objmsg);//converts to the right format 
 		//Logging save to file
-		camfile<<(OBJ_QUAD_stamptransform.stamp_.toNSec())<<"\t"<<(objmsg.transform.translation.x)<<"\t"<<(objmsg.transform.translation.y)<<"\t"<<(objmsg.transform.translation.z)<<"\t"<<(objmsg.transform.rotation.x)<<"\t"<<(objmsg.transform.rotation.y)<<"\t"<<(objmsg.transform.rotation.z)<<"\t"<<(objmsg.transform.rotation.w)<<endl;
+		tipfile<<(ros::Time::now().toNSec())<<"\t"<<	tip_position[0]<<"\t"<<tip_position[1]<<"\t"<<tip_position[2]<<"\t"<<target_location[0]<<"\t"<<target_location[1]<<"\t"<<target_location[2]<<"\t"<<actual_armangles[0]<<"\t"<<actual_armangles[1]<<"\t"<<armangles[0]<<"\t"<<armangles[1]<<"\t"<<endl;//Later will change this to include timestamp when the serial data is got in a parallel thread TODO
+
+		camfile<<(OBJ_QUAD_stamptransform.stamp_.toNSec())<<"\t"<<(objmsg.transform.translation.x)<<"\t"<<(objmsg.transform.translation.y)<<"\t"<<(objmsg.transform.translation.z)<<"\t"<<(objmsg.transform.rotation.x)<<"\t"<<(objmsg.transform.rotation.y)<<"\t"<<(objmsg.transform.rotation.z)<<"\t"<<(objmsg.transform.rotation.w)<<"\t"<<curr_goal[0]<<"\t"<<curr_goal[1]<<"\t"<<curr_goal[2]<<"\t"<<object_origin[0]<<"\t"<<object_origin[1]<<"\t"<<object_origin[2]<<"\t"<<(UV_O.stamp_.toNSec())<<endl;
 	}
 }
 void QuadcopterGui::cmdCallback(const geometry_msgs::TransformStamped::ConstPtr &currframe)//Removed arm stuff from this
@@ -997,11 +1021,13 @@ void QuadcopterGui::cmdCallback(const geometry_msgs::TransformStamped::ConstPtr 
 		vrpnfile<<(UV_O.stamp_.toNSec())<<"\t"<<(currframe->transform.translation.x)<<"\t"<<(currframe->transform.translation.y)<<"\t"<<(currframe->transform.translation.z)<<"\t"<<(currframe->transform.rotation.x)<<"\t"<<(currframe->transform.rotation.y)<<"\t"<<(currframe->transform.rotation.z)<<"\t"<<(currframe->transform.rotation.w)<<"\t"<<bias_vrpn[0]<<"\t"<<bias_vrpn[1]<<endl;
 	}	
 	//[DEBUG] if(!startcontrol)
+#ifndef LOG_DEBUG
 	if(!data.armed)//Once the quadcopter is armed we do not set the goal position to quad's origin, the user will set the goal. But the goal will not move until u set the enable_control The user should not give random goal once it is initialized.
 	{
 		curr_goal = UV_O.getOrigin();//set the current goal to be same as the quadcopter origin we dont care abt the orientation as of now
 		ctrlrinst->setgoal(curr_goal[0],curr_goal[1],curr_goal[2],goalyaw);//Set the goal to be same as the current position of the quadcopter the velgoal is by default 0
 	}
+#endif
 
 	//Set the altitude of the quadcopter in the data
 	parserinstance->setaltitude(currframe->transform.translation.z);
