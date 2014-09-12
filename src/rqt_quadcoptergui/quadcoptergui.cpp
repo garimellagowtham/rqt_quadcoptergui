@@ -96,6 +96,7 @@ QuadcopterGui::QuadcopterGui() : rqt_gui_cpp::Plugin()
 		object_armoffset = tf::Vector3(0,0.08,-0.18);//relative to the markers in Optitrack frame //For full camera control this SHOULD BE IN Object/Inertial Frame
 		//-0.07 was prev guess
 		quadoffset_object = tf::Vector3(0, -0.5, 0.0);//Where the quadcopter should stay relative to the markers This is manually adjusted based on the accuracy of the quadcopter
+		//in z dirxn have to see if 0.0 is ok or use -0.05
 		//manual_offset = tf::Vector3(0,0.1,0);//This is the bias in estimation of the object. We have to find an automatic way of finding this
 	}
 
@@ -833,13 +834,13 @@ void QuadcopterGui::camcmdCallback(const geometry_msgs::TransformStamped::ConstP
 		//Fixed Workspace for now:
 		if(offset_quadposn[0] < 1.4 && offset_quadposn[0] > 0.1 && offset_quadposn[1] < 1.6 && offset_quadposn[1] > 0.2 && offset_quadposn[2] < 1.7 && offset_quadposn[2] > 0)
 		{
-			goalcount = 20;//TODO Figure out as a function of freq of goaltimer
-			//Set goalyaw also to face towards the object:
-			//[DEBUG]	cout<<"Goal Yaw: "<<atan2(OBJ_QUAD_origin_inoptitrackframe[1], OBJ_QUAD_origin_inoptitrackframe[0])<<endl; //atan2(y,x)
 #ifndef LOG_DEBUG
 			if(enable_joy)
 			{
 #endif
+				goalcount = 20;//TODO Figure out as a function of freq of goaltimer
+				//Set goalyaw also to face towards the object:
+				//[DEBUG]	cout<<"Goal Yaw: "<<atan2(OBJ_QUAD_origin_inoptitrackframe[1], OBJ_QUAD_origin_inoptitrackframe[0])<<endl; //atan2(y,x)
 				goalyaw = atan2(OBJ_QUAD_origin_inoptitrackframe[1], OBJ_QUAD_origin_inoptitrackframe[0]); 
 				//cout<<"Goal Yaw: "<<goalyaw<<endl;
 				diff_goal.setValue((-curr_goal[0] + offset_quadposn[0])/goalcount, (-curr_goal[1] + offset_quadposn[1])/goalcount,(-curr_goal[2] + offset_quadposn[2])/goalcount);//Adding offset in y posn assuming that is the dirxn of approach later have to use that from the object pose
@@ -1161,6 +1162,7 @@ void QuadcopterGui::goaltimerCallback(const ros::TimerEvent &event)
 			goal_frame.setIdentity();
 			goal_frame.setOrigin(curr_goal);
 			broadcaster->sendTransform(tf::StampedTransform(goal_frame,ros::Time::now(),UV_O.frame_id_,"goal_posn"));
+			//TODO add tip posn and desired tip posn also here
 		}
 	}
 	else
