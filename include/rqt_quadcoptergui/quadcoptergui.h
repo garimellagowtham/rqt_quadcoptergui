@@ -55,6 +55,8 @@
 #include "ros/ros.h"
 #include <sensor_msgs/Joy.h>
 #include <visualization_msgs/Marker.h>
+#include <gcop_comm/CtrlTraj.h>
+#include <gcop_comm/Iteration_req.h>
 
 //#include <controllers/SetptCtrl.h>
 
@@ -113,7 +115,11 @@ protected:
 
 	ros::Subscriber joydata_sub;
 
-	ros::Publisher desiredtraj_pub;
+	ros::Subscriber gcoptraj_sub;
+
+	ros::Publisher iterationreq_pub;
+
+	//ros::Publisher desiredtraj_pub;
 
 
 	//ros::Publisher stringdata_pub;
@@ -143,6 +149,7 @@ protected:
 	void ClosingafterGrabbing(const ros::TimerEvent &); //Timer Callback for Closing after grabbing an object
 	void camcmdCallback(const geometry_msgs::TransformStamped::ConstPtr &currframe);
 	void joyCallback(const sensor_msgs::Joy::ConstPtr &joymsg);
+	void gcoptrajectoryCallback(const gcop_comm::CtrlTraj &traj_msg);
 	bool enable_joy;
 	bool enable_camctrl;
 
@@ -215,10 +222,14 @@ protected:
 	int armcmdrate,armratecount;
 	tf::Vector3  object_armoffset;//Offset for object when arm has to catch it
 	tf::Vector3 quadoffset_object;//Offset of the quadcopter from markers
+
+	gcop_comm::CtrlTraj gcop_trajectory;
+
 	//tf::Vector3  manual_offset;//Offset for object when arm has to catch it
-	boost::shared_ptr<visualization_msgs::Marker> trajectoryPtr;
-	boost::shared_ptr<visualization_msgs::Marker> targetPtr;
+	//boost::shared_ptr<visualization_msgs::Marker> trajectoryPtr;
+	//boost::shared_ptr<visualization_msgs::Marker> targetPtr;
 	//boost::shared_ptr<visualization_msgs::Marker> finaltipPtr; TODO add final tip frame to see
+
 	tf::Transform quadtobase;
   boost::shared_ptr<tf::TransformBroadcaster> broadcaster;//Transform Broadcaster
 	ros::Time start_grabbing;

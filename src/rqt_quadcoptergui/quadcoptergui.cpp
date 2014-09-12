@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, Dorian Scholz, TU Darmstadt
+ * Copyright (c) 2011,  Gowtham Garimella JHU
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -53,10 +53,8 @@ QuadcopterGui::QuadcopterGui() : rqt_gui_cpp::Plugin()
 	, joymsg_prevbutton(0), buttoncount(0)
 	, joymsg_prevbutton1(0), buttoncount1(0)
 	, updategoal_dynreconfig(false), cam_partialcontrol(true), gripped_already(false)
-	, trajectoryPtr(new visualization_msgs::Marker())
-	, targetPtr(new visualization_msgs::Marker())
 	, broadcaster(new tf::TransformBroadcaster())
-	, timeout_grabbing(3)
+	, timeout_grabbing(3) //, targetPtr(new visualization_msgs::Marker()) //, trajectoryPtr(new visualization_msgs::Marker())
 	{
 		setObjectName("QuadcopterGui");
 		parser_loader.reset(new pluginlib::ClassLoader<parsernode::Parser>("parsernode","parsernode::Parser"));
@@ -65,36 +63,37 @@ QuadcopterGui::QuadcopterGui() : rqt_gui_cpp::Plugin()
 		target.setValue(0,0,0);//Initializing the target extraction point
 		quadtobase.setIdentity();
 		quadtobase.setOrigin(tf::Vector3(0.0732,0,-0.07));//The z distance needs to adjusted exactly
-		//armpwm.resize(3);//Number of arms for now just hardcoded
 
-		targetPtr->id = 1;
-		targetPtr->ns = "targetpickup";
-		targetPtr->header.frame_id = "/optitrak";
-		targetPtr->action = visualization_msgs::Marker::ADD;
-		targetPtr->pose.orientation.w = 1.0;
-		targetPtr->type = visualization_msgs::Marker::CUBE;
-		targetPtr->scale.x = 0.1;
-		targetPtr->scale.y = 0.1;
-		targetPtr->scale.z = 0.1;
-		targetPtr->color.r = 1.0;
-		targetPtr->color.a = 1.0;
-
-
-		trajectoryPtr->id = 1;
-		trajectoryPtr->points.resize(31);//Just fixed number of points in trajectoryPtr
-		trajectoryPtr->header.frame_id = "/optitrak";
-		trajectoryPtr->ns = "desired_traj";
-		trajectoryPtr->action = visualization_msgs::Marker::ADD;
-		trajectoryPtr->pose.orientation.w = 1.0;
-		trajectoryPtr->id = 1;
-		trajectoryPtr->type = visualization_msgs::Marker::LINE_STRIP;
-		trajectoryPtr->scale.x = 0.05;//Need thick line
-		trajectoryPtr->color.b = 1.0;
-		trajectoryPtr->color.a = 1.0;
 		//For now default value of object_offset:
 		object_armoffset = tf::Vector3(0,0.05,-0.07);//relative to the markers in Optitrack frame //For full camera control this SHOULD BE IN Object/Inertial Frame
 		quadoffset_object = tf::Vector3(0, -0.5, 0.07);//Where the quadcopter should stay relative to the markers This is manually adjusted based on the accuracy of the quadcopter
 		//manual_offset = tf::Vector3(0,0.1,0);//This is the bias in estimation of the object. We have to find an automatic way of finding this
+
+		/*		targetPtr->id = 1;
+					targetPtr->ns = "targetpickup";
+					targetPtr->header.frame_id = "/optitrak";
+					targetPtr->action = visualization_msgs::Marker::ADD;
+					targetPtr->pose.orientation.w = 1.0;
+					targetPtr->type = visualization_msgs::Marker::CUBE;
+					targetPtr->scale.x = 0.1;
+					targetPtr->scale.y = 0.1;
+					targetPtr->scale.z = 0.1;
+					targetPtr->color.r = 1.0;
+					targetPtr->color.a = 1.0;
+
+
+					trajectoryPtr->id = 1;
+					trajectoryPtr->points.resize(31);//Just fixed number of points in trajectoryPtr
+					trajectoryPtr->header.frame_id = "/optitrak";
+					trajectoryPtr->ns = "desired_traj";
+					trajectoryPtr->action = visualization_msgs::Marker::ADD;
+					trajectoryPtr->pose.orientation.w = 1.0;
+					trajectoryPtr->id = 1;
+					trajectoryPtr->type = visualization_msgs::Marker::LINE_STRIP;
+					trajectoryPtr->scale.x = 0.05;//Need thick line
+					trajectoryPtr->color.b = 1.0;
+					trajectoryPtr->color.a = 1.0;
+		 */
 	}
 
 QuadcopterGui::~QuadcopterGui()
@@ -290,8 +289,10 @@ void QuadcopterGui::initPlugin(qt_gui_cpp::PluginContext& context)
 	vrpndata_sub = nh.subscribe(uav_posename,1,&QuadcopterGui::cmdCallback,this);
 	camdata_sub = nh.subscribe("/Pose_Est/objpose",1,&QuadcopterGui::camcmdCallback,this);
 	joydata_sub = nh.subscribe("/joy",1,&QuadcopterGui::joyCallback,this);
+	gcoptraj_sub = nh.subscribe("/mbsddp/traj_resp",&QuadcopterGui::gcoptrajectoryCallback,this);
 
-	desiredtraj_pub = nh.advertise<visualization_msgs::Marker>("desired_traj", 5);
+	//desiredtraj_pub = nh.advertise<visualization_msgs::Marker>("desired_traj", 5);
+	iterationreq_pub = nh.advertis<gcop_comm::Iteration_req>("/mbsddp/iteration_req",1);
 
 	//Connect to dynamic reconfigure server:
 	reconfigserver.reset(new dynamic_reconfigure::Server<rqt_quadcoptergui::QuadcopterInterfaceConfig>(nh));
@@ -696,12 +697,17 @@ void QuadcopterGui::shutdownPlugin()
 	vrpnfile.close();//Close the file
 	camfile.close();//Close the file
 	tipfile.close();//Close the file
-	trajectoryPtr.reset();
-	targetPtr.reset();
-	desiredtraj_pub.shutdown();
+	//trajectoryPtr.reset();
+	//targetPtr.reset();
+	//desiredtraj_pub.shutdown();
 	//cmdfile.close();//Close the file
 	//stringdata_sub.shutdown();
 	//stringdata_pub.shutdown();
+}
+
+void gcoptrajectoryCallback(const gcop_comm::CtrlTraj &traj_msg)
+{
+	gcop_trajectory = traj_msg;//Default Copy constructor
 }
 
 void QuadcopterGui::joyCallback(const sensor_msgs::Joy::ConstPtr &joymsg)
@@ -1080,6 +1086,7 @@ void QuadcopterGui::paramreqCallback(rqt_quadcoptergui::QuadcopterInterfaceConfi
 		}
 	}
 	//publish a trajectory marker
+	/*
 	for(int count1 = 0;count1 <= 30;count1++)
 	{
 		trajectoryPtr->points[count1].x = config.xg + traj_amp*cos((count1/30.0)*2*M_PI);
@@ -1089,8 +1096,9 @@ void QuadcopterGui::paramreqCallback(rqt_quadcoptergui::QuadcopterInterfaceConfi
 	targetPtr->pose.position.x = target[0];
 	targetPtr->pose.position.y = target[1];
 	targetPtr->pose.position.z = target[2];
-	desiredtraj_pub.publish(trajectoryPtr);
-	desiredtraj_pub.publish(targetPtr);
+	*/
+	//desiredtraj_pub.publish(trajectoryPtr);
+	//desiredtraj_pub.publish(targetPtr);
 	if(parserinstance)
 	{
 		parserinstance->grip(config.gripper_state);
@@ -1111,8 +1119,6 @@ void QuadcopterGui::paramreqCallback(rqt_quadcoptergui::QuadcopterInterfaceConfi
 //Not much load to run this timer
 void QuadcopterGui::goaltimerCallback(const ros::TimerEvent &event)
 {
-	//if(data.quadstate == "Flying")
-	//{
 	if(!followtraj)
 	{
 		if(goalcount > 0)
@@ -1127,35 +1133,19 @@ void QuadcopterGui::goaltimerCallback(const ros::TimerEvent &event)
 			goalcount--;
 		}
 		trajtime_offset = ros::Time::now();
-		if(cam_partialcontrol && enable_camctrl)
-		{
-			//[DEBUG]cout<<"Current Goal: "<<curr_goal[0]<<"\t"<<curr_goal[1]<<"\t"<<curr_goal[2]<<endl;
-			//Since setptctrl is not called we should publish the goal ourselves:
-			tf::Transform goal_frame;
-			goal_frame.setIdentity();
-			goal_frame.setOrigin(curr_goal);
-			broadcaster->sendTransform(tf::StampedTransform(goal_frame,ros::Time::now(),UV_O.frame_id_,"goal_posn"));
+		/*if(cam_partialcontrol && enable_camctrl)
+			{
+		//[DEBUG]cout<<"Current Goal: "<<curr_goal[0]<<"\t"<<curr_goal[1]<<"\t"<<curr_goal[2]<<endl;
+		//Since setptctrl is not called we should publish the goal ourselves:
+		tf::Transform goal_frame;
+		goal_frame.setIdentity();
+		goal_frame.setOrigin(curr_goal);
+		broadcaster->sendTransform(tf::StampedTransform(goal_frame,ros::Time::now(),UV_O.frame_id_,"goal_posn"));
 		}
+		 */
 	}
-	else
-	{ 
-		ros::Duration currduration = ros::Time::now() - trajtime_offset;
-		float anglearg = 2*M_PI*traj_freq*currduration.toSec();
-		//	float signal = 0, signalder = 0;
-
-		//cout<<"Signal: "<<signal<<"\t Signalder: "<<signalder<<endl;
-		diff_goal.setValue(traj_amp*cos(anglearg),0,traj_amp*traj_skew*sin(anglearg));//Can add axis for the trajectory too
-		diff_velgoal.setValue(-traj_amp*2*M_PI*traj_freq*sin(anglearg),0,traj_skew*traj_amp*2*M_PI*traj_freq*cos(anglearg));//Can make this ellipse/hyperbola by adding two more parameters a, b
-		tf::Vector3 final_goal = curr_goal + diff_goal;
-		ctrlrinst->setgoal(final_goal[0],final_goal[1],final_goal[2],goalyaw,diff_velgoal[0], diff_velgoal[1], diff_velgoal[2]);
-	}
-	/*
-		 else
-		 {
-		 goaltimer.stop();
-		 }
-	 */
-	//}
+	//If following trajectory, we have to give the goal based on the trajectory information:
 }
+
 }
 PLUGINLIB_DECLARE_CLASS(rqt_quadcoptergui, QuadcopterGui, rqt_quadcoptergui::QuadcopterGui, rqt_gui_cpp::Plugin)
