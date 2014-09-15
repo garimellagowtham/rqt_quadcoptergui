@@ -54,6 +54,7 @@
 #include <std_msgs/String.h>
 #include "ros/ros.h"
 #include <sensor_msgs/Joy.h>
+#include <sensor_msgs/JointState.h>
 #include <visualization_msgs/Marker.h>
 #include <gcop_comm/CtrlTraj.h>
 #include <gcop_comm/Iteration_req.h>
@@ -77,6 +78,8 @@
 #include <tf/transform_broadcaster.h>
 
 #include <dynamixelsdk/arm_helper.h>
+
+#define NOFJOINTS 2 //Arm joints
 
 namespace rqt_quadcoptergui {
 
@@ -119,6 +122,8 @@ protected:
 
 	ros::Publisher iterationreq_pub;
 
+	ros::Publisher jointstate_pub;
+
 	//ros::Publisher desiredtraj_pub;
 
 
@@ -139,7 +144,6 @@ protected:
 
 	char buffer[600];//buffer for creating Qstring data
 	parsernode::common::quaddata data;//Quadcopter data from parser
-	geometry_msgs::Quaternion goalposn;
 
 	boost::shared_ptr<CameraSetptCtrl> ctrlrinst;
 	boost::shared_ptr<gcop::Arm> arminst;
@@ -156,7 +160,6 @@ protected:
 
 	//Moving goal dynamically:
 	tf::Vector3 diff_goal;
-	tf::Vector3 diff_velgoal;
 	tf::Vector3 curr_goal;
 	tf::Vector3 bias_vrpn;
 	tf::Vector3 vrpnrpy;//Latest vrpnrpy
@@ -174,7 +177,6 @@ protected:
 	bool followtraj;
 	float traj_amp, traj_freq, traj_skew;
 
-	ros::Time trajtime_offset;
 	int joymsg_prevbutton, buttoncount;
 	int joymsg_prevbutton1, buttoncount1;
 	double as[2][3];//Arm inverse kinematics output
@@ -182,14 +184,18 @@ protected:
 	//double delta_armgoal[3];//Arm Goal in the Frame of the Quadcopter
 	tf::Vector3 target;//Extraction target point
 	tf::Vector3 arm_basewrtquad;
-	double armpwm[3];//Arm pwm
-	double armangles[3];//The angles of the arm in radians in gcop convention
 	std::string uav_name;
 	bool cam_partialcontrol;//Only use the object position to set the goal position 
 	bool updategoal_dynreconfig;//Flag for updating the dynamic reconfigure goal parameters whenever it is triggered (This will write the values in dynreconfig instead of reading from it)
-	double actual_armangles[2];//The angles obtained from dynamixelsdk
+	double cmd_armstate[2*NOFJOINTS];//The angles of the arm in radians in gcop convention and also velocities
+	double actual_armstate[2*NOFJOINTS];//The angles obtained from dynamixelsdk
   double tip_position[3];//Tip Position
 	bool gripped_already; //Used to avoid restarting the timer if it already gripped the target once just waits for 5 secs before returning
+	bool waitingfortrajectory;//Used to not send iteration requests when optimizer is already working on one
+	bool openloop_mode;
+	bool initialitrq;
+	ros::Time request_time;
+	int nearest_index_gcoptime;
 
 	//Reconfigure stuff:
 	boost::shared_ptr<dynamic_reconfigure::Server<rqt_quadcoptergui::QuadcopterInterfaceConfig> >reconfigserver;
@@ -200,6 +206,7 @@ protected:
 
 	//Storing the current frame along with time stamp:
 	tf::StampedTransform UV_O;
+	tf::StampedTransform UV_O_filt;
 	//Storing the current object pose in Quadcopter frame
 	tf::StampedTransform OBJ_QUAD_stamptransform;
 	//Fixed Transforms  for converting Quad to Camera frame and object_mod transforms:
@@ -207,6 +214,7 @@ protected:
 	tf::StampedTransform OBJ_MOD_transform;
 
 	tf::Vector3 errorrpy;
+	tf::Vector3 filt_vel;
 
 	//Storing the current command being set:
 	geometry_msgs::Quaternion rescmdmsg;
@@ -224,6 +232,8 @@ protected:
 	tf::Vector3 quadoffset_object;//Offset of the quadcopter from markers
 
 	gcop_comm::CtrlTraj gcop_trajectory;
+	gcop_comm::Iteration_req itrq;//Request for iteration
+	sensor_msgs::JointState jointstate_msg;
 
 	//tf::Vector3  manual_offset;//Offset for object when arm has to catch it
 	//boost::shared_ptr<visualization_msgs::Marker> trajectoryPtr;
