@@ -867,7 +867,11 @@ void QuadcopterGui::camcmdCallback(const geometry_msgs::TransformStamped::ConstP
 
 					//Goal Condition:
 					//Move this out of camcmdCallback TODO
-					vector3TFToMsg(offset_quadposn, itrq.xf.basepose.translation);//Set the posn and Rotation is identity always
+					//vector3TFToMsg(offset_quadposn, itrq.xf.basepose.translation);//Set the posn and Rotation is identity always
+					itrq.xf.basepose.translation.x = 0.86;
+					itrq.xf.basepose.translation.y = 1.3;
+					itrq.xf.basepose.translation.z =  1.47;
+
 					tf::Quaternion finalorientation = tf::createQuaternionFromYaw(M_PI/2);//Final yaw  Ideally this should be obtained from object pose TODO
 					quaternionTFToMsg(finalorientation, itrq.xf.basepose.rotation);
 					//Find final posn angles based on offset quad posn:
@@ -1272,6 +1276,7 @@ void QuadcopterGui::goaltimerCallback(const ros::TimerEvent &event)
 				gcop_comm::State &goalstate = gcop_trajectory.statemsg[nearest_index_gcoptime];
 				//[DEBUG]
 				cout<<"Publishing goal state: "<<goalstate.basepose.translation.x<<"\t"<<goalstate.basepose.translation.y<<"\t"<<goalstate.basepose.translation.z<<"\t"<<goalyaw<<endl;
+				tf::vector3MsgToTF(goalstate.basepose.translation,curr_goal);//Velocity of the goal is not currently stored
 			/*	if(nearest_index_gcoptime == gcop_trajectory.N)//We set the final state velocities to zero
 				{
 					goalstate.basetwist.linear.x = 0;
