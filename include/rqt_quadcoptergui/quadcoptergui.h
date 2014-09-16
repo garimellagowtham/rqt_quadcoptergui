@@ -124,7 +124,7 @@ protected:
 
 	ros::Publisher jointstate_pub;
 
-	//ros::Publisher desiredtraj_pub;
+	ros::Publisher armtarget_pub;
 
 
 	//ros::Publisher stringdata_pub;
@@ -192,6 +192,7 @@ protected:
   double tip_position[3];//Tip Position
 	bool gripped_already; //Used to avoid restarting the timer if it already gripped the target once just waits for 5 secs before returning
 	bool waitingfortrajectory;//Used to not send iteration requests when optimizer is already working on one
+	bool newcamdata;//Used to tell the arm if new cam data has arrived
 	bool openloop_mode;
 	bool initialitrq;
 	ros::Time request_time;
@@ -237,7 +238,7 @@ protected:
 
 	//tf::Vector3  manual_offset;//Offset for object when arm has to catch it
 	//boost::shared_ptr<visualization_msgs::Marker> trajectoryPtr;
-	//boost::shared_ptr<visualization_msgs::Marker> targetPtr;
+	boost::shared_ptr<visualization_msgs::Marker> targetPtr;//For visualizing the object to grab
 	//boost::shared_ptr<visualization_msgs::Marker> finaltipPtr; TODO add final tip frame to see
 
 	tf::Transform quadtobase;
