@@ -160,14 +160,14 @@ void QuadcopterGui::initPlugin(qt_gui_cpp::PluginContext& context)
 		bool result = listener.waitForTransform(uav_name, "camera",
 				ros::Time(0), ros::Duration(1.0));
 		listener.lookupTransform(uav_name, "camera",
-		                             ros::Time(0), CAM_QUAD_transform);
+				ros::Time(0), CAM_QUAD_transform);
 		if(!result)
 			cout<<"Cannot find QUAD to CAM Transform"<<endl;
 		//Look for object modification transform
 		result = listener.waitForTransform("object", "object_mod",
 				ros::Time(0), ros::Duration(1.0));
 		listener.lookupTransform("object", "object_mod",
-		                             ros::Time(0), OBJ_MOD_transform);
+				ros::Time(0), OBJ_MOD_transform);
 		if(!result)
 			cout<<"Cannot find OBJ_MOD Transform"<<endl;
 	}
@@ -234,7 +234,8 @@ void QuadcopterGui::initPlugin(qt_gui_cpp::PluginContext& context)
 
 	//Create a controller instance from the controllers library:
 	//Get the parameter to know whether to test the controller or directly use it. In testing mode, the thrust value is set to be a very small value and roll and pitch are normal. This way you can move and see if it is doing what its supposed to do
-	ctrlrinst.reset(new CameraSetptCtrl(nh, broadcaster));
+	//ctrlrinst.reset(new CameraSetptCtrl(nh, broadcaster));
+	ctrlrinst.reset(new SetptCtrl(nh, broadcaster));
 	arminst.reset(new gcop::Arm);
 	int dyn_deviceInd = 0;//Defaults
 	int dyn_baudnum = 57600;
@@ -308,7 +309,7 @@ void QuadcopterGui::initPlugin(qt_gui_cpp::PluginContext& context)
 		return;
 	}
 	cout<<"Subscribing to uav pose topic on: "<<uav_posename<<endl;
-	vrpndata_sub = nh.subscribe(uav_posename,1,&QuadcopterGui::cmdCallback,this);
+	vrpndata_sub = nh.subscribe(uav_posename,1,&QuadcopterGui::vrpnCallback,this);
 	camdata_sub = nh.subscribe("/Pose_Est/objpose",1,&QuadcopterGui::camcmdCallback,this);
 	joydata_sub = nh.subscribe("/joy",1,&QuadcopterGui::joyCallback,this);
 	gcoptraj_sub = nh.subscribe("/mbsddp/traj_resp",1,&QuadcopterGui::gcoptrajectoryCallback,this);
@@ -327,6 +328,8 @@ void QuadcopterGui::initPlugin(qt_gui_cpp::PluginContext& context)
 	goaltimer.stop();
 	timer_grabbing = nh.createTimer(ros::Duration(4), &QuadcopterGui::ClosingafterGrabbing, this, true);//One shot timer
 	timer_grabbing.stop();
+	cmdtimer = nh.createTimer(ros::Duration(0.02), &QuadcopterGui::cmdtimerCallback,this);//50Hz is the update rate of Quadcopter cmd
+	cmdtimer.start();
 }
 
 void QuadcopterGui::RefreshGui()
@@ -853,15 +856,19 @@ void QuadcopterGui::camcmdCallback(const geometry_msgs::TransformStamped::ConstP
 					//Fill itrq with data needed
 					//[DEBUG]
 					ROS_INFO("Entering Iteration req");
-
+					if(!ctrlrinst)
+					{
+						ROS_WARN("Controller Instance not defined");
+						return;
+					}
 					//Initial Condition:
-					transformTFToMsg(UV_O_filt,itrq.x0.basepose);//converts to the right format  Basepose
+					transformTFToMsg(ctrlrinst->UV_O_filt,itrq.x0.basepose);//converts to the right format  Basepose
 					if(initialitrq)//Initially assume quadcopter is stable even though it has different angle TODO change this to add initialization in the request itself 
 					{
-						itrq.x0.basepose.rotation = tf::createQuaternionMsgFromYaw(M_PI/2);//Initial rotation is taken to be the same as the current goal
+						itrq.x0.basepose.rotation = tf::createQuaternionMsgFromYaw(M_PI/2);//Initial rotation is taken from knowledge
 					}
 					if(!initialitrq) //When initializing, we assume the quad is at zero velocity. This removes any small velocity that quad may have
-						vector3TFToMsg(UV_O_filt*filt_vel , itrq.x0.basetwist.linear); //Need to find Body Fixed angular velocity TODO
+						vector3TFToMsg((ctrlrinst->UV_O_filt)*filt_vel , itrq.x0.basetwist.linear); //Need to find Body Fixed angular velocity TODO
 					for(int count1 = 0;count1 < 2*NOFJOINTS; count1++) //Joint angles and vel
 						itrq.x0.statevector[count1] = actual_armstate[count1];
 
@@ -899,7 +906,7 @@ void QuadcopterGui::camcmdCallback(const geometry_msgs::TransformStamped::ConstP
 					itrq.tf = 3;//Final time to reach goal is 3 seconds TODO (For closed loop adjust this based on how we are progressing on the trajectory)
 
 					iterationreq_pub.publish(itrq);
-					request_time = UV_O_filt.stamp_;//When the quad stamp was made
+					request_time = (ctrlrinst->UV_O_filt).stamp_;//When the quad stamp was made //Later will add Getcurrent state from ctrlr through kalman filter for accurate estimation of current pose
 					waitingfortrajectory = true;//Once published we are waiting for gcop to produce a trajectory
 					initialitrq = false;//Once initialized, this is set to false
 					ROS_INFO("Leaving Iteration Req");
@@ -912,7 +919,7 @@ void QuadcopterGui::camcmdCallback(const geometry_msgs::TransformStamped::ConstP
 			cout<<"Object in Quad frame: \t"<<OBJ_QUAD_origin[0]<<"\t"<<OBJ_QUAD_origin[1]<<"\t"<<OBJ_QUAD_origin[2]<<endl;
 		}
 	}
-	else//Full Camera Control
+	/*else//Full Camera Control not yet correctly implemented so commented out
 	{
 		controllers::ctrl_command rescmd;
 		tf::Vector3 imurpy ;
@@ -938,6 +945,7 @@ void QuadcopterGui::camcmdCallback(const geometry_msgs::TransformStamped::ConstP
 			}
 		}	
 	}
+	*/
 	if(enable_logging)
 	{
 		geometry_msgs::TransformStamped objmsg;
@@ -953,62 +961,10 @@ void QuadcopterGui::camcmdCallback(const geometry_msgs::TransformStamped::ConstP
 void QuadcopterGui::vrpnCallback(const geometry_msgs::TransformStamped::ConstPtr &currframe)//Removed arm stuff from this
 {
 	transformStampedMsgToTF(*currframe,UV_O);//converts to the right format  and stores the message
-	ros::TimerEvent fakeevent;
-	fakeevent.current_real = UV_O.stamp_;
-	QuadcopterGui::cmdTimer(fakeevent);//Call the command timer immediately after receiving the vrpn data
-}
-
-void QuadcopterGui::cmdTimer(const ros::TimerEvent &event)
-{
-	/////Add a clause for doing this when camcallback is not running///////
-	//Call the ctrlr to set the ctrl and then send the command to the quadparser
-	if(!ctrlrinst)
-	{
-		ROS_WARN("Controller not instantiated");
-		return;
-	}
-	ros::Duration timesincelastrun = (ros::Time::now() - UV_O.stamp_);
-
-	controllers::ctrl_command rescmd;
+	ctrlrinst->Update(UV_O);//Updates the internal state
 
 	Matrix3x3 rotmat = UV_O.getBasis();
 	rotmat.getEulerYPR(vrpnrpy[2],vrpnrpy[1],vrpnrpy[0]);
-	//vrpnrpy = vrpnrpy - bias_vrpn;//Adjusting for the bias here itself
-	//errorrpy = (vrpnrpy - bias_vrpn) - tf::Vector3(data.rpydata.x, data.rpydata.y,data.rpydata.z);// No Need to do this since we are resetting imu to vrpn every 10 Hz
-	//errorrpy = -bias_vrpn;//Since error is substracted from the cmd and bias should be substracted from the cmd value
-	//- is used for previous method remove it when using new method
-
-	tf::Vector3 &quadorigin = UV_O.getOrigin();
-
-	if(enable_camctrl && !cam_partialcontrol)//This implies we are doing full camera control
-	{
-		//Not Using motion capture But still need UV_O in partial cam ctrl so always useful to save the currframe when available if not available thats fine
-		return;
-	}
-	//Store the current position of the quadcopter for display
-	//Using kalman filter
-	ctrlrinst->Set(UV_O, UV_O_filt, filt_vel, rescmd, true);//Since imu is corrected using unbiased vrpn data we can send commands which are unbiased too 
-	//ctrlrinst->Set(UV_O,errorrpy, rescmd);//By default no filtering if needed can add filter data
-	//cout<<"Rescmd: "<<rescmd.roll <<"\t"<<rescmd.pitch <<"\t"<<rescmd.rateyaw <<"\t"<<rescmd.thrust <<"\t"<<endl;
-	if(!parserinstance)
-	{
-		ROS_WARN("Parser not instantiated");
-		return;
-	}
-	rescmdmsg.x = rescmd.roll; rescmdmsg.y = rescmd.pitch; rescmdmsg.z = rescmd.rateyaw; rescmdmsg.w = rescmd.thrust;
-	if(testctrlr)
-	{
-		rescmdmsg.w = 0.2*data.thrustbias;
-	}
-	if(data.armed && startcontrol)
-	{
-		if((++ratecount) == throttlecmdrate)//Throttling down the rate of sending commands to the uav
-		{
-			ratecount = 0;
-			parserinstance->cmdrpythrust(rescmdmsg,true);//Also controlling yaw	
-			//ROS_INFO("Setting cmd");
-		}
-	}	
 	if(enable_logging)
 	{
 		//Logging save to file
@@ -1028,7 +984,55 @@ void QuadcopterGui::cmdTimer(const ros::TimerEvent &event)
 	//#ifdef PRINT
 	//ROS_INFO("Rescmd: %f\t%f\t%f",rescmdmsg.x,rescmdmsg.y,rescmdmsg.w);
 	//#endif
+}
 
+void QuadcopterGui::cmdtimerCallback(const ros::TimerEvent &event)
+{
+	/////Add a clause for doing this when camcallback is not running///////
+	//Call the ctrlr to set the ctrl and then send the command to the quadparser
+	if(!ctrlrinst)
+	{
+		ROS_WARN("Controller not instantiated");
+		return;
+	}
+
+	controllers::ctrl_command rescmd;
+
+	//vrpnrpy = vrpnrpy - bias_vrpn;//Adjusting for the bias here itself
+	//errorrpy = (vrpnrpy - bias_vrpn) - tf::Vector3(data.rpydata.x, data.rpydata.y,data.rpydata.z);// No Need to do this since we are resetting imu to vrpn every 10 Hz
+	//errorrpy = -bias_vrpn;//Since error is substracted from the cmd and bias should be substracted from the cmd value
+	//- is used for previous method remove it when using new method
+
+	//tf::Vector3 &quadorigin = UV_O.getOrigin();
+
+	if(enable_camctrl && !cam_partialcontrol)//This implies we are doing full camera control
+	{
+		//Not Using motion capture But still need UV_O in partial cam ctrl so always useful to save the currframe when available if not available thats fine
+		return;
+	}
+
+	//Store the current position of the quadcopter for display
+	//Using kalman filter
+	ctrlrinst->Getctrl(rescmd);//Since imu is corrected using unbiased vrpn data we can send commands which are unbiased too 
+
+	//ctrlrinst->Set(UV_O,errorrpy, rescmd);//By default no filtering if needed can add filter data
+	//cout<<"Rescmd: "<<rescmd.roll <<"\t"<<rescmd.pitch <<"\t"<<rescmd.rateyaw <<"\t"<<rescmd.thrust <<"\t"<<endl;
+	if(!parserinstance)
+	{
+		ROS_WARN("Parser not instantiated");
+		return;
+	}
+	rescmdmsg.x = rescmd.roll; rescmdmsg.y = rescmd.pitch; rescmdmsg.z = rescmd.rateyaw; rescmdmsg.w = rescmd.thrust;
+	if(testctrlr)
+	{
+		rescmdmsg.w = 0.2*data.thrustbias;
+	}
+	if(data.armed && startcontrol)
+	{
+			ratecount = 0;
+			parserinstance->cmdrpythrust(rescmdmsg,true);//Also controlling yaw	
+			//ROS_INFO("Setting cmd");
+	}	
 }
 
 void QuadcopterGui::paramreqCallback(rqt_quadcoptergui::QuadcopterInterfaceConfig &config , uint32_t level)

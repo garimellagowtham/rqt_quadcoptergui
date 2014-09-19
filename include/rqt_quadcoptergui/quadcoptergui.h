@@ -37,7 +37,8 @@
 #include <iostream>
 #include <fstream>
 #include <string>
-#include <controllers/CamSetptCtrl.h>
+//#include <controllers/CamSetptCtrl.h>
+#include <controllers/SetptCtrl.h>
 #include <controllers/arm.h>
 #include <rqt_quadcoptergui/QuadcopterInterfaceConfig.h>
 #include <dynamic_reconfigure/server.h>
@@ -145,11 +146,13 @@ protected:
 	char buffer[600];//buffer for creating Qstring data
 	parsernode::common::quaddata data;//Quadcopter data from parser
 
-	boost::shared_ptr<CameraSetptCtrl> ctrlrinst;
+	boost::shared_ptr<SetptCtrl> ctrlrinst;
+	//boost::shared_ptr<CameraSetptCtrl> ctrlrinst;
 	boost::shared_ptr<gcop::Arm> arminst;
 	boost::shared_ptr<dynamixelsdk::DynamixelArm> arm_hardwareinst;
 	ros::Timer goaltimer;
-	void cmdCallback(const geometry_msgs::TransformStamped::ConstPtr &currframe);
+	ros::Timer cmdtimer;
+	void vrpnCallback(const geometry_msgs::TransformStamped::ConstPtr &currframe);
 	void ClosingafterGrabbing(const ros::TimerEvent &); //Timer Callback for Closing after grabbing an object
 	void camcmdCallback(const geometry_msgs::TransformStamped::ConstPtr &currframe);
 	void joyCallback(const sensor_msgs::Joy::ConstPtr &joymsg);
@@ -168,6 +171,7 @@ protected:
 	//is the  bias in vrpn
 
 	void goaltimerCallback(const ros::TimerEvent&);
+	void cmdtimerCallback(const ros::TimerEvent&);
 	int goalcount;
 	int reset_imu_count;
 	float goalyaw;
@@ -207,7 +211,6 @@ protected:
 
 	//Storing the current frame along with time stamp:
 	tf::StampedTransform UV_O;
-	tf::StampedTransform UV_O_filt;
 	//Storing the current object pose in Quadcopter frame
 	tf::StampedTransform OBJ_QUAD_stamptransform;
 	//Fixed Transforms  for converting Quad to Camera frame and object_mod transforms:
