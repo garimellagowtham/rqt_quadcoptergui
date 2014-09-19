@@ -950,7 +950,15 @@ void QuadcopterGui::camcmdCallback(const geometry_msgs::TransformStamped::ConstP
 
 
 
-void QuadcopterGui::cmdCallback(const geometry_msgs::TransformStamped::ConstPtr &currframe)//Removed arm stuff from this
+void QuadcopterGui::vrpnCallback(const geometry_msgs::TransformStamped::ConstPtr &currframe)//Removed arm stuff from this
+{
+	transformStampedMsgToTF(*currframe,UV_O);//converts to the right format  and stores the message
+	ros::TimerEvent fakeevent;
+	fakeevent.current_real = UV_O.stamp_;
+	QuadcopterGui::cmdTimer(fakeevent);//Call the command timer immediately after receiving the vrpn data
+}
+
+void QuadcopterGui::cmdTimer(const ros::TimerEvent &event)
 {
 	/////Add a clause for doing this when camcallback is not running///////
 	//Call the ctrlr to set the ctrl and then send the command to the quadparser
@@ -959,12 +967,13 @@ void QuadcopterGui::cmdCallback(const geometry_msgs::TransformStamped::ConstPtr 
 		ROS_WARN("Controller not instantiated");
 		return;
 	}
+	ros::Duration timesincelastrun = (ros::Time::now() - UV_O.stamp_);
+
 	controllers::ctrl_command rescmd;
-	transformStampedMsgToTF(*currframe,UV_O);//converts to the right format 
 
 	Matrix3x3 rotmat = UV_O.getBasis();
 	rotmat.getEulerYPR(vrpnrpy[2],vrpnrpy[1],vrpnrpy[0]);
-	vrpnrpy = vrpnrpy - bias_vrpn;//Adjusting for the bias here itself
+	//vrpnrpy = vrpnrpy - bias_vrpn;//Adjusting for the bias here itself
 	//errorrpy = (vrpnrpy - bias_vrpn) - tf::Vector3(data.rpydata.x, data.rpydata.y,data.rpydata.z);// No Need to do this since we are resetting imu to vrpn every 10 Hz
 	//errorrpy = -bias_vrpn;//Since error is substracted from the cmd and bias should be substracted from the cmd value
 	//- is used for previous method remove it when using new method
