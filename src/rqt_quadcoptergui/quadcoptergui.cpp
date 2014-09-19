@@ -869,7 +869,8 @@ void QuadcopterGui::camcmdCallback(const geometry_msgs::TransformStamped::ConstP
 					//Move this out of camcmdCallback TODO
 					//vector3TFToMsg(offset_quadposn, itrq.xf.basepose.translation);//Set the posn and Rotation is identity always
 					itrq.xf.basepose.translation.x = 0.86;
-					itrq.xf.basepose.translation.y = 1.3;
+					//itrq.xf.basepose.translation.y = 1.3;
+					itrq.xf.basepose.translation.y = 1.25;
 					itrq.xf.basepose.translation.z =  1.47;
 
 					tf::Quaternion finalorientation = tf::createQuaternionFromYaw(M_PI/2);//Final yaw  Ideally this should be obtained from object pose TODO
