@@ -1139,6 +1139,8 @@ void QuadcopterGui::goaltimerCallback(const ros::TimerEvent &event)
 
 	double armres = -1e3;//Initialize arm result
 #ifdef ARM_ENABLED
+	if(armratecount++ == armcmdrate)//Add one to armrate count
+		armratecount = 0; 
 	//Also Need to set the frequency with which this is done [TODO]
 	//if(enable_camctrl)//Only compute and log arm angles when camera is enabled
 	if(arminst && arm_hardwareinst)//Check 
@@ -1155,20 +1157,17 @@ void QuadcopterGui::goaltimerCallback(const ros::TimerEvent &event)
 
 		
 		//Also publishing the current joint states to see the actual quadcopter and arm model in rviz:
-		jointstate_msg.header.stamp = ros::Time::now();
-		jointstate_msg.position[0] = actual_armstate[0];
-		jointstate_msg.position[1] = actual_armstate[1];
-		jointstate_pub.publish(jointstate_msg);
+		if(armratecount == armcmdrate)
+		{
+			jointstate_msg.header.stamp = ros::Time::now();
+			jointstate_msg.position[0] = actual_armstate[0];
+			jointstate_msg.position[1] = actual_armstate[1];
+			jointstate_pub.publish(jointstate_msg);
+		}
 	}
 #endif
 
-	//Publishing State of Quadcopter
-	tf::Transform goal_frame; //Publishing goal ourselves instead of SetptCtrl
-	goal_frame.setIdentity();
-	goal_frame.setOrigin(curr_goal);
-	broadcaster->sendTransform(tf::StampedTransform(goal_frame,ros::Time::now(),UV_O.frame_id_,"goal_posn"));
-
-
+	
 	if(!followtraj)
 	{
 		if(goalcount > 0)
@@ -1181,13 +1180,18 @@ void QuadcopterGui::goaltimerCallback(const ros::TimerEvent &event)
 			}
 			ctrlrinst->setgoal(curr_goal[0],curr_goal[1],curr_goal[2],goalyaw);//By default the vel = 0;
 			goalcount--;
+
+			//Publishing State of Quadcopter
+			tf::Transform goal_frame; //Publishing goal ourselves instead of SetptCtrl
+			goal_frame.setIdentity();
+			goal_frame.setOrigin(curr_goal);
+			broadcaster->sendTransform(tf::StampedTransform(goal_frame,ros::Time::now(),UV_O.frame_id_,"goal_posn"));
 		}
 
 		if(!enable_joy && enable_camctrl && newcamdata)//only control arm using target etc when camera is enabled and joystick is disabled
 		{
-			if((++armratecount == armcmdrate))//default makes it 50/4 = 12.5Hz
+			if(( armratecount == armcmdrate))//default makes it 50/4 = 12.5Hz
 			{
-				armratecount = 0;
 #ifdef ARM_ENABLED
 				if(arminst && parserinstance && arm_hardwareinst) //Can also add startcontrol flag for starting this only when controller has started TODO
 				{
@@ -1313,6 +1317,13 @@ void QuadcopterGui::goaltimerCallback(const ros::TimerEvent &event)
 					cmd_armstate[3] = gcop_trajectory.statemsg[nearest_index_gcoptime-1].statevector[3];
 					arm_hardwareinst->setarmstate(cmd_armstate);//Only using the angles with speed being constant Trial 1 In trial 2 we will try with setting velocities also
 				}
+
+
+				//Publishing State of Quadcopter
+				tf::Transform goal_frame; //Publishing goal ourselves instead of SetptCtrl
+				goal_frame.setIdentity();
+				goal_frame.setOrigin(curr_goal);
+				broadcaster->sendTransform(tf::StampedTransform(goal_frame,ros::Time::now(),UV_O.frame_id_,"goal_posn"));
 			}
 			//[DEBUG] cout<<"Nearest Index, Time offset: "<<nearest_index_gcoptime<<"\t"<<time_offset<<endl;
 			if(nearest_index_gcoptime == gcop_trajectory.N)//After reaching end of trajectory
