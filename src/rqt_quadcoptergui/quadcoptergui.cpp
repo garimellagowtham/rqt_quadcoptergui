@@ -687,6 +687,7 @@ void QuadcopterGui::shutdownPlugin()
 
 	reconfigserver.reset();
 	goaltimer.stop();
+	cmdtimer.stop();
 	vrpnfile.close();//Close the file
 	camfile.close();//Close the file
 	tipfile.close();//Close the file
