@@ -543,7 +543,8 @@ void QuadcopterGui::enable_disablecamctrl(int state) //To specify which controll
 
 		//Also specify the goal as the current quad postion TODO
 		//curr_goal = UV_O.getOrigin();//set the current goal to be same as the quadcopter origin we dont care abt the orientation as of now
-		tf::Vector3 centergoal(0.75, 0.9, 1.4);//Center of workspace with same height
+		//tf::Vector3 centergoal(0.75, 0.9, 1.4);//Center of workspace with same height
+		tf::Vector3 centergoal(0.67, 0.9, 1.4);//Center of workspace with same height
 		updategoal_dynreconfig = true;//Set the flag to make sure dynamic reconfigure reads the new goal
 		goalcount = 20; //Set the goal back to the specified posn smoothly
 		diff_goal.setValue((-curr_goal[0] + centergoal[0])/goalcount, (-curr_goal[1] + centergoal[1])/goalcount,(-curr_goal[2] + centergoal[2])/goalcount);
@@ -654,7 +655,7 @@ void QuadcopterGui::follow_trajectory(int state)
 	{
 		followtraj = false;
 
-		tf::Vector3 centergoal(0.75, 0.9, 1.4);//Center of workspace with same height
+		tf::Vector3 centergoal(0.67, 0.9, 1.4);//Center of workspace with same height
 		updategoal_dynreconfig = true;//Set the flag to make sure dynamic reconfigure reads the new goal
 		goalcount = 20; //Set the goal back to the specified posn smoothly
 		diff_goal.setValue((-curr_goal[0] + centergoal[0])/goalcount, (-curr_goal[1] + centergoal[1])/goalcount,(-curr_goal[2] + centergoal[2])/goalcount);
@@ -815,6 +816,7 @@ void QuadcopterGui::camcmdCallback(const geometry_msgs::TransformStamped::ConstP
 
 
 
+
 	tf::Vector3 object_origin;//Convenience variable for logging in future we will also use full camera ctrl and change how logging works
 
 	//If using partialcontrol should not directly control quadcopter instead just set the goal in optitrack frame and use the optitrack controller to do the job:
@@ -836,7 +838,7 @@ void QuadcopterGui::camcmdCallback(const geometry_msgs::TransformStamped::ConstP
 		//Substract y offset (Assuming the object is to be approached in y dirxn) TODO Use object pose or some input dirxn of approach for grasping later//
 		tf::Vector3 offset_quadposn = object_origin + quadoffset_object;
 		//Fixed Workspace for now:
-		if(offset_quadposn[0] < 1.4 && offset_quadposn[0] > 0.1 && offset_quadposn[1] < 1.6 && offset_quadposn[1] > 0.2 && offset_quadposn[2] < 1.7 && offset_quadposn[2] > 0)
+		if(offset_quadposn[0] < 1.2 && offset_quadposn[0] > 0.1 && offset_quadposn[1] < 1.6 && offset_quadposn[1] > 0.2 && offset_quadposn[2] < 1.7 && offset_quadposn[2] > 0)
 		{
 			if(!followtraj)//If not following the gcop trajectory then set the goal position [Redundancy]
 			{
@@ -876,7 +878,7 @@ void QuadcopterGui::camcmdCallback(const geometry_msgs::TransformStamped::ConstP
 					//Goal Condition:
 					//Move this out of camcmdCallback TODO
 					//vector3TFToMsg(offset_quadposn, itrq.xf.basepose.translation);//Set the posn and Rotation is identity always
-					itrq.xf.basepose.translation.x = 0.86;
+					itrq.xf.basepose.translation.x = 0.58;
 					//itrq.xf.basepose.translation.y = 1.3;
 					itrq.xf.basepose.translation.y = 1.25;
 					itrq.xf.basepose.translation.z =  1.47;
@@ -888,7 +890,8 @@ void QuadcopterGui::camcmdCallback(const geometry_msgs::TransformStamped::ConstP
 					//Rotate with the inverse of final transformation 
 					offsetquadlocaltarget = quatRotate(finalorientation.inverse(),offsetquadlocaltarget) - arm_basewrtquad;
 					cout<<"Offset quad localtarget: "<<offsetquadlocaltarget[0]<<"\t"<<offsetquadlocaltarget[1]<<"\t"<<offsetquadlocaltarget[2]<<"\t"<<endl;
-					armlocaltarget[0] = offsetquadlocaltarget[0]; armlocaltarget[1] = offsetquadlocaltarget[1]; armlocaltarget[2] = offsetquadlocaltarget[2];
+					//armlocaltarget[0] = offsetquadlocaltarget[0]; armlocaltarget[1] = offsetquadlocaltarget[1]; armlocaltarget[2] = offsetquadlocaltarget[2];
+					armlocaltarget[0] = 0.5; armlocaltarget[1] = 0; armlocaltarget[2] = 0.1;
 					//This offset is done in local frame which does not make sense always have to see what this amounts to
 					double armres = arminst->Ik(as,armlocaltarget);
 					cout<<as[0][0]<<"\t"<<as[0][1]<<"\t"<<as[0][2]<<"\t"<<as[1][0]<<"\t"<<as[1][1]<<"\t"<<as[1][2]<<endl;
@@ -1141,7 +1144,7 @@ void QuadcopterGui::goaltimerCallback(const ros::TimerEvent &event)
 	double armres = -1e3;//Initialize arm result
 #ifdef ARM_ENABLED
 	if(armratecount++ == armcmdrate)//Add one to armrate count
-		armratecount = 0; 
+		armratecount = 1; 
 	//Also Need to set the frequency with which this is done [TODO]
 	//if(enable_camctrl)//Only compute and log arm angles when camera is enabled
 	if(arminst && arm_hardwareinst)//Check 
@@ -1296,7 +1299,7 @@ void QuadcopterGui::goaltimerCallback(const ros::TimerEvent &event)
 				//[DEBUG]
 				cout<<"Publishing goal state: "<<goalstate.basepose.translation.x<<"\t"<<goalstate.basepose.translation.y<<"\t"<<goalstate.basepose.translation.z<<"\t"<<goalyaw<<endl;
 				tf::vector3MsgToTF(goalstate.basepose.translation,curr_goal);//Velocity of the goal is not currently stored
-			/*	if(nearest_index_gcoptime == gcop_trajectory.N)//We set the final state velocities to zero
+				if(nearest_index_gcoptime == gcop_trajectory.N)//We set the final state velocities to zero
 				{
 					goalstate.basetwist.linear.x = 0;
 					goalstate.basetwist.linear.y = 0;
@@ -1304,8 +1307,10 @@ void QuadcopterGui::goaltimerCallback(const ros::TimerEvent &event)
 					goalstate.basetwist.angular.x = 0;
 					goalstate.basetwist.angular.y = 0;
 					goalstate.basetwist.angular.z = 0;
+					goalstate.statevector[0] = itrq.xf.statevector[0];
+					goalstate.statevector[1] = itrq.xf.statevector[1];
 				}
-				*/
+				 
 				ctrlrinst->setgoal(goalstate.basepose, goalstate.basetwist); 
 				//ctrlrinst->setgoal(goalstate.basepose.translation.x, goalstate.basepose.translation.y, goalstate.basepose.translation.z,goalyaw);//Default velocity is 0
 				//Convert the angles into right frame i.e when all as zero that means the arm is perpendicular and facing down
@@ -1325,39 +1330,50 @@ void QuadcopterGui::goaltimerCallback(const ros::TimerEvent &event)
 				goal_frame.setIdentity();
 				goal_frame.setOrigin(curr_goal);
 				broadcaster->sendTransform(tf::StampedTransform(goal_frame,ros::Time::now(),UV_O.frame_id_,"goal_posn"));
+
+				//Also set the grabbing start time to new posn as soon as we command:
+				start_grabbing = ros::Time::now();
 			}
 			//[DEBUG] cout<<"Nearest Index, Time offset: "<<nearest_index_gcoptime<<"\t"<<time_offset<<endl;
-			if(nearest_index_gcoptime == gcop_trajectory.N)//After reaching end of trajectory
-			{					
-				gripped_already = true;//Stops gripping after once
-				//Adding oneshot timer to relax grip
-				timer_grabbing.setPeriod(ros::Duration(2));//[For now manual]
-				cout<<"Time to final stop: "<<(gcop_trajectory.time[gcop_trajectory.N] - time_offset.toSec())<<endl;
-//				timer_grabbing.setPeriod(ros::Duration((gcop_trajectory.time[gcop_trajectory.N] - time_offset.toSec())));//Set up timer to end at the final trajectory
-				timer_grabbing.start();//Start oneshot timer;
-			}
-			if(enable_logging)//Put another logging statement for Followtraj TODO
+
+
+			///////////////Logic for Gripper Control and timeout
+			ros::Duration time_since_grabbing = ros::Time::now() - start_grabbing;
+			if(time_since_grabbing.toSec() > timeout_grabbing)
 			{
-					tf::Vector3 target_location = (OBJ_QUAD_stamptransform.getOrigin() + quatRotate(UV_O.getRotation().inverse(),object_armoffset)) - arm_basewrtquad;//Find the object location in local quad frame
-				//Logging save to file
-				tipfile<<(ros::Time::now().toNSec())<<"\t"<<	tip_position[0]<<"\t"<<tip_position[1]<<"\t"<<tip_position[2]<<"\t"<<target_location[0]<<"\t"<<target_location[1]<<"\t"<<target_location[2]<<"\t"<<actual_armstate[0]<<"\t"<<actual_armstate[1]<<"\t"<<actual_armstate[2]<<"\t"<<actual_armstate[3]<<"\t"<<cmd_armstate[0]<<"\t"<<cmd_armstate[1]<<"\t"<<cmd_armstate[2]<<"\t"<<cmd_armstate[3]<<"\t"<<endl;//Later will change this to include timestamp when the serial data is got in a parallel thread TODO
+				//Disable_Camera and fold arm:
+				cout<<"Timeout Done"<<endl;
+				arm_hardwareinst->foldarm();//Can replace this with oneshot timer if needed TODO
+				ui_.camcheckbox->setCheckState(Qt::Unchecked);
 			}
-			////////Grabbing Target Code //////////////////
-		/*	cout<<"Error in tip position: EX ["<<(tip_position[0] - armlocaltarget[0])<<"] EY ["<<(tip_position[1] - armlocaltarget[1])<<"] EZ ["<<(tip_position[2] - armlocaltarget[2])<<"]"<<endl;
-			cout<<"tip position: TX ["<<(tip_position[0])<<"] TY ["<<(tip_position[1])<<"] TZ ["<<(tip_position[2])<<"]"<<endl;
-			cout<<"Local Target: LX ["<<(armlocaltarget[0])<<"] LY ["<<( armlocaltarget[1])<<"] LZ ["<<(armlocaltarget[2])<<"]"<<endl;
-			if( (abs(tip_position[0] - armlocaltarget[0])< 0.03) && (abs(tip_position[1] - armlocaltarget[1]) < 0.05) && (abs(tip_position[2] - armlocaltarget[2]) < 0.02) && (!gripped_already))// we will calibrate it better later //Add these as params TODO
+			else
 			{
-				gripped_already = true;//Stops gripping after once
+				tf::Vector3 target_location = (OBJ_QUAD_stamptransform.getOrigin() + quatRotate(UV_O.getRotation().inverse(),object_armoffset)) - arm_basewrtquad;//Find the object location in local quad frame
+				armlocaltarget[0] = target_location[0]; armlocaltarget[1] = target_location[1]; armlocaltarget[2] = target_location[2];
+				////////Grabbing Target Code //////////////////
+				cout<<"Error in tip position: EX ["<<(tip_position[0] - armlocaltarget[0])<<"] EY ["<<(tip_position[1] - armlocaltarget[1])<<"] EZ ["<<(tip_position[2] - armlocaltarget[2])<<"]"<<endl;
+				cout<<"tip position: TX ["<<(tip_position[0])<<"] TY ["<<(tip_position[1])<<"] TZ ["<<(tip_position[2])<<"]"<<endl;
+				cout<<"Local Target: LX ["<<(armlocaltarget[0])<<"] LY ["<<( armlocaltarget[1])<<"] LZ ["<<(armlocaltarget[2])<<"]"<<endl;
+				if( (abs(tip_position[0] - armlocaltarget[0])< 0.03) && (abs(tip_position[1] - armlocaltarget[1]) < 0.05) && (abs(tip_position[2] - armlocaltarget[2]) < 0.02) && (!gripped_already))// we will calibrate it better later //Add these as params TODO
+				{
+					gripped_already = true;//Stops gripping after once
 #ifndef LOG_DEBUG
-				parserinstance->grip(1);//Parser does not control arm directly anymore it only controls gripper
-				//Adding oneshot timer to relax grip
-				timer_grabbing.setPeriod(ros::Duration(2));//5 seconds
-				timer_grabbing.start();//Start oneshot timer;
+					parserinstance->grip(1);//Parser does not control arm directly anymore it only controls gripper
+					//Adding oneshot timer to relax grip
+					timer_grabbing.setPeriod(ros::Duration(2));//5 seconds
+					timer_grabbing.start();//Start oneshot timer;
 #endif
-				return;
-			}*/
-			//////////End Grabbing Code ///////////////////
+					return;
+				}
+				//////////End Grabbing Code ///////////////////
+
+
+				if(enable_logging)//Put another logging statement for Followtraj TODO
+				{
+					//Logging save to file
+					tipfile<<(ros::Time::now().toNSec())<<"\t"<<	tip_position[0]<<"\t"<<tip_position[1]<<"\t"<<tip_position[2]<<"\t"<<target_location[0]<<"\t"<<target_location[1]<<"\t"<<target_location[2]<<"\t"<<actual_armstate[0]<<"\t"<<actual_armstate[1]<<"\t"<<actual_armstate[2]<<"\t"<<actual_armstate[3]<<"\t"<<cmd_armstate[0]<<"\t"<<cmd_armstate[1]<<"\t"<<cmd_armstate[2]<<"\t"<<cmd_armstate[3]<<"\t"<<endl;//Later will change this to include timestamp when the serial data is got in a parallel thread TODO
+				}
+			}
 		}
 	}
 }
