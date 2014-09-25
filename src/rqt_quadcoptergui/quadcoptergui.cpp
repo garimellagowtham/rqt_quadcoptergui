@@ -1169,6 +1169,20 @@ void QuadcopterGui::goaltimerCallback(const ros::TimerEvent &event)
 			jointstate_pub.publish(jointstate_msg);
 		}
 	}
+
+  //Find the object location in local quad frame
+	tf::Vector3 target_location;
+	if(enable_camctrl)
+		 target_location = (OBJ_QUAD_stamptransform.getOrigin() + quatRotate(UV_O.getRotation().inverse(),object_armoffset)) - arm_basewrtquad;
+
+	if(armratecount == armcmdrate)
+	{
+		if(enable_logging && enable_camctrl)
+		{
+			//Logging save to file
+			tipfile<<(ros::Time::now().toNSec())<<"\t"<<	tip_position[0]<<"\t"<<tip_position[1]<<"\t"<<tip_position[2]<<"\t"<<target_location[0]<<"\t"<<target_location[1]<<"\t"<<target_location[2]<<"\t"<<actual_armstate[0]<<"\t"<<actual_armstate[1]<<"\t"<<actual_armstate[2]<<"\t"<<actual_armstate[3]<<"\t"<<cmd_armstate[0]<<"\t"<<cmd_armstate[1]<<"\t"<<cmd_armstate[2]<<"\t"<<cmd_armstate[3]<<"\t"<<endl;//Later will change this to include timestamp when the serial data is got in a parallel thread TODO
+		}
+	}
 #endif
 
 	
@@ -1202,7 +1216,7 @@ void QuadcopterGui::goaltimerCallback(const ros::TimerEvent &event)
 					//Verify the value of armres when we are like 5 cm from the goal posn. We will use that to calibrate the arm to open
 					//Once it is opened, we note the time and put a timeout of 5 sec and then disable the cam to get a different trajectory
 					//Computing the commanding arm angles
-					tf::Vector3 target_location = (OBJ_QUAD_stamptransform.getOrigin() + quatRotate(UV_O.getRotation().inverse(),object_armoffset)) - arm_basewrtquad;//Find the object location in local quad frame
+					//tf::Vector3 target_location = (OBJ_QUAD_stamptransform.getOrigin() + quatRotate(UV_O.getRotation().inverse(),object_armoffset)) - arm_basewrtquad;//Find the object location in local quad frame
 					armlocaltarget[0] = target_location[0]; armlocaltarget[1] = target_location[1]; armlocaltarget[2] = target_location[2];
 					//This offset is done in local frame which does not make sense always have to see what this amounts to
 					armres = arminst->Ik(as,armlocaltarget);
@@ -1212,11 +1226,12 @@ void QuadcopterGui::goaltimerCallback(const ros::TimerEvent &event)
 					cmd_armstate[1] = as[solnindex][2];//Relative angle wrt to first joint no transformation needed
 					//cout<<"Resulting arm angles"<<as[solnindex][0]<<"\t"<<cmd_armstate[0]<<"\t"<<cmd_armstate[1]<<endl;
 
-					if(enable_logging)//Put another logging statement for Followtraj 
+					/*if(enable_logging)//Put another logging statement for Followtraj 
 					{
 						//Logging save to file
 						tipfile<<(ros::Time::now().toNSec())<<"\t"<<	tip_position[0]<<"\t"<<tip_position[1]<<"\t"<<tip_position[2]<<"\t"<<target_location[0]<<"\t"<<target_location[1]<<"\t"<<target_location[2]<<"\t"<<actual_armstate[0]<<"\t"<<actual_armstate[1]<<"\t"<<actual_armstate[2]<<"\t"<<actual_armstate[3]<<"\t"<<cmd_armstate[0]<<"\t"<<cmd_armstate[1]<<"\t"<<cmd_armstate[2]<<"\t"<<cmd_armstate[3]<<"\t"<<endl;//Later will change this to include timestamp when the serial data is got in a parallel thread TODO
 					}
+					*/
 					newcamdata = false;//Reset new camdata until new valid camera data arrives
 
 					cout<<"Armres: "<<armres<<endl;
@@ -1244,7 +1259,7 @@ void QuadcopterGui::goaltimerCallback(const ros::TimerEvent &event)
 							{
 								gripped_already = true;//Stops gripping after once
 #ifndef LOG_DEBUG
-								parserinstance->grip(1);//Parser does not control arm directly anymore it only controls gripper
+//[JUST FOR LOGGING NOW]								parserinstance->grip(1);//Parser does not control arm directly anymore it only controls gripper
 								//Adding oneshot timer to relax grip
 								timer_grabbing.setPeriod(ros::Duration(2));//5 seconds
 								timer_grabbing.start();//Start oneshot timer;
@@ -1348,7 +1363,7 @@ void QuadcopterGui::goaltimerCallback(const ros::TimerEvent &event)
 			}
 			else
 			{
-				tf::Vector3 target_location = (OBJ_QUAD_stamptransform.getOrigin() + quatRotate(UV_O.getRotation().inverse(),object_armoffset)) - arm_basewrtquad;//Find the object location in local quad frame
+				//tf::Vector3 target_location = (OBJ_QUAD_stamptransform.getOrigin() + quatRotate(UV_O.getRotation().inverse(),object_armoffset)) - arm_basewrtquad;//Find the object location in local quad frame
 				armlocaltarget[0] = target_location[0]; armlocaltarget[1] = target_location[1]; armlocaltarget[2] = target_location[2];
 				////////Grabbing Target Code //////////////////
 				cout<<"Error in tip position: EX ["<<(tip_position[0] - armlocaltarget[0])<<"] EY ["<<(tip_position[1] - armlocaltarget[1])<<"] EZ ["<<(tip_position[2] - armlocaltarget[2])<<"]"<<endl;
@@ -1368,11 +1383,12 @@ void QuadcopterGui::goaltimerCallback(const ros::TimerEvent &event)
 				//////////End Grabbing Code ///////////////////
 
 
-				if(enable_logging)//Put another logging statement for Followtraj TODO
+			/*	if(enable_logging)//Put another logging statement for Followtraj TODO
 				{
 					//Logging save to file
 					tipfile<<(ros::Time::now().toNSec())<<"\t"<<	tip_position[0]<<"\t"<<tip_position[1]<<"\t"<<tip_position[2]<<"\t"<<target_location[0]<<"\t"<<target_location[1]<<"\t"<<target_location[2]<<"\t"<<actual_armstate[0]<<"\t"<<actual_armstate[1]<<"\t"<<actual_armstate[2]<<"\t"<<actual_armstate[3]<<"\t"<<cmd_armstate[0]<<"\t"<<cmd_armstate[1]<<"\t"<<cmd_armstate[2]<<"\t"<<cmd_armstate[3]<<"\t"<<endl;//Later will change this to include timestamp when the serial data is got in a parallel thread TODO
 				}
+				*/
 			}
 		}
 	}
