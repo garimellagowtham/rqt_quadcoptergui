@@ -34,7 +34,7 @@
 
 #include <pluginlib/class_list_macros.h>
 
-#define ARM_ENABLED
+//#define ARM_ENABLED
 //#define LOG_DEBUG
 
 namespace rqt_quadcoptergui {
@@ -1401,6 +1401,8 @@ void QuadcopterGui::goaltimerCallback(const ros::TimerEvent &event)
 				tf::vector3MsgToTF(goalstate.basepose.translation,curr_goal);//Velocity of the goal is not currently stored
 				 
 				ctrlrinst->setgoal(goalstate.basepose, goalstate.basetwist); 
+
+#ifdef ARM_ENABLED
 				//ctrlrinst->setgoal(goalstate.basepose.translation.x, goalstate.basepose.translation.y, goalstate.basepose.translation.z,goalyaw);//Default velocity is 0
 				//Convert the angles into right frame i.e when all as zero that means the arm is perpendicular and facing down
 				if(!enable_joy)
@@ -1412,7 +1414,7 @@ void QuadcopterGui::goaltimerCallback(const ros::TimerEvent &event)
 					cmd_armstate[3] = gcop_trajectory.statemsg[nearest_index_gcoptime-1].statevector[3];
 					arm_hardwareinst->setarmstate(cmd_armstate);//Only using the angles with speed being constant Trial 1 In trial 2 we will try with setting velocities also
 				}
-
+#endif
 
 				//Publishing State of Quadcopter
 				tf::Transform goal_frame; //Publishing goal ourselves instead of SetptCtrl
@@ -1437,6 +1439,7 @@ void QuadcopterGui::goaltimerCallback(const ros::TimerEvent &event)
 			}
 			else
 			{
+#ifdef ARM_ENABLED
 				//tf::Vector3 target_location = (OBJ_QUAD_stamptransform.getOrigin() + quatRotate(UV_O.getRotation().inverse(),object_armoffset)) - arm_basewrtquad;//Find the object location in local quad frame
 				armlocaltarget[0] = target_location[0]; armlocaltarget[1] = target_location[1]; armlocaltarget[2] = target_location[2];
 				////////Grabbing Target Code //////////////////
@@ -1454,6 +1457,7 @@ void QuadcopterGui::goaltimerCallback(const ros::TimerEvent &event)
 //#endif
 					return;
 				}
+#endif
 				//////////End Grabbing Code ///////////////////
 
 
