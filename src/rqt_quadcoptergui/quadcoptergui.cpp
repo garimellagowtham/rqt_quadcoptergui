@@ -69,9 +69,11 @@ QuadcopterGui::QuadcopterGui() : rqt_gui_cpp::Plugin()
 		//quadtobase.setOrigin(tf::Vector3(0.0732,0,-0.07));//The z distance needs to adjusted exactly
 
 		//For now default value of object_offset:
-		object_armoffset = tf::Vector3(0,0.08,-0.18);//relative to the markers in Optitrack frame //For full camera control this SHOULD BE IN Object/Inertial Frame
+		//object_armoffset = tf::Vector3(0,0.08,-0.18);//relative to the markers in Optitrack frame //For full camera control this SHOULD BE IN Object/Inertial Frame
+		//object_armoffset = tf::Vector3(0,0.05,-0.25);//relative to the markers in Optitrack frame //For full camera control this SHOULD BE IN Object/Inertial Frame
+		object_armoffset = tf::Vector3(0,0.0,-0.2);//relative to the markers in Optitrack frame //For full camera control this SHOULD BE IN Object/Inertial Frame
 		//-0.07 was prev guess
-		quadoffset_object = tf::Vector3(0, -0.5, -0.05);//Where the quadcopter should stay relative to the markers This is manually adjusted based on the accuracy of the quadcopter
+		quadoffset_object = tf::Vector3(0, -0.63, 0.05);//Where the quadcopter should stay relative to the markers This is manually adjusted based on the accuracy of the quadcopter
 		//in z dirxn have to see if 0.0 is ok or use -0.05
 		//manual_offset = tf::Vector3(0,0.1,0);//This is the bias in estimation of the object. We have to find an automatic way of finding this
 
@@ -139,7 +141,8 @@ void QuadcopterGui::initPlugin(qt_gui_cpp::PluginContext& context)
 	ui_.textBrowser->setReadOnly(true);
 
 	//Get ros NodeHandle from parent nodelet manager:
-	ros::NodeHandle nh = getNodeHandle();
+//	ros::NodeHandle nh = getNodeHandle();
+	ros::NodeHandle nh = getMTNodeHandle();
 
 	//stringdata_pub = nh.advertise<std_msgs::String>("stringout",1);
 
@@ -212,7 +215,7 @@ void QuadcopterGui::initPlugin(qt_gui_cpp::PluginContext& context)
 	//Setup the timer:
 	timer = new QTimer(widget_);
 	connect(timer, SIGNAL(timeout()), this, SLOT(RefreshGui()));
-	timer->start(50);//20Hz
+	timer->start(100);//10Hz
 	if(!nh.getParam("/gui/test_ctrlr",testctrlr))
 	{
 		testctrlr = true;
@@ -328,6 +331,8 @@ void QuadcopterGui::initPlugin(qt_gui_cpp::PluginContext& context)
 	goaltimer.stop();
 	timer_grabbing = nh.createTimer(ros::Duration(4), &QuadcopterGui::ClosingafterGrabbing, this, true);//One shot timer
 	timer_grabbing.stop();
+	timer_relaxgrip = nh.createTimer(ros::Duration(4), &QuadcopterGui::Oneshotgrabbing, this, true);//One shot timer
+	timer_relaxgrip.stop();
 	cmdtimer = nh.createTimer(ros::Duration(0.02), &QuadcopterGui::cmdtimerCallback,this);//50Hz is the update rate of Quadcopter cmd
 	cmdtimer.start();
 }
@@ -343,7 +348,7 @@ void QuadcopterGui::RefreshGui()
 	parserinstance->getquaddata(data);
 	
 	//Reset attitude on IMU every 10 Hz
-	if(++reset_imu_count == 5)
+	if(++reset_imu_count == 2)
 	{
 		reset_imu_count = 0;
 		if(parserinstance)
@@ -475,7 +480,7 @@ void QuadcopterGui::wrapperDisarm()
 void QuadcopterGui::enable_disablemanualarmctrl(int state) //This is also useful for folding the arm before landing
 {
 	//Get ros NodeHandle from parent nodelet manager:
-	ros::NodeHandle nh = getNodeHandle();
+	ros::NodeHandle nh = getMTNodeHandle();
 	joymsg_prevbutton = 0; buttoncount = 0;
 	joymsg_prevbutton1 = 0; buttoncount1 = 0;
 	//cout<<"________________________I Am called _____________________"<<endl;
@@ -494,6 +499,10 @@ void QuadcopterGui::enable_disablemanualarmctrl(int state) //This is also useful
   if(arm_hardwareinst && parserinstance)
 	{
 		arm_hardwareinst->foldarm();//Just fold the arm whenever you switch between two modes Robustness
+
+		//if(enable_joy) [WILL ENABLE IF NECESSARY]
+			//parserinstance->grip(0);
+
 		//if(!enable_joy)
 		//	parserinstance->grip(-1);//Open gripper position in automatic position so that it will grip it automatically
 	}
@@ -514,7 +523,11 @@ void QuadcopterGui::enable_disablecamctrl(int state) //To specify which controll
 		enable_camctrl = true;
 		//Open the gripper :
 		if(parserinstance)
+		{
 			parserinstance->grip(-1);//Open We changed open to be more energy efficient by increasing pwm width 
+			timer_relaxgrip.setPeriod(ros::Duration(1));//2 seconds
+			timer_relaxgrip.start();//Start oneshot timer;
+		}
 		if(cam_partialcontrol)//If partial control to debug we have to see the output of the goal whenever the quad is started up
 		{
 			goaltimer.start();//Redundancy
@@ -544,7 +557,7 @@ void QuadcopterGui::enable_disablecamctrl(int state) //To specify which controll
 		//Also specify the goal as the current quad postion TODO
 		//curr_goal = UV_O.getOrigin();//set the current goal to be same as the quadcopter origin we dont care abt the orientation as of now
 		//tf::Vector3 centergoal(0.75, 0.9, 1.4);//Center of workspace with same height
-		tf::Vector3 centergoal(0.67, 0.9, 1.4);//Center of workspace with same height
+		tf::Vector3 centergoal(0.67, 0.9, curr_goal[2]);//Center of workspace with same height
 		updategoal_dynreconfig = true;//Set the flag to make sure dynamic reconfigure reads the new goal
 		goalcount = 20; //Set the goal back to the specified posn smoothly
 		diff_goal.setValue((-curr_goal[0] + centergoal[0])/goalcount, (-curr_goal[1] + centergoal[1])/goalcount,(-curr_goal[2] + centergoal[2])/goalcount);
@@ -655,7 +668,7 @@ void QuadcopterGui::follow_trajectory(int state)
 	{
 		followtraj = false;
 
-		tf::Vector3 centergoal(0.67, 0.9, 1.4);//Center of workspace with same height
+		tf::Vector3 centergoal(0.67, 0.9, curr_goal[2]);//Center of workspace with same height
 		updategoal_dynreconfig = true;//Set the flag to make sure dynamic reconfigure reads the new goal
 		goalcount = 20; //Set the goal back to the specified posn smoothly
 		diff_goal.setValue((-curr_goal[0] + centergoal[0])/goalcount, (-curr_goal[1] + centergoal[1])/goalcount,(-curr_goal[2] + centergoal[2])/goalcount);
@@ -734,9 +747,17 @@ void QuadcopterGui::joyCallback(const sensor_msgs::Joy::ConstPtr &joymsg)
 	if(buttoncount == 0)//Three state gripper
 		parserinstance->grip(0);//Neutral
 	else if(buttoncount == 1)
+	{
 		parserinstance->grip(1);//Hold
+		//timer_relaxgrip.setPeriod(ros::Duration(2));//2 seconds
+		//timer_relaxgrip.start();//Start oneshot timer;
+	}
 	else if(buttoncount == 2)
+	{
 		parserinstance->grip(-1);//Release
+		timer_relaxgrip.setPeriod(ros::Duration(1));//2 seconds
+		timer_relaxgrip.start();//Start oneshot timer;
+	}
 	//For starting to move arm:
 
 	if(enable_joy)//If the joystick is not enable return
@@ -768,22 +789,33 @@ void QuadcopterGui::joyCallback(const sensor_msgs::Joy::ConstPtr &joymsg)
 	}
 }
 
+
 void QuadcopterGui::ClosingafterGrabbing(const ros::TimerEvent &event)
 {
 	ROS_INFO("Closing the arm and grabbing target");
 
-	if(followtraj)//If Followtraj, then this function is called exactly at the end of the trajectory
-		parserinstance->grip(1);//Parser does not control arm directly anymore it only controls gripper
+	//if(followtraj)//If Followtraj, then this function is called exactly at the end of the trajectory
+	//	parserinstance->grip(1);//Parser does not control arm directly anymore it only controls gripper
 #ifdef ARM_ENABLED
   gripped_already = false;//Reset gripped already to false after one trial
+
+#ifdef LOG_DEBUG
 	if(arm_hardwareinst && parserinstance)
 	{
 		arm_hardwareinst->foldarm();
-		parserinstance->grip(0);//Neutral
+		parserinstance->grip(0);//Neutral We need to pull the object away
 	}
+#endif
+
 #endif
 	//Disabling Cam checkbox here
 	ui_.camcheckbox->setCheckState(Qt::Unchecked);
+}
+
+void QuadcopterGui::Oneshotgrabbing(const ros::TimerEvent &event)
+{
+	parserinstance->grip(0);//Relax the grip
+	ROS_INFO("Relaxing Grip");
 }
 
 
@@ -837,12 +869,79 @@ void QuadcopterGui::camcmdCallback(const geometry_msgs::TransformStamped::ConstP
 
 		//Substract y offset (Assuming the object is to be approached in y dirxn) TODO Use object pose or some input dirxn of approach for grasping later//
 		tf::Vector3 offset_quadposn = object_origin + quadoffset_object;
+		if(followtraj)
+		{
+			//We are following gcop trajectory Checkout openloop case i.e only call iterationreq once with target number of iterations and try to follow the trajectory
+			//Fill iteration request with all the data needed for doing optimization
+			if((!(openloop_mode ||waitingfortrajectory)) || (openloop_mode && initialitrq) || (!openloop_mode && initialitrq)) //This logic is derived from truth table
+			{
+				//Fill itrq with data needed
+				//[DEBUG]
+				ROS_INFO("Entering Iteration req");
+				if(!ctrlrinst)
+				{
+					ROS_WARN("Controller Instance not defined");
+					return;
+				}
+				//Initial Condition:
+				transformTFToMsg(ctrlrinst->UV_O_filt,itrq.x0.basepose);//converts to the right format  Basepose
+				if(initialitrq)//Initially assume quadcopter is stable even though it has different angle TODO change this to add initialization in the request itself 
+				{
+					itrq.x0.basepose.rotation = tf::createQuaternionMsgFromYaw(M_PI/2);//Initial rotation is taken from knowledge
+				}
+				if(!initialitrq) //When initializing, we assume the quad is at zero velocity. This removes any small velocity that quad may have
+					vector3TFToMsg((ctrlrinst->UV_O_filt)*filt_vel , itrq.x0.basetwist.linear); //Need to find Body Fixed angular velocity TODO
+				for(int count1 = 0;count1 < 2*NOFJOINTS; count1++) //Joint angles and vel
+					itrq.x0.statevector[count1] = actual_armstate[count1];
+
+				//Goal Condition:
+				//Move this out of camcmdCallback TODO
+				//vector3TFToMsg(offset_quadposn, itrq.xf.basepose.translation);//Set the posn and Rotation is identity always
+				itrq.xf.basepose.translation.x = 0.65;
+				//itrq.xf.basepose.translation.y = 1.3;
+				itrq.xf.basepose.translation.y = 1.15;
+				itrq.xf.basepose.translation.z =  1.91;
+
+				tf::Quaternion finalorientation = tf::createQuaternionFromYaw(M_PI/2);//Final yaw  Ideally this should be obtained from object pose TODO
+				quaternionTFToMsg(finalorientation, itrq.xf.basepose.rotation);
+				//Find final posn angles based on offset quad posn:
+				tf::Vector3 offsetquadlocaltarget = (object_armoffset) - quadoffset_object;
+				//Rotate with the inverse of final transformation 
+				offsetquadlocaltarget = quatRotate(finalorientation.inverse(),offsetquadlocaltarget) - arm_basewrtquad;
+				cout<<"Offset quad localtarget: "<<offsetquadlocaltarget[0]<<"\t"<<offsetquadlocaltarget[1]<<"\t"<<offsetquadlocaltarget[2]<<"\t"<<endl;
+				//armlocaltarget[0] = offsetquadlocaltarget[0]; armlocaltarget[1] = offsetquadlocaltarget[1]; armlocaltarget[2] = offsetquadlocaltarget[2];
+				armlocaltarget[0] = 0.52; armlocaltarget[1] = 0; armlocaltarget[2] = -0.05;
+				//This offset is done in local frame which does not make sense always have to see what this amounts to
+				double armres = arminst->Ik(as,armlocaltarget);
+				cout<<as[0][0]<<"\t"<<as[0][1]<<"\t"<<as[0][2]<<"\t"<<as[1][0]<<"\t"<<as[1][1]<<"\t"<<as[1][2]<<endl;
+				//cout<<"arm res: "<<armres<<endl;
+				ROS_INFO("Arm Res: %f",armres);
+
+
+				for(int count1 = 0;count1 < NOFJOINTS; count1++) //Final Joint angles and vel
+				{
+
+					itrq.xf.statevector[count1] = as[1][count1+1];//lower elbow solution
+					itrq.xf.statevector[NOFJOINTS + count1] = 0;//Final commanded velocity
+				}
+
+				//Number of segments to return:
+				itrq.N = 0;//If 0 it will provide all the segments
+				itrq.tf = 3;//Final time to reach goal is 3 seconds TODO (For closed loop adjust this based on how we are progressing on the trajectory)
+
+				iterationreq_pub.publish(itrq);
+				request_time = (ctrlrinst->UV_O_filt).stamp_;//When the quad stamp was made //Later will add Getcurrent state from ctrlr through kalman filter for accurate estimation of current pose
+				waitingfortrajectory = true;//Once published we are waiting for gcop to produce a trajectory
+				initialitrq = false;//Once initialized, this is set to false
+				ROS_INFO("Leaving Iteration Req");
+			}
+		}
 		//Fixed Workspace for now:
-		if(offset_quadposn[0] < 1.2 && offset_quadposn[0] > 0.1 && offset_quadposn[1] < 1.6 && offset_quadposn[1] > 0.2 && offset_quadposn[2] < 1.7 && offset_quadposn[2] > 0)
+		if(offset_quadposn[0] < 0.8 && offset_quadposn[0] > 0.4 && offset_quadposn[1] < 1.5 && offset_quadposn[1] > 1 && offset_quadposn[2] < 2.0 && offset_quadposn[2] > 1.5)
 		{
 			if(!followtraj)//If not following the gcop trajectory then set the goal position [Redundancy]
 			{
-				goalcount = 20;//TODO Figure out as a function of freq of goaltimer
+				goalcount = 40;//TODO Figure out as a function of freq of goaltimer
 				//Set goalyaw also to face towards the object:
 				//[DEBUG]	cout<<"Goal Yaw: "<<atan2(OBJ_QUAD_origin_inoptitrackframe[1], OBJ_QUAD_origin_inoptitrackframe[0])<<endl; //atan2(y,x)
 				goalyaw = atan2(OBJ_QUAD_origin_inoptitrackframe[1], OBJ_QUAD_origin_inoptitrackframe[0]); 
@@ -850,72 +949,7 @@ void QuadcopterGui::camcmdCallback(const geometry_msgs::TransformStamped::ConstP
 				diff_goal.setValue((-curr_goal[0] + offset_quadposn[0])/goalcount, (-curr_goal[1] + offset_quadposn[1])/goalcount,(-curr_goal[2] + offset_quadposn[2])/goalcount);//Adding offset in y posn assuming that is the dirxn of approach later have to use that from the object pose
 				newcamdata = true;//Specifying arm that new camera data arrived
 			}
-			else
-			{
-				//We are following gcop trajectory Checkout openloop case i.e only call iterationreq once with target number of iterations and try to follow the trajectory
-				//Fill iteration request with all the data needed for doing optimization
-				if((!(openloop_mode ||waitingfortrajectory)) || (openloop_mode && initialitrq) || (!openloop_mode && initialitrq)) //This logic is derived from truth table
-				{
-					//Fill itrq with data needed
-					//[DEBUG]
-					ROS_INFO("Entering Iteration req");
-					if(!ctrlrinst)
-					{
-						ROS_WARN("Controller Instance not defined");
-						return;
-					}
-					//Initial Condition:
-					transformTFToMsg(ctrlrinst->UV_O_filt,itrq.x0.basepose);//converts to the right format  Basepose
-					if(initialitrq)//Initially assume quadcopter is stable even though it has different angle TODO change this to add initialization in the request itself 
-					{
-						itrq.x0.basepose.rotation = tf::createQuaternionMsgFromYaw(M_PI/2);//Initial rotation is taken from knowledge
-					}
-					if(!initialitrq) //When initializing, we assume the quad is at zero velocity. This removes any small velocity that quad may have
-						vector3TFToMsg((ctrlrinst->UV_O_filt)*filt_vel , itrq.x0.basetwist.linear); //Need to find Body Fixed angular velocity TODO
-					for(int count1 = 0;count1 < 2*NOFJOINTS; count1++) //Joint angles and vel
-						itrq.x0.statevector[count1] = actual_armstate[count1];
-
-					//Goal Condition:
-					//Move this out of camcmdCallback TODO
-					//vector3TFToMsg(offset_quadposn, itrq.xf.basepose.translation);//Set the posn and Rotation is identity always
-					itrq.xf.basepose.translation.x = 0.58;
-					//itrq.xf.basepose.translation.y = 1.3;
-					itrq.xf.basepose.translation.y = 1.25;
-					itrq.xf.basepose.translation.z =  1.47;
-
-					tf::Quaternion finalorientation = tf::createQuaternionFromYaw(M_PI/2);//Final yaw  Ideally this should be obtained from object pose TODO
-					quaternionTFToMsg(finalorientation, itrq.xf.basepose.rotation);
-					//Find final posn angles based on offset quad posn:
-					tf::Vector3 offsetquadlocaltarget = (object_armoffset) - quadoffset_object;
-					//Rotate with the inverse of final transformation 
-					offsetquadlocaltarget = quatRotate(finalorientation.inverse(),offsetquadlocaltarget) - arm_basewrtquad;
-					cout<<"Offset quad localtarget: "<<offsetquadlocaltarget[0]<<"\t"<<offsetquadlocaltarget[1]<<"\t"<<offsetquadlocaltarget[2]<<"\t"<<endl;
-					//armlocaltarget[0] = offsetquadlocaltarget[0]; armlocaltarget[1] = offsetquadlocaltarget[1]; armlocaltarget[2] = offsetquadlocaltarget[2];
-					armlocaltarget[0] = 0.5; armlocaltarget[1] = 0; armlocaltarget[2] = 0.1;
-					//This offset is done in local frame which does not make sense always have to see what this amounts to
-					double armres = arminst->Ik(as,armlocaltarget);
-					cout<<as[0][0]<<"\t"<<as[0][1]<<"\t"<<as[0][2]<<"\t"<<as[1][0]<<"\t"<<as[1][1]<<"\t"<<as[1][2]<<endl;
-					cout<<"arm res: "<<armres<<endl;
-					
-
-					for(int count1 = 0;count1 < NOFJOINTS; count1++) //Final Joint angles and vel
-					{
-
-						itrq.xf.statevector[count1] = as[1][count1+1];//lower elbow solution
-						itrq.xf.statevector[NOFJOINTS + count1] = 0;//Final commanded velocity
-					}
-
-					//Number of segments to return:
-					itrq.N = 0;//If 0 it will provide all the segments
-					itrq.tf = 3;//Final time to reach goal is 3 seconds TODO (For closed loop adjust this based on how we are progressing on the trajectory)
-
-					iterationreq_pub.publish(itrq);
-					request_time = (ctrlrinst->UV_O_filt).stamp_;//When the quad stamp was made //Later will add Getcurrent state from ctrlr through kalman filter for accurate estimation of current pose
-					waitingfortrajectory = true;//Once published we are waiting for gcop to produce a trajectory
-					initialitrq = false;//Once initialized, this is set to false
-					ROS_INFO("Leaving Iteration Req");
-				}
-			}
+			
 		}
 		else
 		{
@@ -964,6 +998,12 @@ void QuadcopterGui::camcmdCallback(const geometry_msgs::TransformStamped::ConstP
 
 void QuadcopterGui::vrpnCallback(const geometry_msgs::TransformStamped::ConstPtr &currframe)//Removed arm stuff from this
 {
+	//Check if vrpn is skipping:
+	/*if((currframe->header.stamp - UV_O.stamp_).toSec() > 0.1)
+	{
+		ROS_WARN("No Vrpn data from callback for greater than 0.1 sec");
+	}
+	*/
 	transformStampedMsgToTF(*currframe,UV_O);//converts to the right format  and stores the message
 	ctrlrinst->Update(UV_O);//Updates the internal state
 
@@ -998,6 +1038,13 @@ void QuadcopterGui::cmdtimerCallback(const ros::TimerEvent &event)
 	{
 		ROS_WARN("Controller not instantiated");
 		return;
+	}
+	//Check how delayed cmdtimer is :
+	//cout<<(event.current_real - event.last_real).toSec()<<endl;
+	if((event.current_real - event.last_real).toSec() > 0.04)
+	{
+		ROS_WARN("CmdTimer not catching up");
+		ROS_INFO("Current Expected: %f\t%f",event.current_expected.toSec(), event.current_real.toSec());
 	}
 
 	controllers::ctrl_command rescmd;
@@ -1043,6 +1090,7 @@ void QuadcopterGui::paramreqCallback(rqt_quadcoptergui::QuadcopterInterfaceConfi
 {
 	//ROS_INFO("Request recvd");
 	// Use the config values to set the goals and gains for quadcopter
+//	ros::Time debugtime = ros::Time::now();
 	if(!parserinstance || !ctrlrinst)
 	{
 		ROS_WARN("Parser or ctrlr not defined");
@@ -1064,15 +1112,19 @@ void QuadcopterGui::paramreqCallback(rqt_quadcoptergui::QuadcopterInterfaceConfi
 		config.pitch_bias = bias_vrpn[1]*(180.0/M_PI);
 		reconfiginit = true;
 	}
+	//ROS_INFO("Time taken for reconfiginit: %f",(ros::Time::now() - debugtime).toSec());
 	ctrlrinst->setgains(config.kpr, config.kdr, config.kpt, config.kdt, config.kit);//Need to add kpy and kiy TODO
 	ctrlrinst->setbounds(config.throtbound, (M_PI/180.0)*config.rpbound);//This throttle bound is different from throttle bias which needs to be estimated for some quadcopters. This just cuts off the throttle values that are beyond thrustbias +/- throtbound
 
 	throttlecmdrate = config.cmdrate_throttle;
 
+	//ROS_INFO("Time taken for 2: %f",(ros::Time::now() - debugtime).toSec());
+
 	//setting perturbation parameters
-	traj_freq = config.traj_freq;
+	/*traj_freq = config.traj_freq;
 	traj_amp = config.traj_amp;
 	traj_skew = config.traj_skew;
+	*/
 	if(level&0x0002)
 	{
 		tf::Vector3 quadorigin = UV_O.getOrigin();
@@ -1106,6 +1158,7 @@ void QuadcopterGui::paramreqCallback(rqt_quadcoptergui::QuadcopterInterfaceConfi
 			}
 		}
 	}
+	//ROS_INFO("Time taken for 3: %f",(ros::Time::now() - debugtime).toSec());
 	//publish a trajectory marker
 	/*
 	for(int count1 = 0;count1 <= 30;count1++)
@@ -1120,26 +1173,42 @@ void QuadcopterGui::paramreqCallback(rqt_quadcoptergui::QuadcopterInterfaceConfi
 	*/
 	//desiredtraj_pub.publish(trajectoryPtr);
 	//desiredtraj_pub.publish(targetPtr);
-	if(parserinstance)
-	{
-		parserinstance->grip(config.gripper_state);
-	}
+	
 #ifdef ARM_ENABLED
-	if(arm_hardwareinst)
+	if((level&0x0008))
 	{
-		arm_hardwareinst->powermotors(config.power_motors);
+		if(parserinstance)
+		{
+			parserinstance->grip(config.gripper_state);
+			timer_relaxgrip.setPeriod(ros::Duration(1));//2 seconds
+			timer_relaxgrip.start();//Start oneshot timer;
+		}
+		if(arm_hardwareinst)
+		{
+			arm_hardwareinst->powermotors(config.power_motors);
+		}
 	}
 #endif
-	bias_vrpn[0] = config.roll_bias*(M_PI/180.0);
-	bias_vrpn[1] = config.pitch_bias*(M_PI/180.0);
+
+	//bias_vrpn[0] = config.roll_bias*(M_PI/180.0);
+	//bias_vrpn[1] = config.pitch_bias*(M_PI/180.0);
+
 	//traj_axis = config.traj_axis;
 	//corrected_thrustbias = config.add_thrustbias + data.thrustbias;
 	//ctrlrinst->setextbias(corrected_thrustbias);//Set the corrected thrustbias
+//	ROS_INFO("Time taken for Param req: %f",(ros::Time::now() - debugtime).toSec());
 }
 
 //Not much load to run this timer
 void QuadcopterGui::goaltimerCallback(const ros::TimerEvent &event)
 {
+
+	//Check how delayed cmdtimer is :
+	if((event.current_real - event.last_real).toSec() > 0.06)
+	{
+		ROS_WARN("GoalTimer not catching up");
+		ROS_INFO("Current Expected: %f\t%f",event.current_expected.toSec(), event.current_real.toSec());
+	}
 
 	double armres = -1e3;//Initialize arm result
 #ifdef ARM_ENABLED
@@ -1161,13 +1230,14 @@ void QuadcopterGui::goaltimerCallback(const ros::TimerEvent &event)
 
 		
 		//Also publishing the current joint states to see the actual quadcopter and arm model in rviz:
-		if(armratecount == armcmdrate)
+/*		if(armratecount == armcmdrate)
 		{
 			jointstate_msg.header.stamp = ros::Time::now();
 			jointstate_msg.position[0] = actual_armstate[0];
 			jointstate_msg.position[1] = actual_armstate[1];
 			jointstate_pub.publish(jointstate_msg);
 		}
+		*/
 	}
 
   //Find the object location in local quad frame
@@ -1242,7 +1312,9 @@ void QuadcopterGui::goaltimerCallback(const ros::TimerEvent &event)
 						if(time_since_grabbing.toSec() > timeout_grabbing)
 						{
 							//Disable_Camera and fold arm:
+#ifdef LOG_DEBUG
 							arm_hardwareinst->foldarm();//Can replace this with oneshot timer if needed TODO
+#endif
 							ui_.camcheckbox->setCheckState(Qt::Unchecked);
 						}
 						else
@@ -1258,12 +1330,12 @@ void QuadcopterGui::goaltimerCallback(const ros::TimerEvent &event)
 							if( (abs(tip_position[0] - armlocaltarget[0])< 0.03) && (abs(tip_position[1] - armlocaltarget[1]) < 0.05) && (abs(tip_position[2] - armlocaltarget[2]) < 0.02) && (!gripped_already))// we will calibrate it better later //Add these as params TODO
 							{
 								gripped_already = true;//Stops gripping after once
-#ifndef LOG_DEBUG
-//[JUST FOR LOGGING NOW]								parserinstance->grip(1);//Parser does not control arm directly anymore it only controls gripper
+//#ifndef LOG_DEBUG
+								parserinstance->grip(1);//Parser does not control arm directly anymore it only controls gripper
 								//Adding oneshot timer to relax grip
 								timer_grabbing.setPeriod(ros::Duration(2));//5 seconds
 								timer_grabbing.start();//Start oneshot timer;
-#endif
+//#endif
 								return;
 							}
 							arm_hardwareinst->setarmangles(cmd_armstate);//Only using the angles with speed being constant
@@ -1311,9 +1383,6 @@ void QuadcopterGui::goaltimerCallback(const ros::TimerEvent &event)
 				assert(nearest_index_gcoptime > 0);
 				ROS_INFO("Moving to next state: %d", nearest_index_gcoptime);
 				gcop_comm::State &goalstate = gcop_trajectory.statemsg[nearest_index_gcoptime];
-				//[DEBUG]
-				cout<<"Publishing goal state: "<<goalstate.basepose.translation.x<<"\t"<<goalstate.basepose.translation.y<<"\t"<<goalstate.basepose.translation.z<<"\t"<<goalyaw<<endl;
-				tf::vector3MsgToTF(goalstate.basepose.translation,curr_goal);//Velocity of the goal is not currently stored
 				if(nearest_index_gcoptime == gcop_trajectory.N)//We set the final state velocities to zero
 				{
 					goalstate.basetwist.linear.x = 0;
@@ -1324,7 +1393,12 @@ void QuadcopterGui::goaltimerCallback(const ros::TimerEvent &event)
 					goalstate.basetwist.angular.z = 0;
 					goalstate.statevector[0] = itrq.xf.statevector[0];
 					goalstate.statevector[1] = itrq.xf.statevector[1];
+					goalstate.basepose.translation.y = 1.3;//Just a hack for now 
+					goalstate.basepose.translation.z = 1.87;//Just a hack for now 
 				}
+				//[DEBUG]
+				cout<<"Publishing goal state: "<<goalstate.basepose.translation.x<<"\t"<<goalstate.basepose.translation.y<<"\t"<<goalstate.basepose.translation.z<<"\t"<<goalyaw<<endl;
+				tf::vector3MsgToTF(goalstate.basepose.translation,curr_goal);//Velocity of the goal is not currently stored
 				 
 				ctrlrinst->setgoal(goalstate.basepose, goalstate.basetwist); 
 				//ctrlrinst->setgoal(goalstate.basepose.translation.x, goalstate.basepose.translation.y, goalstate.basepose.translation.z,goalyaw);//Default velocity is 0
@@ -1358,7 +1432,7 @@ void QuadcopterGui::goaltimerCallback(const ros::TimerEvent &event)
 			{
 				//Disable_Camera and fold arm:
 				cout<<"Timeout Done"<<endl;
-				arm_hardwareinst->foldarm();//Can replace this with oneshot timer if needed TODO
+				//arm_hardwareinst->foldarm();//Can replace this with oneshot timer if needed TODO
 				ui_.camcheckbox->setCheckState(Qt::Unchecked);
 			}
 			else
@@ -1369,15 +1443,15 @@ void QuadcopterGui::goaltimerCallback(const ros::TimerEvent &event)
 				cout<<"Error in tip position: EX ["<<(tip_position[0] - armlocaltarget[0])<<"] EY ["<<(tip_position[1] - armlocaltarget[1])<<"] EZ ["<<(tip_position[2] - armlocaltarget[2])<<"]"<<endl;
 				cout<<"tip position: TX ["<<(tip_position[0])<<"] TY ["<<(tip_position[1])<<"] TZ ["<<(tip_position[2])<<"]"<<endl;
 				cout<<"Local Target: LX ["<<(armlocaltarget[0])<<"] LY ["<<( armlocaltarget[1])<<"] LZ ["<<(armlocaltarget[2])<<"]"<<endl;
-				if( (abs(tip_position[0] - armlocaltarget[0])< 0.03) && (abs(tip_position[1] - armlocaltarget[1]) < 0.05) && (abs(tip_position[2] - armlocaltarget[2]) < 0.02) && (!gripped_already))// we will calibrate it better later //Add these as params TODO
+				if( (abs(tip_position[0] - armlocaltarget[0])< 0.03) && (abs(tip_position[1] - armlocaltarget[1]) < 0.05) && (abs(tip_position[2] - armlocaltarget[2]) < 0.04) && (!gripped_already))// we will calibrate it better later //Add these as params TODO
 				{
 					gripped_already = true;//Stops gripping after once
-#ifndef LOG_DEBUG
+//#ifndef LOG_DEBUG
 					parserinstance->grip(1);//Parser does not control arm directly anymore it only controls gripper
 					//Adding oneshot timer to relax grip
 					timer_grabbing.setPeriod(ros::Duration(2));//5 seconds
 					timer_grabbing.start();//Start oneshot timer;
-#endif
+//#endif
 					return;
 				}
 				//////////End Grabbing Code ///////////////////

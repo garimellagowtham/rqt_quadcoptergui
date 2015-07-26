@@ -154,6 +154,7 @@ protected:
 	ros::Timer cmdtimer;
 	void vrpnCallback(const geometry_msgs::TransformStamped::ConstPtr &currframe);
 	void ClosingafterGrabbing(const ros::TimerEvent &); //Timer Callback for Closing after grabbing an object
+	void Oneshotgrabbing(const ros::TimerEvent &); //Timer Callback for relaxing grip after grabbing
 	void camcmdCallback(const geometry_msgs::TransformStamped::ConstPtr &currframe);
 	void joyCallback(const sensor_msgs::Joy::ConstPtr &joymsg);
 	void gcoptrajectoryCallback(const gcop_comm::CtrlTraj &traj_msg);
@@ -249,6 +250,7 @@ protected:
 	ros::Time start_grabbing;
 	double timeout_grabbing;//Timeout for waiting to grab object usually a very short time to just stay for few seconds
 	ros::Timer timer_grabbing;//Used to fold arm and set gripper to neutral after grabbing
+	ros::Timer timer_relaxgrip;//Used to fold arm and set gripper to neutral after grabbing
 
 	protected slots:
 	virtual void wrappertakeoff();
