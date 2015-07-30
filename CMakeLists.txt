@@ -88,7 +88,7 @@ find_package(TinyXML REQUIRED)
 ## Generate dynamic reconfig options:
 
 generate_dynamic_reconfigure_options(
-  cfg/paramedit.cfg
+  cfg/QuadcopterInterface.cfg
 	  )
 ## Declare variables specific to rqt plugin:
 
