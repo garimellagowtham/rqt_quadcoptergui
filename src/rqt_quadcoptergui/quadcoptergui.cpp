@@ -1135,17 +1135,24 @@ void QuadcopterGui::paramreqCallback(rqt_quadcoptergui::QuadcopterInterfaceConfi
 			config.zg = curr_goal[2];
 			config.yawg = goalyaw;
 			updategoal_dynreconfig = false;
+			config.update_goal = false;
 		}
 		else
 		{
-			goalyaw = config.yawg;
+			if(config.update_goal)
+			{
+				goalyaw = config.yawg;
+			}
 			//Should not put anything else in level 2 #IMPORTANT
 			//[DEBUG]if(startcontrol)
 			if(data.armed)
 			{
-				goalcount = config.goalT*(5);//Just a hack to ensure the total time is ok TODO
-				diff_goal.setValue((-curr_goal[0] + config.xg)/goalcount, (-curr_goal[1] + config.yg)/goalcount,(-curr_goal[2] + config.zg)/goalcount);
-				//goaltimer.start();
+				if(config.update_goal)
+				{
+					goalcount = config.goalT*(5);//Just a hack to ensure the total time is ok TODO
+					diff_goal.setValue((-curr_goal[0] + config.xg)/goalcount, (-curr_goal[1] + config.yg)/goalcount,(-curr_goal[2] + config.zg)/goalcount);
+					//goaltimer.start();
+				}
 			}
 			else
 			{
@@ -1155,6 +1162,10 @@ void QuadcopterGui::paramreqCallback(rqt_quadcoptergui::QuadcopterInterfaceConfi
 				curr_goal = quadorigin;
 				//goaltimer.start();
 				//diff_goal.setValue(0, 0, (-curr_goal[2] + config.zg)/goalcount);
+			}
+			if(config.update_goal)
+			{
+				config.update_goal = false;
 			}
 		}
 	}
