@@ -151,7 +151,11 @@ void QuadcopterGui::initPlugin(qt_gui_cpp::PluginContext& context)
 	nh.getParam("/ctrlr/targety",target[1]);
 	nh.getParam("/ctrlr/targetz",target[2]);
 	nh.getParam("/ctrlr/partialcam_control",cam_partialcontrol);
+#ifdef ARM_ENABLED
 	nh.getParam("/ctrlr/timeout_grabbing",timeout_grabbing);
+#else
+  timeout_grabbing = 1.0;// Hardset timeout of 1 sec
+#endif
 	nh.getParam("/ctrlr/openloop_mode",openloop_mode);
 
 	//Load UAV Name:  Used in setting tf frame id
@@ -669,6 +673,7 @@ void QuadcopterGui::follow_trajectory(int state)
 		followtraj = false;
 
 		tf::Vector3 centergoal(0.67, 0.9, curr_goal[2]);//Center of workspace with same height
+    ///////////CHANGE CENTER OF WORKSPACE TO BE A PARAMETER ///////////////////
 		updategoal_dynreconfig = true;//Set the flag to make sure dynamic reconfigure reads the new goal
 		goalcount = 20; //Set the goal back to the specified posn smoothly
 		diff_goal.setValue((-curr_goal[0] + centergoal[0])/goalcount, (-curr_goal[1] + centergoal[1])/goalcount,(-curr_goal[2] + centergoal[2])/goalcount);
@@ -715,6 +720,8 @@ void QuadcopterGui::shutdownPlugin()
 
 void QuadcopterGui::gcoptrajectoryCallback(const gcop_comm::CtrlTraj &traj_msg)
 {
+  if(!followtraj)//If follow trajectory has not been enabled do not receive a trajectory
+    return;
 	//[DEBUG]
 	ROS_INFO("Received Gcop Trajectory");
 	gcop_trajectory = traj_msg;//Default Copy constructor (Instead if needed can write our own copy constructor)
@@ -1366,7 +1373,7 @@ void QuadcopterGui::goaltimerCallback(const ros::TimerEvent &event)
 		//If following trajectory, we have to give the goal based on the trajectory information and current time
 		//Need a matchnearest function for finding the closest time based on current time and provide control/goalstate information based on that
 		//We avoid changing curr_goal while following trajectory, so that when we disable follow traj, the goal is set to currgoal automatically
-		if(!waitingfortrajectory && enable_camctrl && !gripped_already)//Camctrl is redundancy as we are following the trajectory to the object provided by the camera
+		if(!waitingfortrajectory && !gripped_already)
 		{
 			//Follow the trajectory i.e set goal for quadcopter, set goals for arm based on current time and when the trajectory was req
 			ros::Duration time_offset = ros::Time::now() - request_time;
@@ -1404,8 +1411,8 @@ void QuadcopterGui::goaltimerCallback(const ros::TimerEvent &event)
 					goalstate.basetwist.angular.z = 0;
 					goalstate.statevector[0] = itrq.xf.statevector[0];
 					goalstate.statevector[1] = itrq.xf.statevector[1];
-					goalstate.basepose.translation.y = 1.3;//Just a hack for now 
-					goalstate.basepose.translation.z = 1.87;//Just a hack for now 
+			///////////////		goalstate.basepose.translation.y = 1.3;//Just a hack for now 
+			//////////////    goalstate.basepose.translation.z = 1.87;//Just a hack for now 
 				}
 				//[DEBUG]
 				cout<<"Publishing goal state: "<<goalstate.basepose.translation.x<<"\t"<<goalstate.basepose.translation.y<<"\t"<<goalstate.basepose.translation.z<<"\t"<<goalyaw<<endl;
