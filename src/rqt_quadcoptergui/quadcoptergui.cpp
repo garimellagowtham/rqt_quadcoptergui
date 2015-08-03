@@ -354,10 +354,11 @@ void QuadcopterGui::RefreshGui()
 	//Reset attitude on IMU every 10 Hz
 	if(++reset_imu_count == 2)
 	{
+    static tf::Vector3 imu_vrpndiff((vrpnrpy[0] - data.rpydata.x),(vrpnrpy[1] - data.rpydata.y),(vrpnrpy[2] - data.rpydata.z));
 		reset_imu_count = 0;
 		if(parserinstance)
 		{
-			parserinstance->reset_attitude(vrpnrpy[0], vrpnrpy[1], vrpnrpy[2]);
+			parserinstance->reset_attitude(vrpnrpy[0]-imu_vrpndiff[0], vrpnrpy[1]-imu_vrpndiff[1], vrpnrpy[2]-imu_vrpndiff[2]);
 		}
 	}
 	//cout<<"Bias :"<<bias_vrpn[0]<<"\t"<<bias_vrpn[1]<<"\t"<<bias_vrpn[2]<<"\t"<<endl;
