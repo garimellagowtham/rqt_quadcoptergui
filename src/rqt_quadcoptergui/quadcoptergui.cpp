@@ -352,14 +352,24 @@ void QuadcopterGui::RefreshGui()
 	parserinstance->getquaddata(data);
 	
 	//Reset attitude on IMU every 10 Hz
-	if(++reset_imu_count == 2)
+	//if(++reset_imu_count == 2)
 	{
-    static tf::Vector3 imu_vrpndiff((vrpnrpy[0] - data.rpydata.x),(vrpnrpy[1] - data.rpydata.y),(vrpnrpy[2] - data.rpydata.z));
-		reset_imu_count = 0;
-		if(parserinstance)
+		static int count_imu = 0;
+    static tf::Vector3 imu_vrpndiff;
+		if(count_imu < 10)
 		{
-			parserinstance->reset_attitude(vrpnrpy[0]-imu_vrpndiff[0], vrpnrpy[1]-imu_vrpndiff[1], vrpnrpy[2]-imu_vrpndiff[2]);
+			imu_vrpndiff = (1.0/double(count_imu+1))*(double(count_imu)*imu_vrpndiff + tf::Vector3((vrpnrpy[0] - data.rpydata.x),(vrpnrpy[1] - data.rpydata.y),(vrpnrpy[2] - data.rpydata.z)));
+			count_imu++;
+			ROS_INFO("Imu Offset: %f,%f,%f\t IMU: %f,%f,%f\t VRPNRPY: %f,%f,%f", imu_vrpndiff[0], imu_vrpndiff[1], imu_vrpndiff[2], data.rpydata.x, data.rpydata.y, data.rpydata.z, vrpnrpy[0], vrpnrpy[1], vrpnrpy[2]);
 		}
+		else
+		{
+			if(parserinstance)
+			{
+				parserinstance->reset_attitude(vrpnrpy[0]-imu_vrpndiff[0], vrpnrpy[1]-imu_vrpndiff[1], vrpnrpy[2]-imu_vrpndiff[2]);
+			}
+		}
+		reset_imu_count = 0;
 	}
 	//cout<<"Bias :"<<bias_vrpn[0]<<"\t"<<bias_vrpn[1]<<"\t"<<bias_vrpn[2]<<"\t"<<endl;
 	//errorrpy.setValue(0,0,0);
