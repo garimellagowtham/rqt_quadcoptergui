@@ -42,7 +42,7 @@ namespace rqt_quadcoptergui {
 QuadcopterGui::QuadcopterGui() : rqt_gui_cpp::Plugin()
   , context_(0)
   , widget_(0)
-	, goalcount(0), reset_imu_count(0), goalyaw(0)
+	, goalcount(0), reset_imu_count(0), reset_imu(false), goalyaw(0)
 	, startcontrol(false) ,testctrlr(true)
 	, corrected_thrustbias(0)
 	, enable_logging(false)
@@ -160,6 +160,7 @@ void QuadcopterGui::initPlugin(qt_gui_cpp::PluginContext& context)
 
 	//Load UAV Name:  Used in setting tf frame id
 	nh.getParam("/gui/uav_name",uav_name);
+	nh.getParam("/gui/reset_imu",reset_imu);
 	//Get The static transform for Camera to Quadcopter and similarly for object mod:
 	//Setting Camera in Quad frame
 	static tf::TransformListener listener;//Will make it a class member later (for other functions to use TODO)
@@ -366,7 +367,8 @@ void QuadcopterGui::RefreshGui()
 		{
 			if(parserinstance)
 			{
-				parserinstance->reset_attitude(vrpnrpy[0]-imu_vrpndiff[0], vrpnrpy[1]-imu_vrpndiff[1], vrpnrpy[2]-imu_vrpndiff[2]);
+				if(reset_imu)
+					parserinstance->reset_attitude(vrpnrpy[0]-imu_vrpndiff[0], vrpnrpy[1]-imu_vrpndiff[1], vrpnrpy[2]-imu_vrpndiff[2]);
 			}
 		}
 		reset_imu_count = 0;

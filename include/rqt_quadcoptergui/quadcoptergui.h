@@ -175,6 +175,7 @@ protected:
 	void cmdtimerCallback(const ros::TimerEvent&);
 	int goalcount;
 	int reset_imu_count;
+	bool reset_imu;///< Reset the imu using EKF
 	float goalyaw;
 	bool startcontrol, testctrlr;
 	float corrected_thrustbias;
