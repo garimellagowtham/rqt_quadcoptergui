@@ -201,6 +201,19 @@
     <bool>false</bool>
    </property>
   </widget>
+  <widget class="QPushButton" name="Connectbutton">
+   <property name="geometry">
+    <rect>
+     <x>120</x>
+     <y>480</y>
+     <width>101</width>
+     <height>24</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Connect</string>
+   </property>
+  </widget>
  </widget>
  <resources/>
  <connections/>

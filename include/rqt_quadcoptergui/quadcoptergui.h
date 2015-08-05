@@ -229,7 +229,8 @@ protected:
 	ofstream vrpnfile;
 	ofstream camfile;
 	ofstream tipfile;
-	bool enable_logging;
+  bool enable_logging;
+  std::string logdir_stamped;
 	bool reconfiginit;
 	int throttlecmdrate,ratecount;
 	int armcmdrate,armratecount;
@@ -255,7 +256,8 @@ protected:
 	protected slots:
 	virtual void wrappertakeoff();
 	virtual void wrapperLand();
-	virtual void wrapperDisarm();
+    virtual void initializePixhawk();
+    virtual void wrapperDisarm();
 	virtual void wrapperimu_recalib(int);
 	virtual void follow_trajectory(int);
 	virtual void integrator_control(int);

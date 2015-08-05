@@ -83,7 +83,7 @@ QuadcopterGui::QuadcopterGui() : rqt_gui_cpp::Plugin()
 		// Prepare Iteration request:
 		itrq.x0.statevector.resize(2*NOFJOINTS);
 		itrq.xf.statevector.resize(2*NOFJOINTS);
-		itrq.xf.basetwist.linear.x = 0; itrq.xf.basetwist.linear.y = 0; itrq.xf.basetwist.linear.z = 0; 
+        itrq.xf.basetwist.linear.x = 0; itrq.xf.basetwist.linear.y = 0; itrq.xf.basetwist.linear.z = 0;
 		itrq.xf.basetwist.angular.x = 0; itrq.xf.basetwist.angular.y = 0; itrq.xf.basetwist.angular.z = 0;
 
 		targetPtr->id = 1;
@@ -194,25 +194,6 @@ void QuadcopterGui::initPlugin(qt_gui_cpp::PluginContext& context)
 	obj_mod_quat.setEulerZYX(M_PI,-M_PI/2,0);
 	OBJ_MOD_transform.setRotation(obj_mod_quat);
 	 */
-	try
-	{
-		string parserplugin_name;
-		if(!nh.getParam("/gui/parser_plugin",parserplugin_name))
-		{
-			ROS_ERROR("Cannot find parser_plugin parameter to load the parser");
-			return;
-		}
-		parserinstance = parser_loader->createInstance(parserplugin_name);
-		parserinstance->initialize(nh);
-	}
-	catch(pluginlib::PluginlibException& ex)
-	{
-		ROS_ERROR("The plugin failed to load for some reason. Error: %s", ex.what());
-		return;
-	}
-
-	//Set gripper state to neutral in the beginning:
-	parserinstance->grip(0);
 
 	//Connect all the slots as needed
 
@@ -229,7 +210,8 @@ void QuadcopterGui::initPlugin(qt_gui_cpp::PluginContext& context)
 	connect(ui_.Takeoffbutton, SIGNAL(clicked()), this, SLOT(wrappertakeoff()));
 	//connect(ui_.TargetCapturebutton, SIGNAL(clicked()), this, SLOT(Capture_Target()));
 	connect(ui_.Landbutton, SIGNAL(clicked()), this, SLOT(wrapperLand()));
-	connect(ui_.Disarmbutton, SIGNAL(clicked()), this, SLOT(wrapperDisarm()));
+  connect(ui_.Connectbutton, SIGNAL(clicked()), this, SLOT(initializePixhawk()));
+  connect(ui_.Disarmbutton, SIGNAL(clicked()), this, SLOT(wrapperDisarm()));
 	connect(ui_.imucheckbox,SIGNAL(stateChanged(int)),this,SLOT(wrapperimu_recalib(int)));
 	connect(ui_.follow_traj,SIGNAL(stateChanged(int)),this,SLOT(follow_trajectory(int)));
 	connect(ui_.log_checkbox,SIGNAL(stateChanged(int)),this,SLOT(enable_disablelog(int)));
@@ -255,17 +237,7 @@ void QuadcopterGui::initPlugin(qt_gui_cpp::PluginContext& context)
 	//arminst->l2 = 0.35;
 	arminst->l2 = 0.42;
 	arminst->x1 = 0.025;//Need to change this after measuring again TODO
-	parserinstance->getquaddata(data);
-	if(ctrlrinst)
-	{
-		double xbias, ybias, rateyawbias;
-		nh.getParam("/bias_vrpnx",xbias);
-		nh.getParam("/bias_vrpny",ybias);
-		nh.getParam("/bias_rateyaw",rateyawbias);
-		ctrlrinst->setextbias(data.thrustbias, xbias, ybias, rateyawbias);
-		ROS_INFO("X,Y, RateYaw Bias: %f\t%f\t%f",xbias, ybias, rateyawbias);
-		//ctrlrinst->setextbias(data.thrustbias); //Fext initial guess comes from the parser. We will need to estimate it for some quadcopters if its used in commanding it.
-	}
+
 	//bias_vrpn.setValue(2.33*(M_PI/180),-0.3*(M_PI/180),0);
 	bias_vrpn.setValue(0,0,0);
 	nh.getParam("/bias_vrpnroll",bias_vrpn[0]);
@@ -278,12 +250,13 @@ void QuadcopterGui::initPlugin(qt_gui_cpp::PluginContext& context)
 	string logdir = "/home/gowtham";//Default name
 	if(!nh.getParam("/gui/logdir",logdir))
 	{
-		ROS_WARN("Cannot find log directory");
+        ROS_WARN("Cannot find log directory");
+    logdir_stamped = "";
 	}
 	else
 	{
 		logdir = logdir + "/session";
-		string logdir_stamped = parsernode::common::addtimestring(logdir);
+    logdir_stamped = parsernode::common::addtimestring(logdir);
 		ROS_INFO("Creating Log dir: %s",logdir_stamped.c_str());
 		mkdir(logdir_stamped.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);//Create the directory see http://pubs.opengroup.org/onlinepubs/009695399/functions/mkdir.html
 		vrpnfile.open((logdir_stamped+"/vrpn.dat").c_str());//TODO add warning if we cannot open the file
@@ -298,7 +271,6 @@ void QuadcopterGui::initPlugin(qt_gui_cpp::PluginContext& context)
 		tipfile.precision(9);
 		tipfile<<"#Time \t Pos.X \t Pos.Y \t Pos.Z\t DesPos.X\t DesPos.Y\t DesPos.Z\t Act_armangle0\t Act_armangle1\t Des_armangle0\t Des_armangle1"<<endl;
 		//cmdfile.open(logdir_stamped+"/cmd.dat");//TODO add warning if we cannot open the file
-		parserinstance->setlogdir(logdir_stamped);
 		ctrlrinst->setlogdir(logdir_stamped);
 	}
 
@@ -343,13 +315,17 @@ void QuadcopterGui::initPlugin(qt_gui_cpp::PluginContext& context)
 
 void QuadcopterGui::RefreshGui()
 {
-	if(!parserinstance)
+  if(!parserinstance)
 	{
-		ROS_ERROR("No parser instance created");
+    //ROS_ERROR("No parser instance created");
 		return;
-	}
-	//parserinstance->grip(-1);//Open arm [DEBUG]
-	parserinstance->getquaddata(data);
+  }
+  if(!parserinstance->initialized)
+  {
+    return;
+  }
+  //parserinstance->grip(-1);//Open arm [DEBUG]
+    parserinstance->getquaddata(data);
 	
 	//Reset attitude on IMU every 10 Hz
 	//if(++reset_imu_count == 2)
@@ -443,12 +419,54 @@ void QuadcopterGui::wrappertakeoff()
 	{
 		ROS_WARN("Parser Instance not defined. Cannot take off");
 		return;
-	}
+  }
+  if(!parserinstance->initialized)
+  {
+    return;
+  }
 	//Set the extbias back to nominal value
 	ctrlrinst->setextbias(data.thrustbias); //Set the external force back to nominal value Just extra safety its already set in check_control etc
 	parserinstance->takeoff();
 }
+void QuadcopterGui::initializePixhawk()
+{
+  ros::NodeHandle nh = getMTNodeHandle();
+  try
+  {
+    string parserplugin_name;
+    if(!nh.getParam("/gui/parser_plugin",parserplugin_name))
+    {
+      ROS_ERROR("Cannot find parser_plugin parameter to load the parser");
+      return;
+    }
+    parserinstance = parser_loader->createInstance(parserplugin_name);
+    parserinstance->initialize(nh);
+  }
+  catch(pluginlib::PluginlibException& ex)
+  {
+    ROS_ERROR("The plugin failed to load for some reason. Error: %s", ex.what());
+    return;
+  }
 
+  //Set gripper state to neutral in the beginning:
+  parserinstance->grip(0);
+
+  parserinstance->getquaddata(data);
+  if(ctrlrinst)
+  {
+    double xbias, ybias, rateyawbias;
+    nh.getParam("/bias_vrpnx",xbias);
+    nh.getParam("/bias_vrpny",ybias);
+    nh.getParam("/bias_rateyaw",rateyawbias);
+    ctrlrinst->setextbias(data.thrustbias, xbias, ybias, rateyawbias);
+    ROS_INFO("X,Y, RateYaw Bias: %f\t%f\t%f",xbias, ybias, rateyawbias);
+    //ctrlrinst->setextbias(data.thrustbias); //Fext initial guess comes from the parser. We will need to estimate it for some quadcopters if its used in commanding it.
+  }
+  if(!logdir_stamped.empty())
+  {
+    parserinstance->setlogdir(logdir_stamped);
+  }
+}
 void QuadcopterGui::wrapperLand()
 {
 	if(!parserinstance)
