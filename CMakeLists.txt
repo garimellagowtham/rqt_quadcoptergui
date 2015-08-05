@@ -19,6 +19,7 @@ find_package(catkin REQUIRED COMPONENTS
   tf
   visualization_msgs
 	gcop_comm
+  message_generation
 )
 
 ## System dependencies are found with CMake's conventions
@@ -60,11 +61,11 @@ find_package(TinyXML REQUIRED)
 ##   * add every package in MSG_DEP_SET to generate_messages(DEPENDENCIES ...)
 
 ## Generate messages in the 'msg' folder
-# add_message_files(
-#   FILES
-#   Message1.msg
-#   Message2.msg
-# )
+ add_message_files(
+   FILES
+   GuiStateMessage.msg
+   GuiCommandMessage.msg
+ )
 
 ## Generate services in the 'srv' folder
 # add_service_files(
@@ -81,12 +82,14 @@ find_package(TinyXML REQUIRED)
 # )
 
 ## Generate added messages and services with any dependencies listed here
-# generate_messages(
-#   DEPENDENCIES
-#   sensor_msgs#   std_msgs#   visualization_msgs
-# )
-## Generate dynamic reconfig options:
+ generate_messages(
+   DEPENDENCIES
+   sensor_msgs   
+   std_msgs   
+   visualization_msgs
+ )
 
+## Generate dynamic reconfig options:
 generate_dynamic_reconfigure_options(
   cfg/QuadcopterInterface.cfg
 	  )
@@ -148,12 +151,15 @@ qt4_wrap_ui(rqt_quadcoptergui_UIS_H ${rqt_quadcoptergui_UIS})
 #   src/${PROJECT_NAME}/rqt_quadcoptergui.cpp
 # )
 add_library(${PROJECT_NAME} ${rqt_quadcoptergui_SRCS} ${rqt_quadcoptergui_MOCS} ${rqt_quadcoptergui_UIS_H})
+# Onboard NodeHandler
+add_library(onboardnodehandler src/onboardnodehandler.cpp)
 
 find_package(class_loader)
 class_loader_hide_library_symbols(${PROJECT_NAME})
 
-message("GCOP LIBS: ${GCOP_LIBRARIES}")
+#message("GCOP LIBS: ${GCOP_LIBRARIES}")
 target_link_libraries(${PROJECT_NAME} ${catkin_LIBRARIES}  ${GCOP_LIBRARIES} ${OpenCV_LIBS} ${TINYXML_LIBRARIES})
+target_link_libraries(onboardnodehandler ${catkin_LIBRARIES}  ${GCOP_LIBRARIES} ${OpenCV_LIBS} ${TINYXML_LIBRARIES})
 
 ## Declare a cpp executable
 # add_executable(rqt_quadcoptergui_node src/rqt_quadcoptergui_node.cpp)
