@@ -81,6 +81,7 @@ protected:
 
     /////Reconfigure Server
     boost::shared_ptr<dynamic_reconfigure::Server<rqt_quadcoptergui::QuadcopterInterfaceConfig> >reconfigserver;
+		dynamic_reconfigure::Server<rqt_quadcoptergui::QuadcopterInterfaceConfig>::CallbackType reconfigcallbacktype;
 
 protected:
     //NodeHandle

@@ -71,8 +71,8 @@ OnboardNodeHandler::OnboardNodeHandler(ros::NodeHandle &nh_):nh(nh_)
   armtarget_pub = nh_.advertise<visualization_msgs::Marker>("armtarget", 10);
 
   //Connect to dynamic reconfigure server:
+	ROS_INFO("Setting Up Reconfigure Sever");
   reconfigserver.reset(new dynamic_reconfigure::Server<rqt_quadcoptergui::QuadcopterInterfaceConfig>(nh_));
-  dynamic_reconfigure::Server<rqt_quadcoptergui::QuadcopterInterfaceConfig>::CallbackType reconfigcallbacktype;
   reconfigcallbacktype = boost::bind(&OnboardNodeHandler::paramreqCallback, this, _1, _2);
   reconfigserver->setCallback(reconfigcallbacktype);
 
@@ -149,6 +149,8 @@ inline void OnboardNodeHandler::setupMemberVariables()
   quadoffset_object = tf::Vector3(0, -0.63, 0.05);//Where the quadcopter should stay relative to the markers This is manually adjusted based on the accuracy of the quadcopter
 
   arm_basewrtquad.setValue(0.0732, 0, -0.1);
+
+	curr_goal = tf::Vector3(0,0,0);//Initial current goal
 
   //Set the Quadcopter in Optitrak frame
   UV_O.setIdentity();
@@ -356,7 +358,7 @@ inline void OnboardNodeHandler::stateTransitionCameraController(bool state)
   if(!ctrlrinst)
   {
     ROS_WARN("Controller not instantiated");
-    return;
+		goto PUBLISH_CAMERA_STATE;
   }
 
   if(state == true)
@@ -387,6 +389,7 @@ inline void OnboardNodeHandler::stateTransitionCameraController(bool state)
     stateTransitionTrajectoryTracking(false);//Transition the trajectory tracking to false
   }
   //Publish Change of State:
+PUBLISH_CAMERA_STATE:
   rqt_quadcoptergui::GuiStateMessage state_message;
   state_message.status = enable_camctrl;
   state_message.commponent_id = state_message.camera_controlstatus;
@@ -423,12 +426,12 @@ inline void OnboardNodeHandler::stateTransitionLogging(bool state)
   if(!parserinstance)
   {
     ROS_WARN("Parser Instance not defined. Cannot Log");
-    return;
+		goto PUBLISH_LOGGING_STATE;
   }
   if(!ctrlrinst)
   {
     ROS_WARN("Controller Instance not defined. Cannot Log");
-    return;
+		goto PUBLISH_LOGGING_STATE;
   }
   if(state == true)
   {
@@ -454,6 +457,7 @@ inline void OnboardNodeHandler::stateTransitionLogging(bool state)
     }
   }
   //Publish Change of State:
+PUBLISH_LOGGING_STATE:
   rqt_quadcoptergui::GuiStateMessage state_message;
   state_message.status = enable_logging;
   state_message.commponent_id = state_message.log_status;
@@ -495,22 +499,27 @@ inline void OnboardNodeHandler::stateTransitionIntegrator(bool state)
   if(!ctrlrinst)
   {
     ROS_WARN("Ctrl inst not defined");
-    return;
+		enable_integrator = false;
+		goto PUBLISH_INTEGRATOR_STATE;
   }
   if(testctrlr)//If testing the controller, do not integrate the thrust
   {
+		enable_integrator = false;
     ctrlrinst->integrate(false);//Redundancy
-    return;
+		goto PUBLISH_INTEGRATOR_STATE;
   }
   if(state == true)
   {
+		enable_integrator = true;
     ctrlrinst->integrate(true);
   }
   else if(state == false)
   {
+		enable_integrator = false;
     ctrlrinst->integrate(false);
   }
   //Publish Change of State:
+PUBLISH_INTEGRATOR_STATE:
   rqt_quadcoptergui::GuiStateMessage state_message;
   state_message.status = enable_integrator;
   state_message.commponent_id = state_message.integrator_status;
@@ -847,6 +856,7 @@ void OnboardNodeHandler::paramreqCallback(rqt_quadcoptergui::QuadcopterInterface
 
   if(!reconfiginit)
   {
+		ROS_INFO("Initializing Reconfig Params");
     //Get parameters
     ros::param::get("/ctrlr/kpr",config.kpr);
     ros::param::get("/ctrlr/kdr",config.kdr);
