@@ -6,3 +6,10 @@ lib/
 bin/
 *.ogv
 *.bak
+rqt_rviz_ogre.log
+Separation_Notes
+TODO
+include/rqt_quadcoptergui/quadcoptergui.bak.h_separation
+logfiles.tar.gz
+src/rqt_quadcoptergui/quadcoptergui.cpp.bak_separation
+
