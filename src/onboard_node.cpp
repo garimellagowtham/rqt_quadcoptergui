@@ -12,7 +12,7 @@ using namespace std;
 int main(int argc, char **argv)
 {
   ros::init(argc, argv, "onboard_node");
-  ros::NodeHandle nh;
+  ros::NodeHandle nh("~");
   //Initialize Onboard NodeHandler:
   OnboardNodeHandler nodehandler_instance_(nh);
 
