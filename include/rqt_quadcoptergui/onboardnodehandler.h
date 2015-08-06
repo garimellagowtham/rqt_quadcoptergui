@@ -122,7 +122,7 @@ protected:
     sensor_msgs::JointState jointstate_msg;///< For publishing arm state
     gcop_comm::Iteration_req itrq;//Request for iteration
     gcop_comm::CtrlTraj gcop_trajectory;
-    boost::shared_ptr<visualization_msgs::Marker> targetPtr;//For visualizing the object to grab
+    visualization_msgs::Marker target_marker;//For visualizing the object to grab
 
     //// Tf Variables:
     tf::StampedTransform UV_O;///< Storing the current frame along with time stamp:
@@ -143,6 +143,7 @@ protected:
     double as[2][3];//Arm inverse kinematics output
     double armlocaltarget[3];//Arm goal (Where the object is to grab)
     double actual_armstate[2*NOFJOINTS];//The angles obtained from dynamixelsdk
+    double cmd_armstate[2*NOFJOINTS];//The angles of the arm in radians in gcop convention and angular velocities
     double tip_position[3];//Tip Position
 
     ////Joystick Variables

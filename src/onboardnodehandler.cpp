@@ -1,4 +1,5 @@
 #include <rqt_quadcoptergui/onboardnodehandler.h>
+//#define ARM_ENABLED
 
 OnboardNodeHandler::OnboardNodeHandler(ros::NodeHandle &nh_):nh(nh_)
                                                             , broadcaster(new tf::TransformBroadcaster())
@@ -12,26 +13,33 @@ OnboardNodeHandler::OnboardNodeHandler(ros::NodeHandle &nh_):nh(nh_)
                                                             , tip_position()
 {
   //initialize member variables
+  ROS_INFO("Setting up Member Variables");
   setupMemberVariables();
 
   //Load Parameters:
+  ROS_INFO("Loading Parameters");
   loadParameters();
 
   //Create Instances of Quadcopter Parser, Arm Controller, Quad Controller:
+  ROS_INFO("Creating Quadcopter Controller");
   if(!createControllerInstance())
   {
     ROS_ERROR("Failed to create controller");
     return;
   }
+
+  ROS_INFO("Creating GCOP Arm Instance");
   if(!createArmInstance())
   {
     ROS_ERROR("Failed to create Arm Inverse Kinematics controller");
     return;
   }
 #ifdef ARM_ENABLED
+  ROS_INFO("Creating Arm Hardware Instance");
   arm_hardwareinst.reset(new dynamixelsdk::DynamixelArm(dyn_deviceInd, dyn_baudnum));
 #endif
 
+  ROS_INFO("Creating Parser");
   if(!createParserInstance())
   {
     ROS_ERROR("Failed to create Quadcopter Parser");
@@ -69,6 +77,7 @@ OnboardNodeHandler::OnboardNodeHandler(ros::NodeHandle &nh_):nh(nh_)
   reconfigserver->setCallback(reconfigcallbacktype);
 
   //Create Timers:
+  ROS_INFO("Creating Timers");
   //Timer to move goal dynamically
   goaltimer = nh_.createTimer(ros::Duration(0.02), &OnboardNodeHandler::goaltimerCallback,this);//50Hz So the goal can go upto 25 Hz  Nyquist rate
   goaltimer.stop();
@@ -123,7 +132,6 @@ OnboardNodeHandler::~OnboardNodeHandler()
   vrpnfile.close();//Close the file
   camfile.close();//Close the file
   tipfile.close();//Close the file
-  targetPtr.reset();
 }
 
 //////////////////////HELPER Functions///////////////////
@@ -158,17 +166,17 @@ inline void OnboardNodeHandler::setupMemberVariables()
   itrq.xf.basetwist.angular.x = 0; itrq.xf.basetwist.angular.y = 0; itrq.xf.basetwist.angular.z = 0;
 
   // Prepare Target cube pointer for visualizing object
-  targetPtr->id = 1;
-  targetPtr->ns = "targetpickup";
-  targetPtr->header.frame_id = "/optitrak";
-  targetPtr->action = visualization_msgs::Marker::ADD;
-  targetPtr->pose.orientation.w = 1.0;
-  targetPtr->type = visualization_msgs::Marker::CUBE;
-  targetPtr->scale.x = 0.04;
-  targetPtr->scale.y = 0.1;
-  targetPtr->scale.z = 0.1;
-  targetPtr->color.r = 1.0;
-  targetPtr->color.a = 1.0;
+  target_marker.id = 1;
+  target_marker.ns = "targetpickup";
+  target_marker.header.frame_id = "/optitrak";
+  target_marker.action = visualization_msgs::Marker::ADD;
+  target_marker.pose.orientation.w = 1.0;
+  target_marker.type = visualization_msgs::Marker::CUBE;
+  target_marker.scale.x = 0.04;
+  target_marker.scale.y = 0.1;
+  target_marker.scale.z = 0.1;
+  target_marker.color.r = 1.0;
+  target_marker.color.a = 1.0;
 }
 
 inline void OnboardNodeHandler::loadParameters()
@@ -651,10 +659,10 @@ void OnboardNodeHandler::camcmdCallback(const geometry_msgs::TransformStamped::C
 
     tf::Vector3 ARMTarget_OPTITRACK_position = object_origin + object_markeroffset;
 
-    targetPtr->pose.position.x = ARMTarget_OPTITRACK_position[0];//Target Object Position
-    targetPtr->pose.position.y = ARMTarget_OPTITRACK_position[1];
-    targetPtr->pose.position.z = ARMTarget_OPTITRACK_position[2];
-    armtarget_pub.publish(targetPtr);
+    target_marker.pose.position.x = ARMTarget_OPTITRACK_position[0];//Target Object Position
+    target_marker.pose.position.y = ARMTarget_OPTITRACK_position[1];
+    target_marker.pose.position.z = ARMTarget_OPTITRACK_position[2];
+    armtarget_pub.publish(target_marker);
 
     //Substract y offset (Assuming the object is to be approached in y dirxn) TODO Use object pose or some input dirxn of approach for grasping later//
     tf::Vector3 offset_quadposn = object_origin + quadoffset_object;
@@ -960,7 +968,7 @@ void OnboardNodeHandler::goaltimerCallback(const ros::TimerEvent &event)
   //Find the object location in local quad frame
   tf::Vector3 target_location;
   if(enable_camctrl)
-    target_location = (OBJ_QUAD_stamptransform.getOrigin() + quatRotate(UV_O.getRotation().inverse(),object_armoffset)) - arm_basewrtquad;
+    target_location = (OBJ_QUAD_stamptransform.getOrigin() + quatRotate(UV_O.getRotation().inverse(),object_markeroffset)) - arm_basewrtquad;
 
   if(armratecount == armcmdrate)
   {

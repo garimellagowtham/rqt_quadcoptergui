@@ -163,15 +163,16 @@ target_link_libraries(onboardnodehandler ${catkin_LIBRARIES}  ${GCOP_LIBRARIES} 
 
 ## Declare a cpp executable
 # add_executable(rqt_quadcoptergui_node src/rqt_quadcoptergui_node.cpp)
+add_executable(onboard_node src/onboard_node.cpp)
 
 ## Add cmake target dependencies of the executable/library
 ## as an example, message headers may need to be generated before nodes
 # add_dependencies(rqt_quadcoptergui_node rqt_quadcoptergui_generate_messages_cpp)
 
 ## Specify libraries to link a library or executable target against
-# target_link_libraries(rqt_quadcoptergui_node
-#   ${catkin_LIBRARIES}
-# )
+ target_link_libraries(onboard_node
+   onboardnodehandler
+ )
 
 #############
 ## Install ##
