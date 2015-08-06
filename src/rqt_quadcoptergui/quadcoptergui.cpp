@@ -42,7 +42,7 @@ namespace rqt_quadcoptergui {
 QuadcopterGui::QuadcopterGui() : rqt_gui_cpp::Plugin()
                                 , context_(0)
                                 , widget_(0)
-                                , update_gui(false)
+                                , update_component_id()
 {
   setObjectName("QuadcopterGui");
 }
@@ -129,13 +129,8 @@ bool QuadcopterGui::eventFilter(QObject* watched, QEvent* event)
 
 void QuadcopterGui::enable_disablelog(int state)//0
 {
-  qgui_mutex_.lock();
-  bool update_gui_ = update_gui;
-  qgui_mutex_.unlock();
-  if(update_gui_)//Do not run slot functionality if we are updating gui using onboard node's input
-  {
-    return;
-  }
+  if(checkUpdateState(0))//Check if input is from onboard Node
+   return;
   GuiCommandMessage msg;
   if(state == Qt::Checked)
     msg.command = true;
@@ -147,13 +142,8 @@ void QuadcopterGui::enable_disablelog(int state)//0
 
 void QuadcopterGui::integrator_control(int state)//1
 {
-  qgui_mutex_.lock();
-  bool update_gui_ = update_gui;
-  qgui_mutex_.unlock();
-  if(update_gui_)//Do not run slot functionality if we are updating gui using onboard node's input
-  {
-    return;
-  }
+  if(checkUpdateState(1))//Check if input is from onboard Node
+   return;
   GuiCommandMessage msg;
   if(state == Qt::Checked)
     msg.command = true;
@@ -166,13 +156,9 @@ void QuadcopterGui::integrator_control(int state)//1
 
 void QuadcopterGui::follow_trajectory(int state)//2
 {
-  qgui_mutex_.lock();
-  bool update_gui_ = update_gui;
-  qgui_mutex_.unlock();
-  if(update_gui_)//Do not run slot functionality if we are updating gui using onboard node's input
-  {
-    return;
-  }
+  if(checkUpdateState(2))//Check if input is from onboard Node
+   return;
+
   GuiCommandMessage msg;
   if(state == Qt::Checked)
     msg.command = true;
@@ -184,13 +170,8 @@ void QuadcopterGui::follow_trajectory(int state)//2
 
 void QuadcopterGui::enable_disablecontroller(int state)//3
 {
-  qgui_mutex_.lock();
-  bool update_gui_ = update_gui;
-  qgui_mutex_.unlock();
-  if(update_gui_)//Do not run slot functionality if we are updating gui using onboard node's input
-  {
-    return;
-  }
+  if(checkUpdateState(3))//Check if input is from onboard Node
+   return;
   GuiCommandMessage msg;
   if(state == Qt::Checked)
     msg.command = true;
@@ -201,13 +182,8 @@ void QuadcopterGui::enable_disablecontroller(int state)//3
 }
 void QuadcopterGui::enable_disablemanualarmctrl(int state)//4
 {
-  qgui_mutex_.lock();
-  bool update_gui_ = update_gui;
-  qgui_mutex_.unlock();
-  if(update_gui_)//Do not run slot functionality if we are updating gui using onboard node's input
-  {
-    return;
-  }
+  if(checkUpdateState(4))//Check if input is from onboard Node
+   return;
   GuiCommandMessage msg;
   if(state == Qt::Checked)
     msg.command = true;
@@ -219,13 +195,8 @@ void QuadcopterGui::enable_disablemanualarmctrl(int state)//4
 
 void QuadcopterGui::enable_disablecamctrl(int state)//5
 {
-  qgui_mutex_.lock();
-  bool update_gui_ = update_gui;
-  qgui_mutex_.unlock();
-  if(update_gui_)//Do not run slot functionality if we are updating gui using onboard node's input
-  {
-    return;
-  }
+  if(checkUpdateState(5))//Check if input is from onboard Node
+   return;
   GuiCommandMessage msg;
   if(state == Qt::Checked)
     msg.command = true;
@@ -234,15 +205,11 @@ void QuadcopterGui::enable_disablecamctrl(int state)//5
   msg.commponent_name = msg.enable_cam;
   gui_command_publisher_.publish(msg);
 }
+
 void QuadcopterGui::wrappertakeoff()//6
 {
-  qgui_mutex_.lock();
-  bool update_gui_ = update_gui;
-  qgui_mutex_.unlock();
-  if(update_gui_)//Do not run slot functionality if we are updating gui using onboard node's input
-  {
-    return;
-  }
+  if(checkUpdateState(6))//Check if input is from onboard Node
+   return;
   GuiCommandMessage msg;
   msg.commponent_name = msg.arm_quad;
   gui_command_publisher_.publish(msg);
@@ -250,13 +217,8 @@ void QuadcopterGui::wrappertakeoff()//6
 
 void QuadcopterGui::wrapperLand()//7
 {
-  qgui_mutex_.lock();
-  bool update_gui_ = update_gui;
-  qgui_mutex_.unlock();
-  if(update_gui_)//Do not run slot functionality if we are updating gui using onboard node's input
-  {
-    return;
-  }
+  if(checkUpdateState(7))//Check if input is from onboard Node
+   return;
   GuiCommandMessage msg;
   msg.commponent_name = msg.land_quad;
   gui_command_publisher_.publish(msg);
@@ -264,13 +226,8 @@ void QuadcopterGui::wrapperLand()//7
 
 void QuadcopterGui::wrapperDisarm()//8
 {
-  qgui_mutex_.lock();
-  bool update_gui_ = update_gui;
-  qgui_mutex_.unlock();
-  if(update_gui_)//Do not run slot functionality if we are updating gui using onboard node's input
-  {
-    return;
-  }
+  if(checkUpdateState(8))//Check if input is from onboard Node
+   return;
   GuiCommandMessage msg;
   msg.commponent_name = msg.disarm_quad;
   gui_command_publisher_.publish(msg);
@@ -295,34 +252,64 @@ void QuadcopterGui::shutdownPlugin()
 
 void QuadcopterGui::guistateCallback(const GuiStateMessage &statemsg)
 {
-  qgui_mutex_.lock();
-  update_gui = true;
-  qgui_mutex_.unlock();
   //Change UI states:
   switch(statemsg.commponent_id)
   {
   case statemsg.camera_controlstatus:
-    ui_.camcheckbox->setCheckState(CHECKSTATE(statemsg.status));
+    if(statemsg.status != ui_.camcheckbox->isChecked())
+    {
+      qgui_mutex_.lock();
+      update_component_id[statemsg.commponent_id] = true;
+      qgui_mutex_.unlock();
+      ui_.camcheckbox->setCheckState(CHECKSTATE(statemsg.status));
+    }
     break;
   case statemsg.controller_status:
-    ui_.enable_controller->setCheckState(CHECKSTATE(statemsg.status));
+    if(statemsg.status != ui_.enable_controller->isChecked())
+    {
+      qgui_mutex_.lock();
+      update_component_id[statemsg.commponent_id] = true;
+      qgui_mutex_.unlock();
+      ui_.enable_controller->setCheckState(CHECKSTATE(statemsg.status));
+    }
     break;
   case statemsg.integrator_status:
-    ui_.integrator_checkbox->setCheckState(CHECKSTATE(statemsg.status));
+    if(statemsg.status != ui_.integrator_checkbox->isChecked())
+    {
+      qgui_mutex_.lock();
+      update_component_id[statemsg.commponent_id] = true;
+      qgui_mutex_.unlock();
+      ui_.integrator_checkbox->setCheckState(CHECKSTATE(statemsg.status));
+    }
     break;
   case statemsg.joystick_status:
-    ui_.enable_joycheckbox->setCheckState(CHECKSTATE(statemsg.status));
+    if(statemsg.status != ui_.enable_joycheckbox->isChecked())
+    {
+      qgui_mutex_.lock();
+      update_component_id[statemsg.commponent_id] = true;
+      qgui_mutex_.unlock();
+      ui_.enable_joycheckbox->setCheckState(CHECKSTATE(statemsg.status));
+    }
     break;
   case statemsg.log_status:
-    ui_.log_checkbox->setCheckState(CHECKSTATE(statemsg.status));
+    if(statemsg.status != ui_.log_checkbox->isChecked())
+    {
+      qgui_mutex_.lock();
+      update_component_id[statemsg.commponent_id] = true;
+      qgui_mutex_.unlock();
+      ui_.log_checkbox->setCheckState(CHECKSTATE(statemsg.status));
+    }
     break;
   case statemsg.trajectory_tracking_status:
-    ui_.follow_traj->setCheckState(CHECKSTATE(statemsg.status));
+    if(statemsg.status != ui_.follow_traj->isChecked())
+    {
+      qgui_mutex_.lock();
+      update_component_id[statemsg.commponent_id] = true;
+      qgui_mutex_.unlock();
+      ui_.follow_traj->setCheckState(CHECKSTATE(statemsg.status));
+    }
     break;
   }
-  qgui_mutex_.lock();
-  update_gui = false;
-  qgui_mutex_.unlock();
 }
 
 void QuadcopterGui::quadstateCallback(const std_msgs::String & statemsg)

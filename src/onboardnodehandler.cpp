@@ -1245,7 +1245,7 @@ void OnboardNodeHandler::quadstatetimerCallback(const ros::TimerEvent &event)
 
   parserinstance->getquaddata(data);
 
-  //Reset attitude on IMU every 10 Hz
+  //Reset attitude on IMU every 20 Hz
   {
     static int count_imu = 0;
     static tf::Vector3 imu_vrpndiff;

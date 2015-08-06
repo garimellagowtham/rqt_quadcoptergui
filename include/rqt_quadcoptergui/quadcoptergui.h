@@ -104,11 +104,24 @@ protected:
 
   ////Helper Variables
   QMutex qgui_mutex_;//Mutex for refreshing states
-  bool update_gui;// Only update gui and do not execute signal functions
+  bool update_component_id[9];// Only update gui and do not execute signal functions
 
 
 protected:
   virtual void shutdownPlugin();
+  //////Helper Function:
+  inline bool checkUpdateState(int index)
+  {
+    qgui_mutex_.lock();
+    if(update_component_id[index])//Do not run slot functionality if we are updating gui using onboard node's input
+    {
+      update_component_id[index] = false;
+      qgui_mutex_.unlock();
+      return true;
+    }
+    qgui_mutex_.unlock();
+    return false;
+  }
   //////Callbacks
   void guistateCallback(const rqt_quadcoptergui::GuiStateMessage&);
 
