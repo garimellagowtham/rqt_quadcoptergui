@@ -234,7 +234,7 @@ void QuadcopterGui::initPlugin(qt_gui_cpp::PluginContext& context)
 #ifdef ARM_ENABLED
 	arm_hardwareinst.reset(new dynamixelsdk::DynamixelArm(dyn_deviceInd, dyn_baudnum));
 #endif
-	arminst->l1 = 0.175;
+    arminst->l1 = 0.175;
 	//arminst->l2 = 0.35;
 	arminst->l2 = 0.42;
 	arminst->x1 = 0.025;//Need to change this after measuring again TODO
@@ -891,7 +891,7 @@ void QuadcopterGui::camcmdCallback(const geometry_msgs::TransformStamped::ConstP
 
 	//If using partialcontrol should not directly control quadcopter instead just set the goal in optitrack frame and use the optitrack controller to do the job:
 	if(cam_partialcontrol)
-	{
+    {
 		//Set the goal based on OBJ_QUAD transform 
 		tf::Transform OBJ_OPTITRACK_transform = UV_O*OBJ_QUAD_stamptransform;
 		object_origin = OBJ_OPTITRACK_transform.getOrigin();
