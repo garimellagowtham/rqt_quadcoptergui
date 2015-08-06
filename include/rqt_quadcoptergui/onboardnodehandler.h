@@ -46,7 +46,7 @@ class OnboardNodeHandler
 public:
     OnboardNodeHandler(ros::NodeHandle &nh_);
 
-    ~OnboardNodeHandler();
+    virtual ~OnboardNodeHandler();
 
 protected:
     ////Subscribers
@@ -78,8 +78,6 @@ protected:
     ros::Timer goaltimer;//REFACTOR
     ros::Timer cmdtimer;//REFACTOR #TODO
     ros::Timer quadstatetimer;// Send quad state to GUI
-    ros::Timer timer_grabbing;//Used to fold arm and set gripper to neutral after grabbing
-    ros::Timer timer_relaxgrip;//Used to fold arm and set gripper to neutral after grabbing
 
     /////Reconfigure Server
     boost::shared_ptr<dynamic_reconfigure::Server<rqt_quadcoptergui::QuadcopterInterfaceConfig> >reconfigserver;
@@ -108,6 +106,8 @@ protected:
     bool gripped_already; ///< Used to avoid restarting the timer if it already gripped the target once just waits for 5 secs before returning
     ros::Time start_grabbing;///< Time when we start grabbing the object
     char buffer[1500];//buffer for creating Text data
+    ros::Timer timer_grabbing;//Used to fold arm and set gripper to neutral after grabbing
+    ros::Timer timer_relaxgrip;//Used to fold arm and set gripper to neutral after grabbing
 
 
     //// State Variables

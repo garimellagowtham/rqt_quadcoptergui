@@ -85,6 +85,47 @@ OnboardNodeHandler::OnboardNodeHandler(ros::NodeHandle &nh_):nh(nh_)
   quadstatetimer = nh_.createTimer(ros::Duration(0.05), &OnboardNodeHandler::quadstatetimerCallback, this);//20Hz update GUI quad state
 }
 
+OnboardNodeHandler::~OnboardNodeHandler()
+{
+  //Poweroff arm:
+#ifdef ARM_ENABLED
+  arm_hardwareinst->powermotors(false);
+#endif
+
+  parserinstance.reset();
+  parser_loader.reset();
+  ctrlrinst.reset();
+  arminst.reset();
+#ifdef ARM_ENABLED
+  arm_hardwareinst.reset();
+#endif
+
+  vrpndata_sub.shutdown();
+  camdata_sub.shutdown();
+  joydata_sub.shutdown();
+  gcoptraj_sub.shutdown();
+  gui_command_subscriber_.shutdown();
+
+  gui_state_publisher_.shutdown();
+  quad_state_publisher_.shutdown();
+  jointstate_pub.shutdown();
+  armtarget_pub.shutdown();
+  iterationreq_pub.shutdown();
+
+  broadcaster.reset();
+
+  reconfigserver.reset();
+
+  goaltimer.stop();
+  cmdtimer.stop();
+  quadstatetimer.stop();
+
+  vrpnfile.close();//Close the file
+  camfile.close();//Close the file
+  tipfile.close();//Close the file
+  targetPtr.reset();
+}
+
 //////////////////////HELPER Functions///////////////////
 void OnboardNodeHandler::publishGuiState(const rqt_quadcoptergui::GuiStateMessage &state_msg)
 {
@@ -385,7 +426,10 @@ inline void OnboardNodeHandler::stateTransitionLogging(bool state)
   {
     if(enable_logging == false)
     {
-      ROS_INFO("I am called");
+      if(logdir_created == false)
+      {
+        setupLogDir();//Create a log directory and files corresponding
+      }
       enable_logging = true;
       parserinstance->controllog(true);
       ctrlrinst->controllog(true);
@@ -540,27 +584,35 @@ void OnboardNodeHandler::receiveGuiCommands(const rqt_quadcoptergui::GuiCommandM
   //Do whatever is commanded
   switch(command_msg.commponent_name)
   {
-  case command_msg.arm_quad :
+  case command_msg.enable_log://0
+    stateTransitionLogging(command_msg.command);
+    break;
+  case command_msg.enable_integrator://1
+    stateTransitionIntegrator(command_msg.command);
+    break;
+  case command_msg.traj_on://2
+    stateTransitionTrajectoryTracking(command_msg.command);
+    break;
+  case command_msg.enable_ctrl://3
+    stateTransitionController(command_msg.command);
+    break;
+  case command_msg.enable_joy://4
+    stateTransitionJoyControl(command_msg.command);
+    break;
+  case command_msg.enable_cam://5
+    stateTransitionCameraController(command_msg.command);
+    break;
+  case command_msg.arm_quad ://6
     ROS_INFO("Arming Quad");
     armQuad();
     break;
-  case command_msg.disarm_quad:
+  case command_msg.land_quad://7
+    ROS_INFO("Landing Quad");
+    landQuad();
+    break;
+  case command_msg.disarm_quad://8
+    ROS_INFO("Disarming Quad");
     disarmQuad();
-    break;
-  case command_msg.enable_cam:
-    stateTransitionCameraController(command_msg.command);
-    break;
-  case command_msg.enable_ctrl:
-    stateTransitionController(command_msg.command);
-    break;
-  case command_msg.enable_joy:
-    stateTransitionJoyControl(command_msg.command);
-    break;
-  case command_msg.enable_log:
-    stateTransitionLogging(command_msg.command);
-    break;
-  case command_msg.enable_integrator:
-    stateTransitionIntegrator(command_msg.command);
     break;
   }
 }

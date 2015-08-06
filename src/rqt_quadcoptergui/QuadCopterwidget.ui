@@ -75,19 +75,6 @@
     <string>imu_recalib</string>
    </property>
   </widget>
-  <widget class="QCheckBox" name="bias_estcheckbox">
-   <property name="geometry">
-    <rect>
-     <x>220</x>
-     <y>80</y>
-     <width>101</width>
-     <height>21</height>
-    </rect>
-   </property>
-   <property name="text">
-    <string>bias_est</string>
-   </property>
-  </widget>
   <widget class="QPushButton" name="Disarmbutton">
    <property name="geometry">
     <rect>
@@ -199,19 +186,6 @@
    </property>
    <property name="checked">
     <bool>false</bool>
-   </property>
-  </widget>
-  <widget class="QPushButton" name="Connectbutton">
-   <property name="geometry">
-    <rect>
-     <x>120</x>
-     <y>480</y>
-     <width>101</width>
-     <height>24</height>
-    </rect>
-   </property>
-   <property name="text">
-    <string>Connect</string>
    </property>
   </widget>
  </widget>
