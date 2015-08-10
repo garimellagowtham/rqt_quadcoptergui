@@ -10,7 +10,7 @@ OnboardNodeHandler::OnboardNodeHandler(ros::NodeHandle &nh_):nh(nh_)
                                                             , reconfiginit(false), updategoal_dynreconfig(false)
                                                             , armcmdrate(4), armratecount(0), gripped_already(false), newcamdata(false)
                                                             , enable_control(false), enable_integrator(false), enable_camctrl(false)
-                                                            , tip_position()
+                                                            , tip_position(), goalcount(1), diff_goal()
 {
   //initialize member variables
   ROS_INFO("Setting up Member Variables");
