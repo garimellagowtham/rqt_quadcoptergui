@@ -19,6 +19,18 @@ OnboardNodeHandler::OnboardNodeHandler(ros::NodeHandle &nh_):nh(nh_)
   //Load Parameters:
   ROS_INFO("Loading Parameters");
   loadParameters();
+ 
+  ROS_INFO("Creating Parser");
+  if(!createParserInstance())
+  {
+    ROS_ERROR("Failed to create Quadcopter Parser");
+    return;
+  }
+
+#ifdef ARM_ENABLED
+  ROS_INFO("Creating Arm Hardware Instance");
+  arm_hardwareinst.reset(new dynamixelsdk::DynamixelArm(dyn_deviceInd, dyn_baudnum));
+#endif
 
   //Create Instances of Quadcopter Parser, Arm Controller, Quad Controller:
   ROS_INFO("Creating Quadcopter Controller");
@@ -34,18 +46,6 @@ OnboardNodeHandler::OnboardNodeHandler(ros::NodeHandle &nh_):nh(nh_)
     ROS_ERROR("Failed to create Arm Inverse Kinematics controller");
     return;
   }
-#ifdef ARM_ENABLED
-  ROS_INFO("Creating Arm Hardware Instance");
-  arm_hardwareinst.reset(new dynamixelsdk::DynamixelArm(dyn_deviceInd, dyn_baudnum));
-#endif
-
-  ROS_INFO("Creating Parser");
-  if(!createParserInstance())
-  {
-    ROS_ERROR("Failed to create Quadcopter Parser");
-    return;
-  }
-
   ROS_INFO("Subscribing to Callbacks");
   //Subscribe to GuiCommands
   gui_command_subscriber_ = nh_.subscribe("/gui_commands", 10, &OnboardNodeHandler::receiveGuiCommands, this);
