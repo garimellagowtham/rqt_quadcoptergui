@@ -188,6 +188,32 @@
     <bool>false</bool>
    </property>
   </widget>
+  <widget class="QPushButton" name="LoadTrajectorybutton">
+   <property name="geometry">
+    <rect>
+     <x>130</x>
+     <y>480</y>
+     <width>41</width>
+     <height>21</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>LT</string>
+   </property>
+  </widget>
+  <widget class="QPushButton" name="SendTrajectorybutton">
+   <property name="geometry">
+    <rect>
+     <x>180</x>
+     <y>480</y>
+     <width>31</width>
+     <height>21</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>ST</string>
+   </property>
+  </widget>
  </widget>
  <resources/>
  <connections/>

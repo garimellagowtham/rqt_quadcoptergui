@@ -34,6 +34,7 @@
 #define rqt_quadcopter_gui_H
 
 #include <string>
+#include <fstream>
 #include <rqt_gui_cpp/plugin.h>
 #include <ui_QuadCopterwidget.h>
 
@@ -41,15 +42,21 @@
 
 #include "ros/ros.h"
 
+//TF helper functions:
+#include <tf/transform_datatypes.h>
+
 //Ros Messages
 #include <std_msgs/String.h>
 #include <rqt_quadcoptergui/GuiCommandMessage.h>
 #include <rqt_quadcoptergui/GuiStateMessage.h>
+#include <gcop_comm/CtrlTraj.h>
+#include <visualization_msgs/Marker.h>
 
 #include <QCloseEvent>
 #include <QCheckBox>
 #include <QPushButton>
 #include <QMessageBox>
+#include <QFileDialog>
 #include <QTableWidget>
 #include <QTableWidgetItem>
 #include <QString>
@@ -101,10 +108,14 @@ protected:
 
   //Publisher:
   ros::Publisher gui_command_publisher_;
+  ros::Publisher rviz_trajectory_publisher_;
+  ros::Publisher gcop_trajectory_publisher_;
 
   ////Helper Variables
   QMutex qgui_mutex_;//Mutex for refreshing states
   bool update_component_id[9];// Only update gui and do not execute signal functions
+  std::string trajectory_file_name;//Prespecified file name
+  boost::shared_ptr<gcop_comm::CtrlTraj> quadcopter_trajectory;///< Trajectory to be followed by quadcopter
 
 
 protected:
@@ -122,6 +133,13 @@ protected:
     qgui_mutex_.unlock();
     return false;
   }
+  inline geometry_msgs::Point vec2Point(geometry_msgs::Vector3 vector)
+  {
+    geometry_msgs::Point pt;
+    pt.x = vector.x;
+    pt.y = vector.y;
+    pt.z = vector.z;
+  }
   //////Callbacks
   void guistateCallback(const rqt_quadcoptergui::GuiStateMessage&);
 
@@ -131,6 +149,8 @@ protected slots:
   virtual void wrappertakeoff();
   virtual void wrapperLand();
   virtual void wrapperDisarm();
+  virtual void loadTrajectory();
+  virtual void sendTrajectory();
   virtual void wrapperimu_recalib(int);
   virtual void follow_trajectory(int);
   virtual void integrator_control(int);
