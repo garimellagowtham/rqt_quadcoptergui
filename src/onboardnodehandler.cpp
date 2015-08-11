@@ -1255,7 +1255,8 @@ void OnboardNodeHandler::quadstatetimerCallback(const ros::TimerEvent &event)
 
   parserinstance->getquaddata(data);
 
-  //Reset attitude on IMU every 20 Hz
+  //Reset attitude on IMU every 20 Hz only when Quadcopter is armed
+	if(data.armed)
   {
     static int count_imu = 0;
     static tf::Vector3 imu_vrpndiff;
@@ -1270,7 +1271,9 @@ void OnboardNodeHandler::quadstatetimerCallback(const ros::TimerEvent &event)
       if(parserinstance)
       {
         if(reset_imu)
+				{
           parserinstance->reset_attitude(vrpnrpy[0]-imu_vrpndiff[0], vrpnrpy[1]-imu_vrpndiff[1], vrpnrpy[2]-imu_vrpndiff[2]);
+				}
       }
     }
   }

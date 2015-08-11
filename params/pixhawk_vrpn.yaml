@@ -12,6 +12,8 @@ bias_vrpnx: -0.12
 bias_vrpny: -0.07
 bias_rateyaw: 0.0
 
+vrpn/centery: 0.7
+
 #bias_vrpnx: 0.186
 #bias_vrpny: 0.145
 #bias_rateyaw: 0.0
