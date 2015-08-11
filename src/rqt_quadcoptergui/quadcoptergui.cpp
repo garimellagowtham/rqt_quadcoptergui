@@ -264,7 +264,7 @@ void QuadcopterGui::loadTrajectory()
   quadcopter_trajectory.reset(new gcop_comm::CtrlTraj());
   visualization_msgs::Marker trajectory_marker;///< Trajectory marker to be published to rviz
   //Setup marker:
-  trajectory_marker.header.frame_id = "optitrack";
+  trajectory_marker.header.frame_id = "optitrak";
   trajectory_marker.action = visualization_msgs::Marker::ADD;
   trajectory_marker.ns = "desiredtraj";
   trajectory_marker.pose.orientation.w = 1.0;
@@ -334,6 +334,14 @@ void QuadcopterGui::shutdownPlugin()
   quad_state_subscriber_.shutdown();
 
   gui_command_publisher_.shutdown();
+  rviz_trajectory_publisher_.shutdown();
+  gcop_trajectory_publisher_.shutdown();
+
+  //Clear Variables:
+  quadcopter_trajectory.reset();
+  //delete update_component_id;
+  //delete timer;
+  //delete widget_;
 }
 
 ////////////////CALLBACKS///////////////
