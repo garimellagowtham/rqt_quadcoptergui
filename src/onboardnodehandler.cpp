@@ -70,6 +70,13 @@ OnboardNodeHandler::OnboardNodeHandler(ros::NodeHandle &nh_):nh(nh_)
   //Advertise Target position of Manipulator
   armtarget_pub = nh_.advertise<visualization_msgs::Marker>("armtarget", 10);
 
+  if(publish_rpy)
+  {
+    //advertise rpy topics:
+    imu_rpy_pub_ = nh_.advertise<geometry_msgs::Vector3>("imu_rpy",10);
+    vrpn_rpy_pub_ = nh_.advertise<geometry_msgs::Vector3>("vrpn_rpy",10);
+  }
+
   //Connect to dynamic reconfigure server:
 	ROS_INFO("Setting Up Reconfigure Sever");
   reconfigserver.reset(new dynamic_reconfigure::Server<rqt_quadcoptergui::QuadcopterInterfaceConfig>(nh_));
@@ -210,6 +217,7 @@ inline void OnboardNodeHandler::loadParameters()
   nh.param<double>("/vrpn/centerx",center_workspace[0], 0.67);
   nh.param<double>("/vrpn/centery",center_workspace[1], 0.9);
   nh.param<double>("/vrpn/centerz",center_workspace[2], 1.5);
+  nh.param<bool>("/gui/publishrpy",publish_rpy,false);
 
 #ifdef ARM_ENABLED
   nh.getParam("/ctrlr/timeout_grabbing", timeout_grabbing);
@@ -1273,6 +1281,22 @@ void OnboardNodeHandler::quadstatetimerCallback(const ros::TimerEvent &event)
           parserinstance->reset_attitude(vrpnrpy[0]-imu_vrpndiff[0], vrpnrpy[1]-imu_vrpndiff[1], vrpnrpy[2]-imu_vrpndiff[2]);
       }
     }
+  }
+  //If we have to publish rpy data:
+  if(publish_rpy)
+  {
+    geometry_msgs::Vector3 rpymsg;
+    rpymsg = data.rpydata;
+    //Convert to degrees:
+    rpymsg.x *= (180/M_PI);
+    rpymsg.y *= (180/M_PI);
+    rpymsg.z *= (180/M_PI);
+    imu_rpy_pub_.publish(rpymsg);
+    tf::vector3TFToMsg(vrpnrpy, rpymsg);
+    rpymsg.x *= (180/M_PI);
+    rpymsg.y *= (180/M_PI);
+    rpymsg.z *= (180/M_PI);
+    vrpn_rpy_pub_.publish(rpymsg);
   }
   tf::Vector3 quadorigin = UV_O.getOrigin();
   tf::Vector3 obj_origin = OBJ_QUAD_stamptransform.getOrigin();
