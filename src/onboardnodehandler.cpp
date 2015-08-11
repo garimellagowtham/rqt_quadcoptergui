@@ -209,7 +209,7 @@ inline void OnboardNodeHandler::loadParameters()
   nh.param<std::string>("/gui/logdir",logdir,"/home/gowtham");
   nh.param<double>("/vrpn/centerx",center_workspace[0], 0.67);
   nh.param<double>("/vrpn/centery",center_workspace[1], 0.9);
-  nh.param<double>("/vrpn/centerz",center_workspace[1], 1.5);
+  nh.param<double>("/vrpn/centerz",center_workspace[2], 1.5);
 
 #ifdef ARM_ENABLED
   nh.getParam("/ctrlr/timeout_grabbing", timeout_grabbing);
