@@ -10,7 +10,7 @@ OnboardNodeHandler::OnboardNodeHandler(ros::NodeHandle &nh_):nh(nh_)
                                                             , reconfiginit(false), updategoal_dynreconfig(false)
                                                             , armcmdrate(4), armratecount(0), gripped_already(false), newcamdata(false)
                                                             , enable_control(false), enable_integrator(false), enable_camctrl(false)
-                                                            , tip_position(), goalcount(1), diff_goal()
+                                                            , tip_position(), goalcount(1), diff_goal(), count_imu(0)
 {
   //initialize member variables
   ROS_INFO("Setting up Member Variables");
@@ -538,6 +538,14 @@ inline void OnboardNodeHandler::armQuad()
   {
     return;
   }
+	//Set Flag to recalibrate IMU and VRPN Diff:
+	count_imu = 0;
+	usleep(500000);
+	if(count_imu != 10)
+	{
+		ROS_WARN("Failed to find imu vrpn diff: %d", count_imu);
+		return;
+	}
   //Set the extbias back to nominal value
   ctrlrinst->setextbias(data.thrustbias); //Set the external force back to nominal value Just extra safety its already set in check_control etc
   parserinstance->takeoff();
@@ -1256,27 +1264,48 @@ void OnboardNodeHandler::quadstatetimerCallback(const ros::TimerEvent &event)
   parserinstance->getquaddata(data);
 
   //Reset attitude on IMU every 20 Hz only when Quadcopter is armed
-	if(data.armed)
-  {
-    static int count_imu = 0;
-    static tf::Vector3 imu_vrpndiff;
-    if(count_imu < 10)
-    {
-      imu_vrpndiff = (1.0/double(count_imu+1))*(double(count_imu)*imu_vrpndiff + tf::Vector3((vrpnrpy[0] - data.rpydata.x),(vrpnrpy[1] - data.rpydata.y),(vrpnrpy[2] - data.rpydata.z)));
-      count_imu++;
-      ROS_INFO("Imu Offset: %f,%f,%f\t IMU: %f,%f,%f\t VRPNRPY: %f,%f,%f", imu_vrpndiff[0], imu_vrpndiff[1], imu_vrpndiff[2], data.rpydata.x, data.rpydata.y, data.rpydata.z, vrpnrpy[0], vrpnrpy[1], vrpnrpy[2]);
-    }
-    else
-    {
-      if(parserinstance)
-      {
-        if(reset_imu)
+	{
+		//if(data.armed)
+		{
+			if(count_imu < 10)
+			{
+				imu_vrpndiff = (1.0/double(count_imu+1))*(double(count_imu)*imu_vrpndiff + tf::Vector3((vrpnrpy[0] - data.rpydata.x),(vrpnrpy[1] - data.rpydata.y),(vrpnrpy[2])));
+				count_imu++;
+				ROS_INFO("Imu Offset: %f,%f,%f\t IMU: %f,%f,%f\t VRPNRPY: %f,%f,%f", imu_vrpndiff[0]*(180.0/M_PI), imu_vrpndiff[1]*(180.0/M_PI), imu_vrpndiff[2]*(180.0/M_PI), data.rpydata.x*(180.0/M_PI), data.rpydata.y*(180.0/M_PI), data.rpydata.z*(180.0/M_PI), vrpnrpy[0]*(180.0/M_PI), vrpnrpy[1]*(180.0/M_PI), vrpnrpy[2]*(180.0/M_PI));
+			}
+			else
+			{
+				if(parserinstance)
 				{
-          parserinstance->reset_attitude(vrpnrpy[0]-imu_vrpndiff[0], vrpnrpy[1]-imu_vrpndiff[1], vrpnrpy[2]-imu_vrpndiff[2]);
+					if(reset_imu)
+						parserinstance->reset_attitude(vrpnrpy[0]-imu_vrpndiff[0], vrpnrpy[1]-imu_vrpndiff[1], vrpnrpy[2]-imu_vrpndiff[2]);
+					/*if(reset_imu)
+					{
+						static tf::Vector3 prev_vrpnrpy = vrpnrpy;
+						static ros::Time prev_time_stamp = UV_O.stamp_;
+						double tdiff = (UV_O.stamp_ - prev_time_stamp).toSec();
+						if(tdiff > 0.01)//Atleast this far apart
+						{
+							//Predict where the rpy should be based on current rpy (20 milliseconds forward)
+							tf::Vector3 future_vrpnrpy = vrpnrpy + (vrpnrpy - prev_vrpnrpy)*(0.02/tdiff);//20 Hz (50 millisec). Predict forward by 20 millisec
+							parserinstance->reset_attitude(future_vrpnrpy[0]-imu_vrpndiff[0], future_vrpnrpy[1]-imu_vrpndiff[1], future_vrpnrpy[2]-imu_vrpndiff[2]);
+							prev_vrpnrpy = vrpnrpy;
+							prev_time_stamp = UV_O.stamp_;
+						}
+					}
+					*/
 				}
-      }
-    }
-  }
+			}
+		}
+		/*
+		{
+			count_imu = 0;
+			imu_vrpndiff[0] = 0;
+			imu_vrpndiff[1] = 0;
+			imu_vrpndiff[2] = 0;//Set to zero
+		}
+		*/
+	}
   tf::Vector3 quadorigin = UV_O.getOrigin();
   tf::Vector3 obj_origin = OBJ_QUAD_stamptransform.getOrigin();
   // Create a Text message based on the data from the Parser class

@@ -109,6 +109,8 @@ protected:
     char buffer[1500];//buffer for creating Text data
     ros::Timer timer_grabbing;//Used to fold arm and set gripper to neutral after grabbing
     ros::Timer timer_relaxgrip;//Used to fold arm and set gripper to neutral after grabbing
+		int count_imu;//Used to count the IMU VRPN Diff. Used by arming function to reset the count back to zero to freshly calculate new imu vrpn difference
+		tf::Vector3 imu_vrpndiff;//Difference between IMU and VRPN
 
 
     //// State Variables
