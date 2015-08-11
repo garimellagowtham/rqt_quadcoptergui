@@ -43,6 +43,7 @@ QuadcopterGui::QuadcopterGui() : rqt_gui_cpp::Plugin()
                                 , context_(0)
                                 , widget_(0)
                                 , update_component_id()
+                                , trajectory_file_name()
 {
   setObjectName("QuadcopterGui");
 }
@@ -83,7 +84,8 @@ void QuadcopterGui::initPlugin(qt_gui_cpp::PluginContext& context)
 
   //Publishers:
   gui_command_publisher_ = nh.advertise<rqt_quadcoptergui::GuiCommandMessage>("/gui_commands",10);
-
+  rviz_trajectory_publisher_ = nh.advertise<visualization_msgs::Marker>("/desired_traj",10);
+  gcop_trajectory_publisher_ = nh.advertise<gcop_comm::CtrlTraj>("/mbsddp/traj_resp",10);
 
   //Setup the timer to refresh Gui
   timer = new QTimer(widget_);
@@ -94,6 +96,8 @@ void QuadcopterGui::initPlugin(qt_gui_cpp::PluginContext& context)
   connect(ui_.Takeoffbutton, SIGNAL(clicked()), this, SLOT(wrappertakeoff()));
   //connect(ui_.TargetCapturebutton, SIGNAL(clicked()), this, SLOT(Capture_Target()));
   connect(ui_.Landbutton, SIGNAL(clicked()), this, SLOT(wrapperLand()));
+  connect(ui_.LoadTrajectorybutton, SIGNAL(clicked()), this, SLOT(loadTrajectory()));
+  connect(ui_.SendTrajectorybutton, SIGNAL(clicked()), this, SLOT(sendTrajectory()));
   connect(ui_.Disarmbutton, SIGNAL(clicked()), this, SLOT(wrapperDisarm()));
   connect(ui_.imucheckbox,SIGNAL(stateChanged(int)),this,SLOT(wrapperimu_recalib(int)));
   connect(ui_.follow_traj,SIGNAL(stateChanged(int)),this,SLOT(follow_trajectory(int)));
@@ -233,6 +237,90 @@ void QuadcopterGui::wrapperDisarm()//8
   gui_command_publisher_.publish(msg);
 }
 
+void QuadcopterGui::loadTrajectory()
+{
+  //Load a trajectory from FileBox:
+  trajectory_file_name = std::string();//Empty
+  if(ros::param::has("/trajectory_file_name"))
+    ros::param::get("/trajectory_file_name", trajectory_file_name);
+  std::ifstream ifile;
+  if(trajectory_file_name.empty())
+  {
+    QString filename = QFileDialog::getOpenFileName(widget_, "Open Trajectory File", "/home","All files (*.*)");
+    trajectory_file_name = filename.toStdString();
+  }
+  ROS_INFO("Opening File: %s",trajectory_file_name.c_str());
+
+  ifile.open(trajectory_file_name);
+
+  if(!ifile.is_open())
+  {
+    std::cerr<<"Cannot Open File"<<trajectory_file_name<<std::endl;
+    return;
+  }
+  //Ignore First line:
+  ifile.ignore(1000,'\n');//Wait till new line
+  //File should have t, traj_x,y,z, yaw; traj_vx,vy,vz in global frame;
+  quadcopter_trajectory.reset(new gcop_comm::CtrlTraj());
+  visualization_msgs::Marker trajectory_marker;///< Trajectory marker to be published to rviz
+  //Setup marker:
+  trajectory_marker.header.frame_id = "optitrack";
+  trajectory_marker.action = visualization_msgs::Marker::ADD;
+  trajectory_marker.ns = "desiredtraj";
+  trajectory_marker.pose.orientation.w = 1.0;
+  trajectory_marker.id = 1;
+  trajectory_marker.type = visualization_msgs::Marker::LINE_STRIP;
+  trajectory_marker.scale.x = 0.05;
+  trajectory_marker.color.b = 1.0;
+  trajectory_marker.color.a = 1.0;
+
+  gcop_comm::State desired_state;
+  geometry_msgs::Point pt;
+  quadcopter_trajectory->N = 0;
+  //Get Current Goal from reconfig params
+  double xg, yg, zg, yawg;
+  ros::param::get("/onboard_node/xg",xg);
+  ros::param::get("/onboard_node/yg",yg);
+  ros::param::get("/onboard_node/zg",zg);
+  ros::param::get("/onboard_node/yawg",yawg);
+  double data[8];
+  while(1)
+  {
+    //While EOF has not been reached:
+    ifile>>data[0]>>data[1]>>data[2]>>data[3]>>data[4]>>data[5]>>data[6]>>data[7];
+    if(ifile.eof())//Break if EOF is reached
+    {
+      ROS_INFO("EOF Reached!");
+      break;
+    }
+    //Printing File for DEBUG
+    std::cout<<data[0]<<"\t"<<data[1]<<"\t"<<data[2]<<"\t"<<data[3]<<"\t"<<data[4]<<"\t"<<data[5]<<"\t"<<data[6]<<"\t"<<data[7]<<std::endl;
+    quadcopter_trajectory->time.push_back(data[0]);
+    quadcopter_trajectory->N++;
+    //State:
+    desired_state.basepose.rotation = tf::createQuaternionMsgFromYaw(data[4]+yawg);
+    desired_state.basepose.translation.x = xg+data[1];
+    desired_state.basepose.translation.y = yg+data[2];
+    desired_state.basepose.translation.z = zg+data[3];
+    desired_state.basetwist.linear.x = data[5];
+    desired_state.basetwist.linear.y = data[6];
+    desired_state.basetwist.linear.z = data[7];
+    quadcopter_trajectory->statemsg.push_back(desired_state);
+    pt.x = desired_state.basepose.translation.x;
+    pt.y = desired_state.basepose.translation.y;
+    pt.z = desired_state.basepose.translation.z;
+    trajectory_marker.points.push_back(pt);
+  }
+  ifile.close();
+  trajectory_marker.header.stamp = ros::Time::now();
+  rviz_trajectory_publisher_.publish(trajectory_marker);//Publish the trajectory
+}
+void QuadcopterGui::sendTrajectory()
+{
+  //To send quadcopter trajectory to Onboard Node:
+  if(quadcopter_trajectory)
+    gcop_trajectory_publisher_.publish(quadcopter_trajectory);
+}
 void QuadcopterGui::wrapperimu_recalib(int state)
 {
   ROS_WARN("Not Implemented");
