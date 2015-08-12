@@ -159,6 +159,8 @@ inline void OnboardNodeHandler::setupMemberVariables()
 
 	curr_goal = tf::Vector3(0,0,0);//Initial current goal
 
+	imu_vrpndiff = tf::Vector3(0,0,0);//Initial vrpndiff estimate
+
   //Set the Quadcopter in Optitrak frame
   UV_O.setIdentity();
 
@@ -1245,6 +1247,10 @@ void OnboardNodeHandler::cmdtimerCallback(const ros::TimerEvent &event)
   //Using kalman filter
   ctrlrinst->Getctrl(rescmd);//Since imu is corrected using unbiased vrpn data we can send commands which are unbiased too
 
+	//Offset by the imuvrpndiff:
+	rescmd.roll += imu_vrpndiff[0];
+	rescmd.pitch += imu_vrpndiff[1];
+
   if(!parserinstance)
   {
     ROS_WARN("Parser not instantiated");
@@ -1319,10 +1325,10 @@ void OnboardNodeHandler::quadstatetimerCallback(const ros::TimerEvent &event)
   {
     geometry_msgs::Vector3 rpymsg;
     rpymsg = data.rpydata;
-    //Convert to degrees:
-    rpymsg.x *= (180/M_PI);
-    rpymsg.y *= (180/M_PI);
-    rpymsg.z *= (180/M_PI);
+    //Convert to degrees and offset to vrpn:
+    rpymsg.x = (rpymsg.x+imu_vrpndiff[0])*(180/M_PI);
+    rpymsg.y = (rpymsg.y+imu_vrpndiff[1])*(180/M_PI);
+    rpymsg.z = (rpymsg.z+imu_vrpndiff[2])*(180/M_PI);
     imu_rpy_pub_.publish(rpymsg);
     tf::vector3TFToMsg(vrpnrpy, rpymsg);
     rpymsg.x *= (180/M_PI);
