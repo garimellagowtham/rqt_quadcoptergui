@@ -6,4 +6,4 @@ gui/vrpn_pose: "/serial_receiver/pixhawk/pose"
 gui/test_ctrlr: false
 gui/uav_name: "pixhawk"
 gui/reset_imu: true
-
+gui/publishrpy: true

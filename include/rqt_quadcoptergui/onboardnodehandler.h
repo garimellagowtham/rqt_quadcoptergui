@@ -71,6 +71,10 @@ protected:
 
     ros::Publisher armtarget_pub;
 
+    ros::Publisher imu_rpy_pub_;
+
+    ros::Publisher vrpn_rpy_pub_;
+
     //// TF:
     boost::shared_ptr<tf::TransformBroadcaster> broadcaster;//Transform Broadcaster
 
@@ -167,6 +171,7 @@ protected:
     std::string uav_posename;
     tf::Vector3 target;//Extraction target point
     bool cam_partialcontrol;//Only use the object position to set the goal position
+    bool publish_rpy;///< Publish roll pitch yaw on a topic or not
     double timeout_grabbing;//Timeout for waiting to grab object usually a very short time to just stay for few seconds
     bool openloop_mode;///< Optimal Control being used in open loop or closed loop
     std::string uav_name;///< Name of UAV used in setting ID for tf
