@@ -41,6 +41,10 @@
 
 #define NOFJOINTS 2 //Arm joints
 
+#ifndef FILE_BUFFER_SIZE
+#define FILE_BUFFER_SIZE 1024
+#endif
+
 class OnboardNodeHandler
 {
 public:
@@ -167,6 +171,9 @@ protected:
     ofstream vrpnfile;
     ofstream camfile;
     ofstream tipfile;
+		char vrpnfile_buffer[FILE_BUFFER_SIZE];
+		char camfile_buffer[FILE_BUFFER_SIZE];
+		char tipfile_buffer[FILE_BUFFER_SIZE];
 
     //// Parameters:
     std::string uav_posename;

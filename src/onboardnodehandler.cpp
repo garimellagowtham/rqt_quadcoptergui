@@ -317,18 +317,30 @@ inline void OnboardNodeHandler::setupLogDir()
   std::string logdir_stamped = parsernode::common::addtimestring(logdir_append);
   ROS_INFO("Creating Log dir: %s",logdir_stamped.c_str());
   mkdir(logdir_stamped.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);//Create the directory see http://pubs.opengroup.org/onlinepubs/009695399/functions/mkdir.html
-  vrpnfile.open((logdir_stamped+"/vrpn.dat").c_str());//TODO add warning if we cannot open the file
+
+  vrpnfile.open((logdir_stamped+"/vrpn.dat").c_str());
+	//Check if we cannot open file:
+	if(!vrpnfile.is_open())
+	{
+		ROS_WARN("Cannot Open File");
+		return;
+	}
   vrpnfile.precision(9);
+	vrpnfile.rdbuf()->pubsetbuf(vrpnfile_buffer,FILE_BUFFER_SIZE);//Set Buffer:
   vrpnfile<<"#Time\tPos.X\tPos.Y\tPos.Z\tQuat.X\tQuat.Y\tQuat.Z\tQuat.W\tBias_R\tBias_P\tCurr_goal_x\tCurr_goal_y\tCurr_goal_z"<<endl;
+
   //Camfile
-  camfile.open((logdir_stamped+"/campose.dat").c_str());//TODO add warning if we cannot open the file
+  camfile.open((logdir_stamped+"/campose.dat").c_str());
   camfile.precision(9);
+	camfile.rdbuf()->pubsetbuf(camfile_buffer,FILE_BUFFER_SIZE);//Set Buffer
   camfile<<"#Time \t Pos.X \t Pos.Y \t Pos.Z \t Quat.X \t Quat.Y \t Quat.Z \t Quat.W\t Curr_goal.x\t Curr_goal.y\t Curr_goal.z\t Obj_origin.x\t Obj_origin.y\t Obj_origin.z"<<endl;
+
   //Arm Tip file
-  tipfile.open((logdir_stamped+"/tippos.dat").c_str());//TODO add warning if we cannot open the file
+  tipfile.open((logdir_stamped+"/tippos.dat").c_str());
   tipfile.precision(9);
+	tipfile.rdbuf()->pubsetbuf(tipfile_buffer, FILE_BUFFER_SIZE);//Tip File Buffer
   tipfile<<"#Time \t Pos.X \t Pos.Y \t Pos.Z\t DesPos.X\t DesPos.Y\t DesPos.Z\t Act_armangle0\t Act_armangle1\t Des_armangle0\t Des_armangle1"<<endl;
-  //cmdfile.open(logdir_stamped+"/cmd.dat");//TODO add warning if we cannot open the file
+
   if(ctrlrinst)
     ctrlrinst->setlogdir(logdir_stamped);
   if(parserinstance)

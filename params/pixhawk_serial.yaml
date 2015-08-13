@@ -1,2 +1,3 @@
 serial/port: "/dev/ttyACM0"
-serial/baudrate: 115200
+#serial/baudrate: 115200
+serial/baudrate: 230400
