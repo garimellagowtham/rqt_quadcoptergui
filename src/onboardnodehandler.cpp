@@ -159,6 +159,7 @@ inline void OnboardNodeHandler::setupMemberVariables()
 
 	curr_goal = tf::Vector3(0,0,0);//Initial current goal
 
+	//imu_vrpndiff = tf::Vector3(0,0,0);//Initial vrpndiff estimate
 	imu_vrpndiff = tf::Vector3(0,0,0);//Initial vrpndiff estimate
 
   //Set the Quadcopter in Optitrak frame
@@ -1298,7 +1299,8 @@ void OnboardNodeHandler::quadstatetimerCallback(const ros::TimerEvent &event)
 				//imu_vrpndiff = (1.0/double(count_imu+1))*(double(count_imu)*imu_vrpndiff + tf::Vector3((vrpnrpy[0] - data.rpydata.x),(vrpnrpy[1] - data.rpydata.y),(vrpnrpy[2])));
 				imu_vrpndiff = (1.0/double(count_imu+1))*(double(count_imu)*imu_vrpndiff + tf::Vector3((vrpnrpy[0] - data.rpydata.x),(vrpnrpy[1] - data.rpydata.y),(vrpnrpy[2] - data.rpydata.z)));
 				count_imu++;
-				ROS_INFO("Imu Offset: %f,%f,%f\t IMU: %f,%f,%f\t VRPNRPY: %f,%f,%f", imu_vrpndiff[0]*(180.0/M_PI), imu_vrpndiff[1]*(180.0/M_PI), imu_vrpndiff[2]*(180.0/M_PI), data.rpydata.x*(180.0/M_PI), data.rpydata.y*(180.0/M_PI), data.rpydata.z*(180.0/M_PI), vrpnrpy[0]*(180.0/M_PI), vrpnrpy[1]*(180.0/M_PI), vrpnrpy[2]*(180.0/M_PI));
+				//ROS_INFO("Imu Offset: %f,%f,%f\t IMU: %f,%f,%f\t VRPNRPY: %f,%f,%f", imu_vrpndiff[0]*(180.0/M_PI), imu_vrpndiff[1]*(180.0/M_PI), imu_vrpndiff[2]*(180.0/M_PI), data.rpydata.x*(180.0/M_PI), data.rpydata.y*(180.0/M_PI), data.rpydata.z*(180.0/M_PI), vrpnrpy[0]*(180.0/M_PI), vrpnrpy[1]*(180.0/M_PI), vrpnrpy[2]*(180.0/M_PI));
+				ROS_INFO("Imu Offset: %f,%f,%f\t IMU: %f,%f,%f\t VRPNRPY: %f,%f,%f", imu_vrpndiff[0], imu_vrpndiff[1], imu_vrpndiff[2], data.rpydata.x, data.rpydata.y, data.rpydata.z, vrpnrpy[0], vrpnrpy[1], vrpnrpy[2]);
 				prev_imurpy = data.rpydata;
 			}
 			else
@@ -1315,19 +1317,26 @@ void OnboardNodeHandler::quadstatetimerCallback(const ros::TimerEvent &event)
 						if(abs(imudiff.x) > 20 || abs(imudiff.y) > 20  || abs(imudiff.z) > 20)//If there is greater than 10 degrees change in imu readings then:
 						{
               */
-            if(parserinstance->imu_reset)
+           /* if(parserinstance->imu_reset)
             {
 							ROS_WARN("Imu is resetting itself. Recalculating VRPNDiff");
 							//ROS_WARN("IMUDIFF: %f,%f,%f; IMU_Readings: %f,%f,%f",imudiff.x, imudiff.y, imudiff.z, data.rpydata.x*(180/M_PI), data.rpydata.y*(180/M_PI), data.rpydata.z*(180/M_PI));
 							imu_vrpndiff = tf::Vector3((vrpnrpy[0] - data.rpydata.x),(vrpnrpy[1] - data.rpydata.y),(vrpnrpy[2] - data.rpydata.z));
               parserinstance->imu_reset = false;//Set the variable as consumed
+							*/
 							/*imu_vrpndiff[0] -= imudiff.x;
 							imu_vrpndiff[1] -= imudiff.y;
 							imu_vrpndiff[2] -= imudiff.z;
 							*/
+						//}
+						//prev_imurpy = data.rpydata;
+						static int count_reset = 0;
+						count_reset++;
+						if(count_reset == 10)
+						{
+							count_reset = 0;
+							parserinstance->reset_attitude(vrpnrpy[0]-imu_vrpndiff[0], vrpnrpy[1]-imu_vrpndiff[1], vrpnrpy[2]-imu_vrpndiff[2]);
 						}
-						prev_imurpy = data.rpydata;
-						parserinstance->reset_attitude(vrpnrpy[0]-imu_vrpndiff[0], vrpnrpy[1]-imu_vrpndiff[1], vrpnrpy[2]-imu_vrpndiff[2]);
 					}
 					/*if(reset_imu)
 					{
