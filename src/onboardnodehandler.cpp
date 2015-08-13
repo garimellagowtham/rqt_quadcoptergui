@@ -1308,15 +1308,19 @@ void OnboardNodeHandler::quadstatetimerCallback(const ros::TimerEvent &event)
 					if(reset_imu)
 					{
 						//Check IMU Difference:
-						geometry_msgs::Vector3 imudiff;
+						/*geometry_msgs::Vector3 imudiff;
 						imudiff.x = (data.rpydata.x - prev_imurpy.x)*180.0/M_PI;
 						imudiff.y = (data.rpydata.y - prev_imurpy.y)*180.0/M_PI;
 						imudiff.z = (data.rpydata.z - prev_imurpy.z)*180.0/M_PI;
 						if(abs(imudiff.x) > 20 || abs(imudiff.y) > 20  || abs(imudiff.z) > 20)//If there is greater than 10 degrees change in imu readings then:
 						{
+              */
+            if(parserinstance->imu_reset)
+            {
 							ROS_WARN("Imu is resetting itself. Recalculating VRPNDiff");
-							ROS_WARN("IMUDIFF: %f,%f,%f; IMU_Readings: %f,%f,%f",imudiff.x, imudiff.y, imudiff.z, data.rpydata.x*(180/M_PI), data.rpydata.y*(180/M_PI), data.rpydata.z*(180/M_PI));
+							//ROS_WARN("IMUDIFF: %f,%f,%f; IMU_Readings: %f,%f,%f",imudiff.x, imudiff.y, imudiff.z, data.rpydata.x*(180/M_PI), data.rpydata.y*(180/M_PI), data.rpydata.z*(180/M_PI));
 							imu_vrpndiff = tf::Vector3((vrpnrpy[0] - data.rpydata.x),(vrpnrpy[1] - data.rpydata.y),(vrpnrpy[2] - data.rpydata.z));
+              parserinstance->imu_reset = false;//Set the variable as consumed
 							/*imu_vrpndiff[0] -= imudiff.x;
 							imu_vrpndiff[1] -= imudiff.y;
 							imu_vrpndiff[2] -= imudiff.z;
