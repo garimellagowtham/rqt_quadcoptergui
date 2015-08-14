@@ -1330,13 +1330,7 @@ void OnboardNodeHandler::quadstatetimerCallback(const ros::TimerEvent &event)
 							*/
 						//}
 						//prev_imurpy = data.rpydata;
-						static int count_reset = 0;
-						count_reset++;
-						if(count_reset == 10)
-						{
-							count_reset = 0;
-							parserinstance->reset_attitude(vrpnrpy[0]-imu_vrpndiff[0], vrpnrpy[1]-imu_vrpndiff[1], vrpnrpy[2]-imu_vrpndiff[2]);
-						}
+						parserinstance->reset_attitude(vrpnrpy[0]-imu_vrpndiff[0], vrpnrpy[1]-imu_vrpndiff[1], vrpnrpy[2]-imu_vrpndiff[2]);
 					}
 					/*if(reset_imu)
 					{
