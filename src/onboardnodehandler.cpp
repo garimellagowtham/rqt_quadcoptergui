@@ -1261,8 +1261,8 @@ void OnboardNodeHandler::cmdtimerCallback(const ros::TimerEvent &event)
   ctrlrinst->Getctrl(rescmd);//Since imu is corrected using unbiased vrpn data we can send commands which are unbiased too
 
 	//Offset by the imuvrpndiff:
-	rescmd.roll += imu_vrpndiff[0];
-	rescmd.pitch += imu_vrpndiff[1];
+	rescmd.roll -= imu_vrpndiff[0];
+	rescmd.pitch -= imu_vrpndiff[1];//FIX BUG GG
 
   if(!parserinstance)
   {
