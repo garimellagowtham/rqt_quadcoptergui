@@ -1290,84 +1290,41 @@ void OnboardNodeHandler::quadstatetimerCallback(const ros::TimerEvent &event)
 
   parserinstance->getquaddata(data);
 
-  //Reset attitude on IMU every 20 Hz only when Quadcopter is armed
-	{
-		//if(data.armed)
-		{
-			if(count_imu < 10)
-			{
-				//imu_vrpndiff = (1.0/double(count_imu+1))*(double(count_imu)*imu_vrpndiff + tf::Vector3((vrpnrpy[0] - data.rpydata.x),(vrpnrpy[1] - data.rpydata.y),(vrpnrpy[2])));
-				imu_vrpndiff = (1.0/double(count_imu+1))*(double(count_imu)*imu_vrpndiff + tf::Vector3((vrpnrpy[0] - data.rpydata.x),(vrpnrpy[1] - data.rpydata.y),(vrpnrpy[2] - data.rpydata.z)));
-				count_imu++;
-				//ROS_INFO("Imu Offset: %f,%f,%f\t IMU: %f,%f,%f\t VRPNRPY: %f,%f,%f", imu_vrpndiff[0]*(180.0/M_PI), imu_vrpndiff[1]*(180.0/M_PI), imu_vrpndiff[2]*(180.0/M_PI), data.rpydata.x*(180.0/M_PI), data.rpydata.y*(180.0/M_PI), data.rpydata.z*(180.0/M_PI), vrpnrpy[0]*(180.0/M_PI), vrpnrpy[1]*(180.0/M_PI), vrpnrpy[2]*(180.0/M_PI));
-				ROS_INFO("Imu Offset: %f,%f,%f\t IMU: %f,%f,%f\t VRPNRPY: %f,%f,%f", imu_vrpndiff[0], imu_vrpndiff[1], imu_vrpndiff[2], data.rpydata.x, data.rpydata.y, data.rpydata.z, vrpnrpy[0], vrpnrpy[1], vrpnrpy[2]);
-				prev_imurpy = data.rpydata;
-			}
-			else
-			{
-				if(parserinstance)
-				{
-					if(reset_imu)
-					{
-						//Check IMU Difference:
-						/*geometry_msgs::Vector3 imudiff;
-						imudiff.x = (data.rpydata.x - prev_imurpy.x)*180.0/M_PI;
-						imudiff.y = (data.rpydata.y - prev_imurpy.y)*180.0/M_PI;
-						imudiff.z = (data.rpydata.z - prev_imurpy.z)*180.0/M_PI;
-						if(abs(imudiff.x) > 20 || abs(imudiff.y) > 20  || abs(imudiff.z) > 20)//If there is greater than 10 degrees change in imu readings then:
-						{
-              */
-           /* if(parserinstance->imu_reset)
-            {
-							ROS_WARN("Imu is resetting itself. Recalculating VRPNDiff");
-							//ROS_WARN("IMUDIFF: %f,%f,%f; IMU_Readings: %f,%f,%f",imudiff.x, imudiff.y, imudiff.z, data.rpydata.x*(180/M_PI), data.rpydata.y*(180/M_PI), data.rpydata.z*(180/M_PI));
-							imu_vrpndiff = tf::Vector3((vrpnrpy[0] - data.rpydata.x),(vrpnrpy[1] - data.rpydata.y),(vrpnrpy[2] - data.rpydata.z));
-              parserinstance->imu_reset = false;//Set the variable as consumed
-							*/
-							/*imu_vrpndiff[0] -= imudiff.x;
-							imu_vrpndiff[1] -= imudiff.y;
-							imu_vrpndiff[2] -= imudiff.z;
-							*/
-						//}
-						//prev_imurpy = data.rpydata;
-						parserinstance->reset_attitude(vrpnrpy[0]-imu_vrpndiff[0], vrpnrpy[1]-imu_vrpndiff[1], vrpnrpy[2]-imu_vrpndiff[2]);
-					}
-					/*if(reset_imu)
-					{
-						static tf::Vector3 prev_vrpnrpy = vrpnrpy;
-						static ros::Time prev_time_stamp = UV_O.stamp_;
-						double tdiff = (UV_O.stamp_ - prev_time_stamp).toSec();
-						if(tdiff > 0.01)//Atleast this far apart
-						{
-							//Predict where the rpy should be based on current rpy (20 milliseconds forward)
-							tf::Vector3 future_vrpnrpy = vrpnrpy + (vrpnrpy - prev_vrpnrpy)*(0.02/tdiff);//20 Hz (50 millisec). Predict forward by 20 millisec
-							parserinstance->reset_attitude(future_vrpnrpy[0]-imu_vrpndiff[0], future_vrpnrpy[1]-imu_vrpndiff[1], future_vrpnrpy[2]-imu_vrpndiff[2]);
-							prev_vrpnrpy = vrpnrpy;
-							prev_time_stamp = UV_O.stamp_;
-						}
-					}
-					*/
-				}
-			}
-		}
-		/*
-		{
-			count_imu = 0;
-			imu_vrpndiff[0] = 0;
-			imu_vrpndiff[1] = 0;
-			imu_vrpndiff[2] = 0;//Set to zero
-		}
-		*/
-	}
+  //Reset attitude on IMU every 20 Hz
+  {
+    //Find IMU Offset first
+    if(count_imu < 10)
+    {
+      imu_vrpndiff = (1.0/double(count_imu+1))*(double(count_imu)*imu_vrpndiff + tf::Vector3((vrpnrpy[0] - data.rpydata.x),(vrpnrpy[1] - data.rpydata.y),(vrpnrpy[2] - data.rpydata.z)));
+      count_imu++;
+      ROS_INFO("Imu Offset: %f,%f,%f\t IMU: %f,%f,%f\t VRPNRPY: %f,%f,%f", imu_vrpndiff[0]*(180.0/M_PI), imu_vrpndiff[1]*(180.0/M_PI), imu_vrpndiff[2]*(180.0/M_PI), data.rpydata.x*(180.0/M_PI), data.rpydata.y*(180.0/M_PI), data.rpydata.z*(180.0/M_PI), vrpnrpy[0]*(180.0/M_PI), vrpnrpy[1]*(180.0/M_PI), vrpnrpy[2]*(180.0/M_PI));
+      //ROS_INFO("Imu Offset: %f,%f,%f\t IMU: %f,%f,%f\t VRPNRPY: %f,%f,%f", imu_vrpndiff[0], imu_vrpndiff[1], imu_vrpndiff[2], data.rpydata.x, data.rpydata.y, data.rpydata.z, vrpnrpy[0], vrpnrpy[1], vrpnrpy[2]);
+      prev_imurpy = data.rpydata;
+    }
+    else
+    {
+      if(parserinstance)
+      {
+        if(reset_imu)
+        {
+          parserinstance->reset_attitude(vrpnrpy[0]-imu_vrpndiff[0], vrpnrpy[1]-imu_vrpndiff[1], vrpnrpy[2]-imu_vrpndiff[2]);
+        }
+      }
+    }
+  }
+
 //If we have to publish rpy data:
   if(publish_rpy)
   {
     geometry_msgs::Vector3 rpymsg;
-    rpymsg = data.rpydata;
-    //Convert to degrees and offset to vrpn:
-    rpymsg.x = (rpymsg.x+imu_vrpndiff[0])*(180/M_PI);
+    //Resulting command from Controller
+    rpymsg.x = (rescmdmsg.x)*(180/M_PI);
+    rpymsg.y = (rescmdmsg.y)*(180/M_PI);
+    rpymsg.z = (rescmdmsg.z)*(180/M_PI);
+    //IMU Angles: Convert to degrees and offset to vrpn:
+    /*rpymsg.x = (rpymsg.x+imu_vrpndiff[0])*(180/M_PI);
     rpymsg.y = (rpymsg.y+imu_vrpndiff[1])*(180/M_PI);
-    rpymsg.z = (rpymsg.z+imu_vrpndiff[2])*(180/M_PI);
+    rpymsg.z = (rpymsg.z+imu_vrpndiff[2])*(180/M_PI);*/
     imu_rpy_pub_.publish(rpymsg);
     tf::vector3TFToMsg(vrpnrpy, rpymsg);
     rpymsg.x *= (180/M_PI);
