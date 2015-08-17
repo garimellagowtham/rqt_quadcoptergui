@@ -192,6 +192,7 @@ protected:
     tf::StampedTransform CAM_QUAD_transform;
     tf::StampedTransform OBJ_MOD_transform;
     tf::Vector3 center_workspace;
+    tf::Quaternion q_trim;///< Trim between Quadcopter frame and vrpn frame
 
 protected:
     // Helper Functions

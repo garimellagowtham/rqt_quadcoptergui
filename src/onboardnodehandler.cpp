@@ -221,6 +221,13 @@ inline void OnboardNodeHandler::loadParameters()
   nh.param<double>("/vrpn/centery",center_workspace[1], 0.9);
   nh.param<double>("/vrpn/centerz",center_workspace[2], 1.5);
   nh.param<bool>("/gui/publishrpy",publish_rpy,false);
+  {
+    double bias_vrpnroll, bias_vrpnpitch, bias_vrpnyaw;
+    nh.param<double>("/bias_vrpnroll",bias_vrpnroll,0.0);
+    nh.param<double>("/bias_vrpnpitch",bias_vrpnpitch,0.0);
+    nh.param<double>("/bias_vrpnyaw",bias_vrpnyaw,0.0);
+    q_trim.setRPY(bias_vrpnroll, bias_vrpnpitch, bias_vrpnyaw);
+  }
 
 #ifdef ARM_ENABLED
   nh.getParam("/ctrlr/timeout_grabbing", timeout_grabbing);
@@ -605,6 +612,7 @@ void OnboardNodeHandler::vrpnCallback(const geometry_msgs::TransformStamped::Con
 {
   //Check if vrpn is skipping:
   transformStampedMsgToTF(*currframe,UV_O);//converts to the right format  and stores the message
+  UV_O.setRotation(UV_O.getRotation()*q_trim);//Modify by trim
   ctrlrinst->Update(UV_O);//Updates the internal state
 
   tf::Matrix3x3 rotmat = UV_O.getBasis();
