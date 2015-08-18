@@ -6,7 +6,8 @@
 %cd session11_August_2015_02_00_43_PM/
 %cd session11_August_2015_03_50_28_PM/
 %cd session13_August_2015_07_31_00_PM/
-cd session14_August_2015_02_54_55_PM/
+%cd session14_August_2015_02_54_55_PM/
+cd session17_August_2015_06_29_47_PM/
 
 RC_MIN = [1005,1003,1003,1003];
 RC_MAX = [1981,1995,1998,1999];
@@ -35,12 +36,10 @@ for i = 1:length(cmdtime)
 end
 
 %% Plot the data in between two times:
-%t0 = 32;
-%t1 = 42;
-t0 = 50;
-t1 = 60;
-%t0 = 57;
-%t1 = 59.2;
+t0 = 35;
+t1 = 47;
+%t0 = 70;
+%t1 = 83;
 index1 = matchnearest(t0, cmdtime);%For commands
 index2 = matchnearest(t1, cmdtime);
 indexvrpn = matchnearest(cmdtime(index1:index2), vrpntime);
@@ -61,12 +60,12 @@ subplot(2,2,2), plot(vrpntime(indexvrpn),vrpnrpy(indexvrpn,2)*(180/pi)), xlabel(
 subplot(2,1,2), plot(vrpntime(indexvrpn),vrpnrpy(indexvrpn,3)*(180/pi)), xlabel('time(sec)'), ylabel('yaw(t)^o');
 %% Plot Integrated Trajectories vs Actual Measurements:
 %system_params = zeros(5,1);
- system_params = [  28.0767
-    0.1
-   -0.0797
-    0.0223
-    0.0017
-    0.0050];
+ system_params = [     29.5348
+    0.0160
+    0.0035
+   -0.0028
+    0.0006
+    0.0502];
 % system_params(1) = 17.9808;%Gain
 % system_params(2) = 0.2644;
 % system_params(3) = 0.0989;
@@ -88,11 +87,11 @@ options = optimoptions('fminunc','TolX',1e-8);
 constants.system_params_mean = system_params;
 %constants.R(3,3) = 1;
 constants.R = 100*eye(3);
-constants.P(2,2) = 0;
-constants.P(3,3) = 1;
-constants.P(4,4) = 1;
-constants.P(5,5) = 10;
-constants.P(6,6) = 10;
+constants.P(2,2) = 1e3;
+constants.P(3,3) = 1e3;
+constants.P(4,4) = 1e3;
+constants.P(5,5) = 1e3;
+constants.P(6,6) = 1e3;
 % constants.P(3,3) = 100;
 % constants.P(4,4) = 100;
 % constants.P(5,5) = 1e7;

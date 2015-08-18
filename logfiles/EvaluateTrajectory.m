@@ -36,7 +36,7 @@ function [xnew, constants] = quadcopter_dynamics(i, xold, h, u, system_params, c
 xnew = zeros(6,1);
 constants.throttle(i+1) = constants.throttle(i) + h*system_params(2)*(system_params(1)*u(5) - constants.throttle(i));
 %Plot Throttle
-R_offset = rpy2mat([system_params(5), system_params(6),0]);
+R_offset = rpy2mat([0, system_params(6), system_params(5)]);%Yaw Pitch Roll
 R = quat2mat([u(4); u(1); u(2); u(3)]);
 xnew(4:6) = xold(4:6) + (h/constants.mass)*R*R_offset*[0;0;1]*(constants.throttle(i+1)) + h*[system_params(3); system_params(4); constants.z_offset];
 vel_avg = (xnew(4:6) + xold(4:6))/2;

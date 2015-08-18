@@ -81,7 +81,7 @@
 %cd session14_August_2015_05_20_25_PM/ %Gain Checking with kpr, kdr, etc 
 %cd session17_August_2015_02_09_01_PM/ %Two YZ Circles with faster timing (9 secs) to get better signal to noise response
 %cd session17_August_2015_02_55_14_PM/ %Redo the YZ Circle with stronger gains and disabled integrator midway
-cd session17_August_2015_06_29_47_PM/
+%cd session17_August_2015_06_29_47_PM/ % XY Spiral two times 14 secs good tracking
 correct_bias = false;
 RC_MIN = [1005,1003,1003,1003];
 RC_MAX = [1981,1995,1998,1999];
@@ -103,7 +103,8 @@ subplot(2,2,1), plot(vrpntime,vrpn.data(:,2)), xlabel('time(sec)'), ylabel('x(t)
 subplot(2,2,2), plot(vrpntime,vrpn.data(:,3)), xlabel('time(sec)'), ylabel('y(t)');
 subplot(2,1,2), plot(vrpntime,vrpn.data(:,4)), xlabel('time(sec)'), ylabel('z(t)');
 figure(2), clf;
-subplot(2,2,1), plot(vrpntime,vrpnrpy(:,1)*(180/pi)), xlabel('time(sec)'), ylabel('pitch(t)^o');
+subplot(2,2,1), plot(vrpntime,vrpnrpy(:,1)*(180/pi)), xlabel('time(sec)'), ylabel('roll(t)^o');
+subplot(2,2,2), plot(vrpntime,vrpnrpy(:,2)*(180/pi)), xlabel('time(sec)'), ylabel('pitch(t)^o');
 subplot(2,1,2), plot(vrpntime,vrpnrpy(:,3)*(180/pi)), xlabel('time(sec)'), ylabel('yaw(t)^o');
 if exist('imu.dat','file')
     imu = importdata('imu.dat','\t',1);
@@ -298,8 +299,8 @@ disp(mean(vrpnrpy(idy,1))*(180/pi));
 disp('pitch: ');
 disp(mean(vrpnrpy(idx,2))*(180/pi));
 %% Find mean of vrpn r, p in between times specified:
-t1 = 34;
-t2 = 40;
+t1 = 15;
+t2 = 35;
 indices_t = matchnearest([t1; t2], vrpntime);
 vrpnmean = mean(vrpnrpy(indices_t(1):indices_t(2), 1:2));
 disp('mean_roll: ');

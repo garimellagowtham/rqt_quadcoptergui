@@ -4,7 +4,7 @@ pubfreq: 200
 #in  Degrees
 #bias_vrpnroll: -1.8
 #bias_vrpnpitch: 1.4
-bias_vrpnroll: 0.0
+bias_vrpnroll: 0.0014
 bias_vrpnpitch: 0.0464
 bias_vrpnyaw: 0.0
 
