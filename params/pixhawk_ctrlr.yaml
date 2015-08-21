@@ -1,6 +1,8 @@
-ctrlr/kpr: 1.0
+#ctrlr/kpr: 1.0
+ctrlr/kpr: 1.2
 #ctrlr/kdr: 1.2
-ctrlr/kdr: 1.4
+#ctrlr/kdr: 1.4
+ctrlr/kdr: 1.6
 ctrlr/kpt: 1.0
 ctrlr/kdt: 1.0
 #ctrlr/kpr: 1.5
