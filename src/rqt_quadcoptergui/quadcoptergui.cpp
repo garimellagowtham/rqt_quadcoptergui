@@ -84,8 +84,11 @@ void QuadcopterGui::initPlugin(qt_gui_cpp::PluginContext& context)
 
   //Publishers:
   gui_command_publisher_ = nh.advertise<rqt_quadcoptergui::GuiCommandMessage>("/gui_commands",10);
-  rviz_trajectory_publisher_ = nh.advertise<visualization_msgs::Marker>("/desired_traj",10);
+
   gcop_trajectory_publisher_ = nh.advertise<gcop_comm::CtrlTraj>("/mbsddp/traj_resp",10);
+
+  //Create Visualizer:
+  gcop_trajectory_visualizer_.reset(new GcopTrajectoryVisualizer(nh));
 
   //Setup the timer to refresh Gui
   timer = new QTimer(widget_);
@@ -262,23 +265,12 @@ void QuadcopterGui::loadTrajectory()
   ifile.ignore(1000,'\n');//Wait till new line
   //File should have t, traj_x,y,z, yaw; traj_vx,vy,vz in global frame;
   quadcopter_trajectory.reset(new gcop_comm::CtrlTraj());
-  visualization_msgs::Marker trajectory_marker;///< Trajectory marker to be published to rviz
-  //Setup marker:
-  trajectory_marker.header.frame_id = "optitrak";
-  trajectory_marker.action = visualization_msgs::Marker::ADD;
-  trajectory_marker.ns = "desiredtraj";
-  trajectory_marker.pose.orientation.w = 1.0;
-  trajectory_marker.id = 1;
-  trajectory_marker.type = visualization_msgs::Marker::LINE_STRIP;
-  trajectory_marker.scale.x = 0.05;
-  trajectory_marker.color.b = 1.0;
-  trajectory_marker.color.a = 1.0;
-
+  
   gcop_comm::State desired_state;
   geometry_msgs::Point pt;
-  quadcopter_trajectory->N = 0;
+  quadcopter_trajectory->N = -1;
   //Get Current Goal from reconfig params
-  double xg, yg, zg, yawg;
+  double xg = 0, yg = 0, zg = 0, yawg = 0;
   ros::param::get("/onboard_node/xg",xg);
   ros::param::get("/onboard_node/yg",yg);
   ros::param::get("/onboard_node/zg",zg);
@@ -306,14 +298,9 @@ void QuadcopterGui::loadTrajectory()
     desired_state.basetwist.linear.y = data[6];
     desired_state.basetwist.linear.z = data[7];
     quadcopter_trajectory->statemsg.push_back(desired_state);
-    pt.x = desired_state.basepose.translation.x;
-    pt.y = desired_state.basepose.translation.y;
-    pt.z = desired_state.basepose.translation.z;
-    trajectory_marker.points.push_back(pt);
   }
   ifile.close();
-  trajectory_marker.header.stamp = ros::Time::now();
-  rviz_trajectory_publisher_.publish(trajectory_marker);//Publish the trajectory
+  gcop_trajectory_visualizer_->publishTrajectory(*quadcopter_trajectory);
 }
 void QuadcopterGui::sendTrajectory()
 {
@@ -334,11 +321,11 @@ void QuadcopterGui::shutdownPlugin()
   quad_state_subscriber_.shutdown();
 
   gui_command_publisher_.shutdown();
-  rviz_trajectory_publisher_.shutdown();
   gcop_trajectory_publisher_.shutdown();
 
   //Clear Variables:
   quadcopter_trajectory.reset();
+  gcop_trajectory_visualizer_.reset();
   //delete update_component_id;
   //delete timer;
   //delete widget_;
