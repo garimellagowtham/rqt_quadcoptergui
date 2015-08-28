@@ -8,3 +8,4 @@ uint8 trajectory_tracking_status = 2 # Status of Trajectory tracking controller
 uint8 controller_status = 3          # Status of Controller
 uint8 joystick_status = 4            # Status of Joystick
 uint8 camera_controlstatus = 5       # Status of camera
+uint8 manual_targetretrievalstatus = 6 # Status of manual target retrieval

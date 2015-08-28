@@ -154,11 +154,12 @@ protected slots:
   virtual void wrapperDisarm();
   virtual void loadTrajectory();
   virtual void sendTrajectory();
-  virtual void wrapperimu_recalib(int);
+  //virtual void wrapperimu_recalib(int);
   virtual void follow_trajectory(int);
   virtual void integrator_control(int);
   virtual void enable_disablecontroller(int);
   virtual void enable_disablecamctrl(int);
+  virtual void enable_disablemanualtargetretrieval(int);
   virtual void enable_disablelog(int);
   virtual void enable_disablemanualarmctrl(int);
   virtual void RefreshGui();

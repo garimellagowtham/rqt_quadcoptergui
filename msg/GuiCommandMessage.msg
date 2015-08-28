@@ -12,3 +12,4 @@ uint8 arm_quad = 6       # Arm the Quadcopter
 uint8 land_quad = 7      # Land the quadcopter
 uint8 disarm_quad = 8    # Disarm Quadcopter
 uint8 target_capture = 9 # Capture the target object
+uint8 manual_targetretrievalstatus = 10 # Status of manual target retrieval

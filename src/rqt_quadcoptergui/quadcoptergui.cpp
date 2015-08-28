@@ -102,13 +102,14 @@ void QuadcopterGui::initPlugin(qt_gui_cpp::PluginContext& context)
   connect(ui_.LoadTrajectorybutton, SIGNAL(clicked()), this, SLOT(loadTrajectory()));
   connect(ui_.SendTrajectorybutton, SIGNAL(clicked()), this, SLOT(sendTrajectory()));
   connect(ui_.Disarmbutton, SIGNAL(clicked()), this, SLOT(wrapperDisarm()));
-  connect(ui_.imucheckbox,SIGNAL(stateChanged(int)),this,SLOT(wrapperimu_recalib(int)));
+  //connect(ui_.imucheckbox,SIGNAL(stateChanged(int)),this,SLOT(wrapperimu_recalib(int)));
   connect(ui_.follow_traj,SIGNAL(stateChanged(int)),this,SLOT(follow_trajectory(int)));
   connect(ui_.log_checkbox,SIGNAL(stateChanged(int)),this,SLOT(enable_disablelog(int)));
   connect(ui_.enable_joycheckbox,SIGNAL(stateChanged(int)),this,SLOT(enable_disablemanualarmctrl(int)));
   connect(ui_.integrator_checkbox,SIGNAL(stateChanged(int)),this,SLOT(integrator_control(int)));
   connect(ui_.enable_controller,SIGNAL(stateChanged(int)),this,SLOT(enable_disablecontroller(int)));
   connect(ui_.camcheckbox,SIGNAL(stateChanged(int)),this,SLOT(enable_disablecamctrl(int)));
+  connect(ui_.manualtargetcheckbox,SIGNAL(stateChanged(int)),this,SLOT(enable_disablemanualtargetretrieval(int)));
 }
 
 void QuadcopterGui::RefreshGui()
@@ -213,28 +214,36 @@ void QuadcopterGui::enable_disablecamctrl(int state)//5
   gui_command_publisher_.publish(msg);
 }
 
-void QuadcopterGui::wrappertakeoff()//6
+void QuadcopterGui::enable_disablemanualtargetretrieval(int state)//6
 {
   if(checkUpdateState(6))//Check if input is from onboard Node
    return;
+  GuiCommandMessage msg;
+  if(state == Qt::Checked)
+    msg.command = true;
+  else
+    msg.command = false;
+  msg.commponent_name = msg.manual_targetretrievalstatus;
+  gui_command_publisher_.publish(msg);
+}
+
+////////////Buttons Callback Functions
+void QuadcopterGui::wrappertakeoff()
+{
   GuiCommandMessage msg;
   msg.commponent_name = msg.arm_quad;
   gui_command_publisher_.publish(msg);
 }
 
-void QuadcopterGui::wrapperLand()//7
+void QuadcopterGui::wrapperLand()
 {
-  if(checkUpdateState(7))//Check if input is from onboard Node
-   return;
   GuiCommandMessage msg;
   msg.commponent_name = msg.land_quad;
   gui_command_publisher_.publish(msg);
 }
 
-void QuadcopterGui::wrapperDisarm()//8
+void QuadcopterGui::wrapperDisarm()
 {
-  if(checkUpdateState(8))//Check if input is from onboard Node
-   return;
   GuiCommandMessage msg;
   msg.commponent_name = msg.disarm_quad;
   gui_command_publisher_.publish(msg);
@@ -308,10 +317,11 @@ void QuadcopterGui::sendTrajectory()
   if(quadcopter_trajectory)
     gcop_trajectory_publisher_.publish(quadcopter_trajectory);
 }
-void QuadcopterGui::wrapperimu_recalib(int state)
+/*void QuadcopterGui::wrapperimu_recalib(int state)
 {
   ROS_WARN("Not Implemented");
 }
+*/
 
 
 
@@ -390,6 +400,15 @@ void QuadcopterGui::guistateCallback(const GuiStateMessage &statemsg)
       update_component_id[statemsg.commponent_id] = true;
       qgui_mutex_.unlock();
       ui_.follow_traj->setCheckState(CHECKSTATE(statemsg.status));
+    }
+    break;
+  case statemsg.manual_targetretrievalstatus:
+    if(statemsg.status != ui_.manualtargetcheckbox->isChecked())
+    {
+      qgui_mutex_.lock();
+      update_component_id[statemsg.commponent_id] = true;
+      qgui_mutex_.unlock();
+      ui_.manualtargetcheckbox->setCheckState(CHECKSTATE(statemsg.status));
     }
     break;
   }
