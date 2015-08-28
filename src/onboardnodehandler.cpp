@@ -1,5 +1,5 @@
 #include <rqt_quadcoptergui/onboardnodehandler.h>
-//#define ARM_ENABLED
+#define ARM_ENABLED
 
 OnboardNodeHandler::OnboardNodeHandler(ros::NodeHandle &nh_):nh(nh_)
                                                             , broadcaster(new tf::TransformBroadcaster())
@@ -1071,7 +1071,7 @@ void OnboardNodeHandler::goaltimerCallback(const ros::TimerEvent &event)
   if(enable_camctrl)
     target_location = (OBJ_QUAD_stamptransform.getOrigin() + quatRotate(UV_O.getRotation().inverse(),object_markeroffset)) - arm_basewrtquad;
   else if(enable_manualtargetretrieval)
-    target_location = quatRotate(UV_O.getRotation().inverse(), target - UV_O.getOrigin()) - arm_basewrtquad;
+    target_location = quatRotate(UV_O.getRotation().inverse(), target_object_origin - UV_O.getOrigin()) - arm_basewrtquad;
 
 
   if(armratecount == armcmdrate)
