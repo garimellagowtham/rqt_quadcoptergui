@@ -129,6 +129,8 @@ protected:
     bool enable_control;///< Tells whether the controller is enabled or not
     bool enable_integrator;///< Tells whether integrator is enabled or not
     bool enable_joy;///< If Joystick mode is enabled
+    bool enable_manualtargetretrieval;///< If Retrieving manually specified target location using Mocap.
+
 
     //// ROS Messages
     sensor_msgs::JointState jointstate_msg;///< For publishing arm state
@@ -177,7 +179,7 @@ protected:
 
     //// Parameters:
     std::string uav_posename;
-    tf::Vector3 target;//Extraction target point
+    tf::Vector3 target_object_origin;//Extraction target point
     bool cam_partialcontrol;//Only use the object position to set the goal position
     bool publish_rpy;///< Publish roll pitch yaw on a topic or not
     double timeout_grabbing;//Timeout for waiting to grab object usually a very short time to just stay for few seconds
@@ -212,6 +214,7 @@ protected:
 
     //Gui State Transition Functions:
     inline void stateTransitionController(bool);
+    inline void stateTransitionManualTargetRetrieval(bool);
     inline void stateTransitionCameraController(bool);
     inline void stateTransitionTrajectoryTracking(bool);
     inline void stateTransitionLogging(bool);

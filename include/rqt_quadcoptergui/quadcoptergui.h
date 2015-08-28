@@ -45,6 +45,9 @@
 //TF helper functions:
 #include <tf/transform_datatypes.h>
 
+//Gcop Trajectory Publisher Helper Class:
+#include <gcop_comm/gcop_trajectory_visualizer.h>
+
 //Ros Messages
 #include <std_msgs/String.h>
 #include <rqt_quadcoptergui/GuiCommandMessage.h>
@@ -108,7 +111,6 @@ protected:
 
   //Publisher:
   ros::Publisher gui_command_publisher_;
-  ros::Publisher rviz_trajectory_publisher_;
   ros::Publisher gcop_trajectory_publisher_;
 
   ////Helper Variables
@@ -116,6 +118,7 @@ protected:
   bool update_component_id[9];// Only update gui and do not execute signal functions
   std::string trajectory_file_name;//Prespecified file name
   boost::shared_ptr<gcop_comm::CtrlTraj> quadcopter_trajectory;///< Trajectory to be followed by quadcopter
+  boost::shared_ptr<GcopTrajectoryVisualizer> gcop_trajectory_visualizer_;///< Helper Class to send gcop trajectories to rviz
 
 
 protected:
@@ -151,11 +154,12 @@ protected slots:
   virtual void wrapperDisarm();
   virtual void loadTrajectory();
   virtual void sendTrajectory();
-  virtual void wrapperimu_recalib(int);
+  //virtual void wrapperimu_recalib(int);
   virtual void follow_trajectory(int);
   virtual void integrator_control(int);
   virtual void enable_disablecontroller(int);
   virtual void enable_disablecamctrl(int);
+  virtual void enable_disablemanualtargetretrieval(int);
   virtual void enable_disablelog(int);
   virtual void enable_disablemanualarmctrl(int);
   virtual void RefreshGui();

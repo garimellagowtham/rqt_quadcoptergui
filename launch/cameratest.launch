@@ -5,5 +5,10 @@
 		<param name="guid" type="string" value="00b09d0100d8f8b3"/>
 		<param name="video_mode" type="string" value="640x480_mono8"/>
 		<param name="frame_rate" type="double" value="30.0"/>
+    <param name="auto_shutter" type="int" value="3"/>
+    <param name="shutter" type="double" value="400.0"/>
+    <param name="auto_gain" type="int" value="3"/>
+    <param name="gain" type="double" value="16.0"/>
+		<param name="use_ros_time" type="bool" value="true"/>
 	</node>
 </launch>

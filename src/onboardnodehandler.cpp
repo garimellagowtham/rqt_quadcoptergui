@@ -1,5 +1,5 @@
 #include <rqt_quadcoptergui/onboardnodehandler.h>
-//#define ARM_ENABLED
+#define ARM_ENABLED
 
 OnboardNodeHandler::OnboardNodeHandler(ros::NodeHandle &nh_):nh(nh_)
                                                             , broadcaster(new tf::TransformBroadcaster())
@@ -9,7 +9,7 @@ OnboardNodeHandler::OnboardNodeHandler(ros::NodeHandle &nh_):nh(nh_)
                                                             , followtraj(false), waitingfortrajectory(true), initialitrq(true), nearest_index_gcoptime(0)
                                                             , reconfiginit(false), updategoal_dynreconfig(false)
                                                             , armcmdrate(4), armratecount(0), gripped_already(false), newcamdata(false)
-                                                            , enable_control(false), enable_integrator(false), enable_camctrl(false)
+                                                            , enable_control(false), enable_integrator(false), enable_camctrl(false), enable_manualtargetretrieval(false)
                                                             , tip_position(), goalcount(1), diff_goal(), count_imu(0)
 {
   //initialize member variables
@@ -206,9 +206,9 @@ inline void OnboardNodeHandler::loadParameters()
     ROS_ERROR("Cannot find parser_plugin parameter to load the parser");
   }
 
-  nh.param<double>("/ctrlr/targetx",target[0],0);
-  nh.param<double>("/ctrlr/targety",target[1],0);
-  nh.param<double>("/ctrlr/targetz",target[2],0);
+  nh.param<double>("/ctrlr/targetx",target_object_origin[0],0.65);
+  nh.param<double>("/ctrlr/targety",target_object_origin[1],1.9);
+  nh.param<double>("/ctrlr/targetz",target_object_origin[2],1.9);
   nh.param<bool>("/ctrlr/partialcam_control",cam_partialcontrol, true);
   nh.param<bool>("/ctrlr/openloop_mode",openloop_mode,true);
   nh.param<std::string>("/gui/uav_name",uav_name,"pixhawk");
@@ -299,6 +299,8 @@ inline bool OnboardNodeHandler::createParserInstance()
       break;
     usleep(100000);//0.1 sec
   }
+  //Set the Gripper to Relaxed State:
+  parserinstance->grip(0);
   return parserinstance->initialized;
 }
 
@@ -382,6 +384,53 @@ inline void OnboardNodeHandler::stateTransitionController(bool state)
   gui_state_publisher_.publish(state_message);
 }
 
+inline void OnboardNodeHandler::stateTransitionManualTargetRetrieval(bool state)
+{
+  //Testing only Optitrack
+  if(!ctrlrinst)
+  {
+    ROS_WARN("Controller not instantiated");
+    goto PUBLISH_TARGET_RETRIEVAL_STATE;
+  }
+
+  if(state == true)
+  {
+    //[DEBUG]
+    //cout<<"Ros Time: "<<ros::Time::now()<<"\t UV_O Time: "<<UV_O.stamp_<<endl;
+    enable_manualtargetretrieval = true;
+    //Open the gripper :
+    if(parserinstance)
+    {
+      parserinstance->grip(-1);
+      timer_relaxgrip.setPeriod(ros::Duration(1));//2 seconds
+      timer_relaxgrip.start();//Start oneshot timer;
+    }
+    //Set Goal close to Target:
+    goalcount = 40; //Set the goal back to the specified posn smoothly
+    diff_goal = (1.0/double(goalcount))*(-curr_goal + target_object_origin + quadoffset_object);
+//    diff_goal.setValue((-curr_goal[0] + target_object_origin[0])/goalcount, (-curr_goal[1] + target_object_origin[1])/goalcount,(-curr_goal[2] + target_object_origin[2])/goalcount);
+    goaltimer.start();//Redundancy
+  }
+  else
+  {
+    cout<<"Disabling_ManualRetrieval"<<endl;
+    enable_manualtargetretrieval = false;
+
+    center_workspace[2]  = curr_goal[2];//Set same height
+    updategoal_dynreconfig = true;//Set the flag to make sure dynamic reconfigure reads the new goal
+    goalcount = 40; //Set the goal back to the specified posn smoothly
+    diff_goal.setValue((-curr_goal[0] + center_workspace[0])/goalcount, (-curr_goal[1] + center_workspace[1])/goalcount,(-curr_goal[2] + center_workspace[2])/goalcount);
+    goaltimer.start();//Redundancy
+  }
+  //Publish Change of State:
+PUBLISH_TARGET_RETRIEVAL_STATE:
+  rqt_quadcoptergui::GuiStateMessage state_message;
+  state_message.status = enable_manualtargetretrieval;
+  state_message.commponent_id = state_message.manual_targetretrievalstatus;
+  gui_state_publisher_.publish(state_message);
+}
+
+
 inline void OnboardNodeHandler::stateTransitionCameraController(bool state)
 {
   //Testing only Optitrack
@@ -440,7 +489,7 @@ inline void OnboardNodeHandler::stateTransitionTrajectoryTracking(bool state)
 
     center_workspace[2]  = curr_goal[2];//Set same height
     updategoal_dynreconfig = true;//Set the flag to make sure dynamic reconfigure reads the new goal
-    goalcount = 20; //Set the goal back to the specified posn smoothly
+    goalcount = 40; //Set the goal back to the specified posn smoothly
     diff_goal.setValue((-curr_goal[0] + center_workspace[0])/goalcount, (-curr_goal[1] + center_workspace[1])/goalcount,(-curr_goal[2] + center_workspace[2])/goalcount);
     goaltimer.start();//Redundancy
   }
@@ -669,6 +718,10 @@ void OnboardNodeHandler::receiveGuiCommands(const rqt_quadcoptergui::GuiCommandM
   case command_msg.disarm_quad://8
     ROS_INFO("Disarming Quad");
     disarmQuad();
+    break;
+  case command_msg.manual_targetretrievalstatus://9
+    ROS_INFO("Manual Target Retrieval Enable/Disable");
+    stateTransitionManualTargetRetrieval(command_msg.command);
     break;
   }
 }
@@ -1014,14 +1067,17 @@ void OnboardNodeHandler::goaltimerCallback(const ros::TimerEvent &event)
         */
   }
 
-  //Find the object location in local quad frame
+  //Find the object location in local arm frame
   tf::Vector3 target_location;
   if(enable_camctrl)
     target_location = (OBJ_QUAD_stamptransform.getOrigin() + quatRotate(UV_O.getRotation().inverse(),object_markeroffset)) - arm_basewrtquad;
+  else if(enable_manualtargetretrieval)
+    target_location = quatRotate(UV_O.getRotation().inverse(), target_object_origin - UV_O.getOrigin()) - arm_basewrtquad;
+
 
   if(armratecount == armcmdrate)
   {
-    if(enable_logging && enable_camctrl)
+    if(enable_logging && (enable_camctrl || enable_manualtargetretrieval))
     {
       //Logging save to file
       tipfile<<(ros::Time::now().toNSec())<<"\t"<<	tip_position[0]<<"\t"<<tip_position[1]<<"\t"<<tip_position[2]<<"\t"<<target_location[0]<<"\t"<<target_location[1]<<"\t"<<target_location[2]<<"\t"<<actual_armstate[0]<<"\t"<<actual_armstate[1]<<"\t"<<actual_armstate[2]<<"\t"<<actual_armstate[3]<<"\t"<<cmd_armstate[0]<<"\t"<<cmd_armstate[1]<<"\t"<<cmd_armstate[2]<<"\t"<<cmd_armstate[3]<<"\t"<<endl;//Later will change this to include timestamp when the serial data is got in a parallel thread TODO
@@ -1050,7 +1106,9 @@ void OnboardNodeHandler::goaltimerCallback(const ros::TimerEvent &event)
       broadcaster->sendTransform(tf::StampedTransform(goal_frame,ros::Time::now(),UV_O.frame_id_,"goal_posn"));
     }
 
-    if(!enable_joy && enable_camctrl && newcamdata)//only control arm using target etc when camera is enabled and joystick is disabled
+    bool control_arm = (enable_camctrl && newcamdata) || enable_manualtargetretrieval;
+
+    if(!enable_joy && control_arm)//only control arm using target etc when joystick is not enable or manual target is enab or camera is enabled
     {
       if(( armratecount == armcmdrate))//default makes it 50/4 = 12.5Hz
       {
@@ -1083,7 +1141,10 @@ void OnboardNodeHandler::goaltimerCallback(const ros::TimerEvent &event)
 #ifdef LOG_DEBUG
               arm_hardwareinst->foldarm();//Can replace this with oneshot timer if needed TODO
 #endif
-              stateTransitionCameraController(false);
+              if(enable_camctrl)
+                stateTransitionCameraController(false);
+              else if(enable_manualtargetretrieval)
+                stateTransitionManualTargetRetrieval(false);
             }
             else
             {
