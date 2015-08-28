@@ -207,8 +207,8 @@ inline void OnboardNodeHandler::loadParameters()
   }
 
   nh.param<double>("/ctrlr/targetx",target_object_origin[0],0.65);
-  nh.param<double>("/ctrlr/targety",target_object_origin[1],1.3);
-  nh.param<double>("/ctrlr/targetz",target_object_origin[2],1.91);
+  nh.param<double>("/ctrlr/targety",target_object_origin[1],1.9);
+  nh.param<double>("/ctrlr/targetz",target_object_origin[2],1.9);
   nh.param<bool>("/ctrlr/partialcam_control",cam_partialcontrol, true);
   nh.param<bool>("/ctrlr/openloop_mode",openloop_mode,true);
   nh.param<std::string>("/gui/uav_name",uav_name,"pixhawk");
@@ -407,7 +407,8 @@ inline void OnboardNodeHandler::stateTransitionManualTargetRetrieval(bool state)
     }
     //Set Goal close to Target:
     goalcount = 40; //Set the goal back to the specified posn smoothly
-    diff_goal.setValue((-curr_goal[0] + target_object_origin[0])/goalcount, (-curr_goal[1] + target_object_origin[1])/goalcount,(-curr_goal[2] + target_object_origin[2])/goalcount);
+    diff_goal = (1.0/double(goalcount))*(-curr_goal + target_object_origin + quadoffset_object);
+//    diff_goal.setValue((-curr_goal[0] + target_object_origin[0])/goalcount, (-curr_goal[1] + target_object_origin[1])/goalcount,(-curr_goal[2] + target_object_origin[2])/goalcount);
     goaltimer.start();//Redundancy
   }
   else
