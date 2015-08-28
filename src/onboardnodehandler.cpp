@@ -1,5 +1,6 @@
 #include <rqt_quadcoptergui/onboardnodehandler.h>
 #define ARM_ENABLED
+//#define ARM_MOCK_TEST_DEBUG
 
 OnboardNodeHandler::OnboardNodeHandler(ros::NodeHandle &nh_):nh(nh_)
                                                             , broadcaster(new tf::TransformBroadcaster())
@@ -555,7 +556,7 @@ inline void OnboardNodeHandler::stateTransitionJoyControl(bool state)
   else
   {
     enable_joy = false;
-#ifndef LOG_DEBUG
+#ifndef ARM_MOCK_TEST_DEBUG
     start_grabbing = ros::Time::now();//When we enter reachable workspace and disable joy then this should dictates when to start counting timeout for grabbing target
 #endif
   }
@@ -672,7 +673,7 @@ void OnboardNodeHandler::vrpnCallback(const geometry_msgs::TransformStamped::Con
     vrpnfile<<(UV_O.stamp_.toNSec())<<"\t"<<(currframe->transform.translation.x)<<"\t"<<(currframe->transform.translation.y)<<"\t"<<(currframe->transform.translation.z)<<"\t"<<(currframe->transform.rotation.x)<<"\t"<<(currframe->transform.rotation.y)<<"\t"<<(currframe->transform.rotation.z)<<"\t"<<(currframe->transform.rotation.w)<<"\t"<<0<<"\t"<<0<<"\t"<<curr_goal[0]<<"\t"<<curr_goal[1]<<"\t"<<curr_goal[2]<<endl;
   }
 
-#ifndef LOG_DEBUG
+#ifndef ARM_MOCK_TEST_DEBUG
   if(!data.armed)//Once the quadcopter is armed we do not set the goal position to quad's origin, the user will set the goal. But the goal will not move until u set the enable_control The user should not give random goal once it is initialized.
   {
     curr_goal = UV_O.getOrigin();//set the current goal to be same as the quadcopter origin we dont care abt the orientation as of now
@@ -1138,7 +1139,7 @@ void OnboardNodeHandler::goaltimerCallback(const ros::TimerEvent &event)
             if(time_since_grabbing.toSec() > timeout_grabbing)
             {
               //Disable_Camera and fold arm:
-#ifdef LOG_DEBUG
+#ifdef ARM_MOCK_TEST_DEBUG
               arm_hardwareinst->foldarm();//Can replace this with oneshot timer if needed TODO
 #endif
               if(enable_camctrl)
@@ -1159,7 +1160,7 @@ void OnboardNodeHandler::goaltimerCallback(const ros::TimerEvent &event)
               if( (abs(tip_position[0] - armlocaltarget[0])< 0.03) && (abs(tip_position[1] - armlocaltarget[1]) < 0.05) && (abs(tip_position[2] - armlocaltarget[2]) < 0.02) && (!gripped_already))// we will calibrate it better later //Add these as params TODO
               {
                 gripped_already = true;//Stops gripping after once
-                //#ifndef LOG_DEBUG
+                //#ifndef ARM_MOCK_TEST_DEBUG
                 parserinstance->grip(1);//Parser does not control arm directly anymore it only controls gripper
                 //Adding oneshot timer to relax grip
                 timer_grabbing.setPeriod(ros::Duration(2));//5 seconds
@@ -1277,7 +1278,7 @@ void OnboardNodeHandler::goaltimerCallback(const ros::TimerEvent &event)
         if( (abs(tip_position[0] - armlocaltarget[0])< 0.03) && (abs(tip_position[1] - armlocaltarget[1]) < 0.05) && (abs(tip_position[2] - armlocaltarget[2]) < 0.04) && (!gripped_already))// we will calibrate it better later //Add these as params TODO
         {
           gripped_already = true;//Stops gripping after once
-          //#ifndef LOG_DEBUG
+          //#ifndef ARM_MOCK_TEST_DEBUG
           parserinstance->grip(1);//Parser does not control arm directly anymore it only controls gripper
           //Adding oneshot timer to relax grip
           timer_grabbing.setPeriod(ros::Duration(2));//5 seconds
@@ -1436,7 +1437,7 @@ void OnboardNodeHandler::closeAfterGrabbing(const ros::TimerEvent &event)
 #ifdef ARM_ENABLED
   gripped_already = false;//Reset gripped already to false after one trial
 
-#ifdef LOG_DEBUG
+#ifdef ARM_MOCK_TEST_DEBUG
   if(arm_hardwareinst && parserinstance)
   {
     arm_hardwareinst->foldarm();
