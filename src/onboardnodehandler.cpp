@@ -1,6 +1,6 @@
 #include <rqt_quadcoptergui/onboardnodehandler.h>
 #define ARM_ENABLED
-//#define ARM_MOCK_TEST_DEBUG
+#define ARM_MOCK_TEST_DEBUG
 
 OnboardNodeHandler::OnboardNodeHandler(ros::NodeHandle &nh_):nh(nh_)
                                                             , broadcaster(new tf::TransformBroadcaster())
@@ -152,11 +152,6 @@ inline void OnboardNodeHandler::setupMemberVariables()
   //object_markeroffset = tf::Vector3(0,0.08,-0.18);
   //object_markeroffset = tf::Vector3(0,0.05,-0.25);
   object_markeroffset = tf::Vector3(0,0.0,-0.2);//relative to the camera markers in Optitrack frame //For full camera control this SHOULD BE IN Object/Inertial Frame
-  //-0.07 was prev guess
-
-  quadoffset_object = tf::Vector3(0, -0.63, 0.05);//Where the quadcopter should stay relative to the markers This is manually adjusted based on the accuracy of the quadcopter
-
-  arm_basewrtquad.setValue(0.0732, 0, -0.1);
 
 	curr_goal = tf::Vector3(0,0,0);//Initial current goal
 
@@ -210,6 +205,17 @@ inline void OnboardNodeHandler::loadParameters()
   nh.param<double>("/ctrlr/targetx",target_object_origin[0],0.65);
   nh.param<double>("/ctrlr/targety",target_object_origin[1],1.9);
   nh.param<double>("/ctrlr/targetz",target_object_origin[2],1.9);
+
+  //Where the arm base is in quadcopter's frame Orientations are assumed to be known #TODO Add them as a paremeter too
+  nh.param<double>("/ctrlr/armbasewrtquadx",arm_basewrtquad[0],0.0732);
+  nh.param<double>("/ctrlr/armbasewrtquady",arm_basewrtquad[1], 0.0);
+  nh.param<double>("/ctrlr/armbasewrtquadx",arm_basewrtquad[2], -0.07);//was -0.1
+
+  //Where the quadcopter should stay relative to the markers This is manually adjusted based on the accuracy of the quadcopter
+  nh.param<double>("/ctrlr/quadoffsetobjectx",quadoffset_object[0],0); 
+  nh.param<double>("/ctrlr/quadoffsetobjecty",quadoffset_object[1],-0.63);
+  nh.param<double>("/ctrlr/quadoffsetobjectz",quadoffset_object[2],0.05);
+
   nh.param<bool>("/ctrlr/partialcam_control",cam_partialcontrol, true);
   nh.param<bool>("/ctrlr/openloop_mode",openloop_mode,true);
   nh.param<std::string>("/gui/uav_name",uav_name,"pixhawk");
@@ -677,6 +683,7 @@ void OnboardNodeHandler::vrpnCallback(const geometry_msgs::TransformStamped::Con
   if(!data.armed)//Once the quadcopter is armed we do not set the goal position to quad's origin, the user will set the goal. But the goal will not move until u set the enable_control The user should not give random goal once it is initialized.
   {
     curr_goal = UV_O.getOrigin();//set the current goal to be same as the quadcopter origin we dont care abt the orientation as of now
+    goalcount = 0;
     ctrlrinst->setgoal(curr_goal[0],curr_goal[1],curr_goal[2],goalyaw);//Set the goal to be same as the current position of the quadcopter the velgoal is by default 0
   }
 #endif
@@ -1403,7 +1410,11 @@ void OnboardNodeHandler::quadstatetimerCallback(const ros::TimerEvent &event)
     vrpn_rpy_pub_.publish(rpymsg);
   }
   tf::Vector3 quadorigin = UV_O.getOrigin();
-  tf::Vector3 obj_origin = OBJ_QUAD_stamptransform.getOrigin();
+  tf::Vector3 obj_origin;
+  if(enable_camctrl)
+    obj_origin = OBJ_QUAD_stamptransform.getOrigin();
+  else if(enable_manualtargetretrieval)
+    obj_origin = quatRotate(UV_O.getRotation().inverse(), target_object_origin - UV_O.getOrigin());
   // Create a Text message based on the data from the Parser class
   sprintf(buffer,
           "Battery Percent: %2.2f\t\nTemperature: %2.2f\tPressure: %2.2f\tWindspeed: %2.2f\tAltitude: %2.2f\t\nRoll: %2.2f\tPitch %2.2f\tYaw %2.2f\nMagx: %2.2f\tMagy %2.2f\tMagz %2.2f\naccx: %2.2f\taccy %2.2f\taccz %2.2f\nvelx: %2.2f\tvely %2.2f\tvelz %2.2f\nposx: %2.2f\tposy: %2.2f\tposz: %2.2f\nvrpnr: %2.2f\tvrpnp: %2.2f\tvrpny: %2.2f\nErrorr: %2.2f\tErrorrp: %2.2f\tErrory: %2.2f\nresr: %2.2f\tresp: %2.2f\tresy: %2.2f\trest: %2.2f\nbias_roll: %2.2f\tbias_pitch: %2.2f\tbias_yaw: %2.2f\nObjx: %2.2f\tObjy: %2.2f\tObjz: %2.2f\t\nTipx: %2.2f\tTipy: %2.2f\tTipz: %2.2f\t\nMass: %2.2f\tTimestamp: %2.2f\t\nQuadState: %s",

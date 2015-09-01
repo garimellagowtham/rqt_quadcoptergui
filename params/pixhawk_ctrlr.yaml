@@ -12,9 +12,15 @@ ctrlr/kdt: 1.0
 ctrlr/throtbound: 0.5
 ctrlr/rpbound: 20
 ctrlr/cmdrate_throttle: 2
+
 ctrlr/targetx: 1.63
 ctrlr/targety: 0.7834
 ctrlr/targetz: 1.26
+
+ctrlr/quadoffsetobjectx: 0
+ctrlr/quadoffsetobjecty: -0.63
+ctrlr/quadoffsetobjectz: 0.05
+
 ctrlr/partialcam_control: true
 ctrlr/timeout_grabbing: 20
 ctrlr/openloop_mode: true
