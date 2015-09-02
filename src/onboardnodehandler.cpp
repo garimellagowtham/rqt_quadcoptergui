@@ -1,6 +1,6 @@
 #include <rqt_quadcoptergui/onboardnodehandler.h>
 #define ARM_ENABLED
-#define ARM_MOCK_TEST_DEBUG
+//#define ARM_MOCK_TEST_DEBUG
 
 OnboardNodeHandler::OnboardNodeHandler(ros::NodeHandle &nh_):nh(nh_)
                                                             , broadcaster(new tf::TransformBroadcaster())
@@ -168,8 +168,8 @@ inline void OnboardNodeHandler::setupMemberVariables()
   jointstate_msg.name.push_back("link1tolink2");//Initialization
 
   // Prepare Iteration request:
-  itrq.x0.statevector.resize(2*NOFJOINTS);
-  itrq.xf.statevector.resize(2*NOFJOINTS);
+  itrq.x0.statevector.resize(2*NOFJOINTS, 0);
+  itrq.xf.statevector.resize(2*NOFJOINTS, 0);
   itrq.xf.basetwist.linear.x = 0; itrq.xf.basetwist.linear.y = 0; itrq.xf.basetwist.linear.z = 0;
   itrq.xf.basetwist.angular.x = 0; itrq.xf.basetwist.angular.y = 0; itrq.xf.basetwist.angular.z = 0;
 
@@ -209,7 +209,7 @@ inline void OnboardNodeHandler::loadParameters()
   //Where the arm base is in quadcopter's frame Orientations are assumed to be known #TODO Add them as a paremeter too
   nh.param<double>("/ctrlr/armbasewrtquadx",arm_basewrtquad[0],0.0732);
   nh.param<double>("/ctrlr/armbasewrtquady",arm_basewrtquad[1], 0.0);
-  nh.param<double>("/ctrlr/armbasewrtquadx",arm_basewrtquad[2], -0.07);//was -0.1
+  nh.param<double>("/ctrlr/armbasewrtquadz",arm_basewrtquad[2], -0.07);//was -0.1
 
   //Where the quadcopter should stay relative to the markers This is manually adjusted based on the accuracy of the quadcopter
   nh.param<double>("/ctrlr/quadoffsetobjectx",quadoffset_object[0],0); 
@@ -272,8 +272,8 @@ inline bool OnboardNodeHandler::createArmInstance()
 {
   arminst.reset(new gcop::Arm);
   arminst->l1 = 0.175;
-  //arminst->l2 = 0.35;
-  arminst->l2 = 0.42;
+  arminst->l2 = 0.35;
+  //arminst->l2 = 0.42;
   arminst->x1 = 0.025;//Need to change this after measuring again TODO
   return true;
 }
@@ -1076,12 +1076,22 @@ void OnboardNodeHandler::goaltimerCallback(const ros::TimerEvent &event)
   }
 
   //Find the object location in local arm frame
-  tf::Vector3 target_location;
+  tf::Vector3 target_location(0,0,0);
   if(enable_camctrl)
     target_location = (OBJ_QUAD_stamptransform.getOrigin() + quatRotate(UV_O.getRotation().inverse(),object_markeroffset)) - arm_basewrtquad;
   else if(enable_manualtargetretrieval)
     target_location = quatRotate(UV_O.getRotation().inverse(), target_object_origin - UV_O.getOrigin()) - arm_basewrtquad;
 
+  {
+    static ros::Publisher tip_pub = nh.advertise<geometry_msgs::Vector3>("/tip", 10);
+    static ros::Publisher localtarget_pub = nh.advertise<geometry_msgs::Vector3>("/localtarget", 10);
+    geometry_msgs::Vector3 msg;
+    tf::vector3TFToMsg(target_location, msg);
+    localtarget_pub.publish(msg);
+    msg.x = tip_position[0]; msg.y = tip_position[1];  msg.z = tip_position[2];
+    tip_pub.publish(msg);
+  }
+  
 
   if(armratecount == armcmdrate)
   {
@@ -1161,9 +1171,6 @@ void OnboardNodeHandler::goaltimerCallback(const ros::TimerEvent &event)
               //Check if the tip is on the object:
               //double abssum_error = abs(tip_position[0] - armlocaltarget[0]) + abs(tip_position[1] - armlocaltarget[1]) + abs(tip_position[2] - armlocaltarget[2]);
               //[DEBUG]
-              cout<<"Error in tip position: EX ["<<(tip_position[0] - armlocaltarget[0])<<"] EY ["<<(tip_position[1] - armlocaltarget[1])<<"] EZ ["<<(tip_position[2] - armlocaltarget[2])<<"]"<<endl;
-              cout<<"tip position: TX ["<<(tip_position[0])<<"] TY ["<<(tip_position[1])<<"] TZ ["<<(tip_position[2])<<"]"<<endl;
-              cout<<"Local Target: LX ["<<(armlocaltarget[0])<<"] LY ["<<( armlocaltarget[1])<<"] LZ ["<<(armlocaltarget[2])<<"]"<<endl;
               if( (abs(tip_position[0] - armlocaltarget[0])< 0.03) && (abs(tip_position[1] - armlocaltarget[1]) < 0.05) && (abs(tip_position[2] - armlocaltarget[2]) < 0.02) && (!gripped_already))// we will calibrate it better later //Add these as params TODO
               {
                 gripped_already = true;//Stops gripping after once
@@ -1228,8 +1235,11 @@ void OnboardNodeHandler::goaltimerCallback(const ros::TimerEvent &event)
           goalstate.basetwist.angular.x = 0;
           goalstate.basetwist.angular.y = 0;
           goalstate.basetwist.angular.z = 0;
-          goalstate.statevector[0] = itrq.xf.statevector[0];
-          goalstate.statevector[1] = itrq.xf.statevector[1];
+          if(goalstate.statevector.size() == 2)
+          {
+            goalstate.statevector[0] = itrq.xf.statevector[0];
+            goalstate.statevector[1] = itrq.xf.statevector[1];
+          }
           ///////////////		goalstate.basepose.translation.y = 1.3;//Just a hack for now
           //////////////    goalstate.basepose.translation.z = 1.87;//Just a hack for now
         }
@@ -1244,12 +1254,15 @@ void OnboardNodeHandler::goaltimerCallback(const ros::TimerEvent &event)
         //Convert the angles into right frame i.e when all as zero that means the arm is perpendicular and facing down
         if(!enable_joy)
         {
-          cout<<"Publishing arm state: "<<goalstate.statevector[0]<<"\t"<<goalstate.statevector[1]<<"\t"<<goalstate.statevector[2]<<"\t"<<goalstate.statevector[3]<<endl;
-          cmd_armstate[0] = goalstate.statevector[0]>(-M_PI/2)?goalstate.statevector[0]-M_PI/2:goalstate.statevector[0]+1.5*M_PI;
-          cmd_armstate[1] = goalstate.statevector[1];//Relative angle wrt to first joint no transformation needed
-          cmd_armstate[2] = gcop_trajectory.statemsg[nearest_index_gcoptime-1].statevector[2];//Velocities for arm should be from the previous state
-          cmd_armstate[3] = gcop_trajectory.statemsg[nearest_index_gcoptime-1].statevector[3];
-          arm_hardwareinst->setarmstate(cmd_armstate);//Only using the angles with speed being constant Trial 1 In trial 2 we will try with setting velocities also
+          if(goalstate.statevector.size() == 2)
+          {
+            cout<<"Publishing arm state: "<<goalstate.statevector[0]<<"\t"<<goalstate.statevector[1]<<"\t"<<goalstate.statevector[2]<<"\t"<<goalstate.statevector[3]<<endl;
+            cmd_armstate[0] = goalstate.statevector[0]>(-M_PI/2)?goalstate.statevector[0]-M_PI/2:goalstate.statevector[0]+1.5*M_PI;
+            cmd_armstate[1] = goalstate.statevector[1];//Relative angle wrt to first joint no transformation needed
+            cmd_armstate[2] = gcop_trajectory.statemsg[nearest_index_gcoptime-1].statevector[2];//Velocities for arm should be from the previous state
+            cmd_armstate[3] = gcop_trajectory.statemsg[nearest_index_gcoptime-1].statevector[3];
+            arm_hardwareinst->setarmstate(cmd_armstate);//Only using the angles with speed being constant Trial 1 In trial 2 we will try with setting velocities also
+          }
         }
 #endif
 
@@ -1276,22 +1289,25 @@ void OnboardNodeHandler::goaltimerCallback(const ros::TimerEvent &event)
       else
       {
 #ifdef ARM_ENABLED
-        //tf::Vector3 target_location = (OBJ_QUAD_stamptransform.getOrigin() + quatRotate(UV_O.getRotation().inverse(),object_armoffset)) - arm_basewrtquad;//Find the object location in local quad frame
-        armlocaltarget[0] = target_location[0]; armlocaltarget[1] = target_location[1]; armlocaltarget[2] = target_location[2];
-        ////////Grabbing Target Code //////////////////
-        cout<<"Error in tip position: EX ["<<(tip_position[0] - armlocaltarget[0])<<"] EY ["<<(tip_position[1] - armlocaltarget[1])<<"] EZ ["<<(tip_position[2] - armlocaltarget[2])<<"]"<<endl;
-        cout<<"tip position: TX ["<<(tip_position[0])<<"] TY ["<<(tip_position[1])<<"] TZ ["<<(tip_position[2])<<"]"<<endl;
-        cout<<"Local Target: LX ["<<(armlocaltarget[0])<<"] LY ["<<( armlocaltarget[1])<<"] LZ ["<<(armlocaltarget[2])<<"]"<<endl;
-        if( (abs(tip_position[0] - armlocaltarget[0])< 0.03) && (abs(tip_position[1] - armlocaltarget[1]) < 0.05) && (abs(tip_position[2] - armlocaltarget[2]) < 0.04) && (!gripped_already))// we will calibrate it better later //Add these as params TODO
+        if(!enable_joy)
         {
-          gripped_already = true;//Stops gripping after once
-          //#ifndef ARM_MOCK_TEST_DEBUG
-          parserinstance->grip(1);//Parser does not control arm directly anymore it only controls gripper
-          //Adding oneshot timer to relax grip
-          timer_grabbing.setPeriod(ros::Duration(2));//5 seconds
-          timer_grabbing.start();//Start oneshot timer;
-          //#endif
-          return;
+          //tf::Vector3 target_location = (OBJ_QUAD_stamptransform.getOrigin() + quatRotate(UV_O.getRotation().inverse(),object_armoffset)) - arm_basewrtquad;//Find the object location in local quad frame
+          armlocaltarget[0] = target_location[0]; armlocaltarget[1] = target_location[1]; armlocaltarget[2] = target_location[2];
+          ////////Grabbing Target Code //////////////////
+          cout<<"Error in tip position: EX ["<<(tip_position[0] - armlocaltarget[0])<<"] EY ["<<(tip_position[1] - armlocaltarget[1])<<"] EZ ["<<(tip_position[2] - armlocaltarget[2])<<"]"<<endl;
+          cout<<"tip position: TX ["<<(tip_position[0])<<"] TY ["<<(tip_position[1])<<"] TZ ["<<(tip_position[2])<<"]"<<endl;
+          cout<<"Local Target: LX ["<<(armlocaltarget[0])<<"] LY ["<<( armlocaltarget[1])<<"] LZ ["<<(armlocaltarget[2])<<"]"<<endl;
+          if( (abs(tip_position[0] - armlocaltarget[0])< 0.03) && (abs(tip_position[1] - armlocaltarget[1]) < 0.05) && (abs(tip_position[2] - armlocaltarget[2]) < 0.04) && (!gripped_already))// we will calibrate it better later //Add these as params TODO
+          {
+            gripped_already = true;//Stops gripping after once
+            //#ifndef ARM_MOCK_TEST_DEBUG
+            parserinstance->grip(1);//Parser does not control arm directly anymore it only controls gripper
+            //Adding oneshot timer to relax grip
+            timer_grabbing.setPeriod(ros::Duration(2));//5 seconds
+            timer_grabbing.start();//Start oneshot timer;
+            //#endif
+            return;
+          }
         }
 #endif
         //////////End Grabbing Code ///////////////////
