@@ -218,6 +218,8 @@ inline void OnboardNodeHandler::loadParameters()
 
   nh.param<bool>("/ctrlr/partialcam_control",cam_partialcontrol, true);
   nh.param<bool>("/ctrlr/openloop_mode",openloop_mode,true);
+  nh.param<bool>("/ctrlr/gripper_control",gripper_control,false);
+
   nh.param<std::string>("/gui/uav_name",uav_name,"pixhawk");
   nh.param<bool>("/gui/reset_imu",reset_imu,false);
   nh.param<bool>("/gui/test_ctrlr",testctrlr,true);
@@ -1158,6 +1160,9 @@ void OnboardNodeHandler::goaltimerCallback(const ros::TimerEvent &event)
               //Disable_Camera and fold arm:
 #ifdef ARM_MOCK_TEST_DEBUG
               arm_hardwareinst->foldarm();//Can replace this with oneshot timer if needed TODO
+#else
+              if(!gripper_control)
+                arm_hardwareinst->foldarm();
 #endif
               if(enable_camctrl)
                 stateTransitionCameraController(false);
@@ -1235,11 +1240,18 @@ void OnboardNodeHandler::goaltimerCallback(const ros::TimerEvent &event)
           goalstate.basetwist.angular.x = 0;
           goalstate.basetwist.angular.y = 0;
           goalstate.basetwist.angular.z = 0;
-          if(goalstate.statevector.size() == 2)
+          if(!gripper_control)
+          {
+            parserinstance->grip(-1);//Release The Object
+            timer_relaxgrip.setPeriod(ros::Duration(1));//2 seconds
+            timer_relaxgrip.start();//Start oneshot timer;
+          }
+          /*if(goalstate.statevector.size() == 2)
           {
             goalstate.statevector[0] = itrq.xf.statevector[0];
             goalstate.statevector[1] = itrq.xf.statevector[1];
           }
+          */
           ///////////////		goalstate.basepose.translation.y = 1.3;//Just a hack for now
           //////////////    goalstate.basepose.translation.z = 1.87;//Just a hack for now
         }
@@ -1261,7 +1273,7 @@ void OnboardNodeHandler::goaltimerCallback(const ros::TimerEvent &event)
             cmd_armstate[1] = goalstate.statevector[1];//Relative angle wrt to first joint no transformation needed
             cmd_armstate[2] = gcop_trajectory.statemsg[nearest_index_gcoptime-1].statevector[2];//Velocities for arm should be from the previous state
             cmd_armstate[3] = gcop_trajectory.statemsg[nearest_index_gcoptime-1].statevector[3];
-            arm_hardwareinst->setarmstate(cmd_armstate);//Only using the angles with speed being constant Trial 1 In trial 2 we will try with setting velocities also
+            arm_hardwareinst->setarmstate(cmd_armstate);
           }
         }
 #endif
@@ -1289,7 +1301,7 @@ void OnboardNodeHandler::goaltimerCallback(const ros::TimerEvent &event)
       else
       {
 #ifdef ARM_ENABLED
-        if(!enable_joy)
+        if(!enable_joy && gripper_control)
         {
           //tf::Vector3 target_location = (OBJ_QUAD_stamptransform.getOrigin() + quatRotate(UV_O.getRotation().inverse(),object_armoffset)) - arm_basewrtquad;//Find the object location in local quad frame
           armlocaltarget[0] = target_location[0]; armlocaltarget[1] = target_location[1]; armlocaltarget[2] = target_location[2];

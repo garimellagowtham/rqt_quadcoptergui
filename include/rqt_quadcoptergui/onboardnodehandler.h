@@ -113,6 +113,7 @@ protected:
     int armcmdrate;///< Factor by which arm command rate slows down
     int armratecount;///< Variable used to count upto armcmdrate
     bool gripped_already; ///< Used to avoid restarting the timer if it already gripped the target once just waits for 5 secs before returning
+    bool gripper_control; ///< If Enabled will try to pickup object at end of trajectory. Otherwise releases gripper at the end of trajectory (For Placing)
     ros::Time start_grabbing;///< Time when we start grabbing the object
     char buffer[1500];//buffer for creating Text data
     ros::Timer timer_grabbing;//Used to fold arm and set gripper to neutral after grabbing
