@@ -270,13 +270,39 @@ void QuadcopterGui::loadTrajectory()
     std::cerr<<"Cannot Open File"<<trajectory_file_name<<std::endl;
     return;
   }
-  //Ignore First line:
-  ifile.ignore(1000,'\n');//Wait till new line
-  //File should have t, traj_x,y,z, yaw; traj_vx,vy,vz in global frame;
+  //Read First line into a string
+  std::string first_line;
+  std::getline(ifile, first_line, '\n');
+  bool armdata_provided = false;
+  //Check what is the Format of the file:
+  {
+    std::stringstream fin(first_line);
+    std::string word;
+    int count = 0;
+    while(fin>>word)
+    {
+      count++;
+      //DEBUG
+      std::cout<<"Word: "<<word<<std::endl;
+    }
+    //DEBUG:
+    std::cout<<"Number of Words in First Line" <<count<<std::endl;
+    if(count ==8)
+      armdata_provided = false;
+    else if(count == 12)
+      armdata_provided = true;
+    else
+    {
+      std::cerr<<"Unknown File Header!"<<std::endl;
+      return;
+    }
+  }
+  //File should have t, traj_x,y,z, yaw; traj_vx,vy,vz in global frame (Optionally Arm Joint Angles and Velocities);
   quadcopter_trajectory.reset(new gcop_comm::CtrlTraj());
   
   gcop_comm::State desired_state;
-  geometry_msgs::Point pt;
+  if(armdata_provided)
+    desired_state.statevector.resize(4);
   quadcopter_trajectory->N = -1;
   //Get Current Goal from reconfig params
   double xg = 0, yg = 0, zg = 0, yawg = 0;
@@ -285,10 +311,13 @@ void QuadcopterGui::loadTrajectory()
   ros::param::get("/onboard_node/zg",zg);
   ros::param::get("/onboard_node/yawg",yawg);
   double data[8];
+  double armdata[4];
   while(1)
   {
     //While EOF has not been reached:
     ifile>>data[0]>>data[1]>>data[2]>>data[3]>>data[4]>>data[5]>>data[6]>>data[7];
+    if(armdata_provided)
+      ifile>>armdata[0]>>armdata[1]>>armdata[2]>>armdata[3];
     if(ifile.eof())//Break if EOF is reached
     {
       ROS_INFO("EOF Reached!");
@@ -306,6 +335,13 @@ void QuadcopterGui::loadTrajectory()
     desired_state.basetwist.linear.x = data[5];
     desired_state.basetwist.linear.y = data[6];
     desired_state.basetwist.linear.z = data[7];
+    if(armdata_provided)
+    {
+      desired_state.statevector[0] = armdata[0];
+      desired_state.statevector[1] = armdata[1];
+      desired_state.statevector[2] = armdata[2];
+      desired_state.statevector[3] = armdata[3];
+    }
     quadcopter_trajectory->statemsg.push_back(desired_state);
   }
   ifile.close();
