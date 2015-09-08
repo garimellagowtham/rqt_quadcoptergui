@@ -1246,7 +1246,7 @@ void OnboardNodeHandler::goaltimerCallback(const ros::TimerEvent &event)
             timer_relaxgrip.setPeriod(ros::Duration(1));//2 seconds
             timer_relaxgrip.start();//Start oneshot timer;
           }
-          /*if(goalstate.statevector.size() == 2)
+          /*if(goalstate.statevector.size() == 2*NOFJOINTS)
           {
             goalstate.statevector[0] = itrq.xf.statevector[0];
             goalstate.statevector[1] = itrq.xf.statevector[1];
@@ -1266,7 +1266,7 @@ void OnboardNodeHandler::goaltimerCallback(const ros::TimerEvent &event)
         //Convert the angles into right frame i.e when all as zero that means the arm is perpendicular and facing down
         if(!enable_joy)
         {
-          if(goalstate.statevector.size() == 2)
+          if(goalstate.statevector.size() == 2*NOFJOINTS)
           {
             cout<<"Publishing arm state: "<<goalstate.statevector[0]<<"\t"<<goalstate.statevector[1]<<"\t"<<goalstate.statevector[2]<<"\t"<<goalstate.statevector[3]<<endl;
             cmd_armstate[0] = goalstate.statevector[0]>(-M_PI/2)?goalstate.statevector[0]-M_PI/2:goalstate.statevector[0]+1.5*M_PI;
