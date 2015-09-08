@@ -324,7 +324,15 @@ void QuadcopterGui::loadTrajectory()
       break;
     }
     //Printing File for DEBUG
-    std::cout<<data[0]<<"\t"<<data[1]<<"\t"<<data[2]<<"\t"<<data[3]<<"\t"<<data[4]<<"\t"<<data[5]<<"\t"<<data[6]<<"\t"<<data[7]<<std::endl;
+    std::cout<<data[0]<<"\t"<<data[1]<<"\t"<<data[2]<<"\t"<<data[3]<<"\t"<<data[4]<<"\t"<<data[5]<<"\t"<<data[6]<<"\t"<<data[7];
+    if(armdata_provided)
+    {
+      std::cout<<"\t"<<armdata[0]<<"\t"<<armdata[1]<<"\t"<<armdata[2]<<"\t"<<armdata[3]<<std::endl;
+    }
+    else
+    {
+      std::cout<<std::endl;
+    }
     quadcopter_trajectory->time.push_back(data[0]);
     quadcopter_trajectory->N++;
     //State:
