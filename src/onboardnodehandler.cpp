@@ -1161,7 +1161,7 @@ void OnboardNodeHandler::goaltimerCallback(const ros::TimerEvent &event)
 #ifdef ARM_MOCK_TEST_DEBUG
               arm_hardwareinst->foldarm();//Can replace this with oneshot timer if needed TODO
 #else
-              if(!gripper_control)
+              if(!gripper_control && arm_hardwareinst)
                 arm_hardwareinst->foldarm();
 #endif
               if(enable_camctrl)
@@ -1246,6 +1246,8 @@ void OnboardNodeHandler::goaltimerCallback(const ros::TimerEvent &event)
             timer_relaxgrip.setPeriod(ros::Duration(1));//2 seconds
             timer_relaxgrip.start();//Start oneshot timer;
           }
+          //Also set the grabbing start time to new posn as soon as we command:
+          start_grabbing = ros::Time::now() + ros::Duration(gcop_trajectory.time[gcop_trajectory.N] - gcop_trajectory.time[gcop_trajectory.N-1]);
           /*if(goalstate.statevector.size() == 2*NOFJOINTS)
           {
             goalstate.statevector[0] = itrq.xf.statevector[0];
@@ -1284,18 +1286,18 @@ void OnboardNodeHandler::goaltimerCallback(const ros::TimerEvent &event)
         goal_frame.setOrigin(curr_goal);
         broadcaster->sendTransform(tf::StampedTransform(goal_frame,ros::Time::now(),UV_O.frame_id_,"goal_posn"));
 
-        //Also set the grabbing start time to new posn as soon as we command:
-        start_grabbing = ros::Time::now();
       }
       //[DEBUG] cout<<"Nearest Index, Time offset: "<<nearest_index_gcoptime<<"\t"<<time_offset<<endl;
 
 
       ///////////////Logic for Gripper Control and timeout
       ros::Duration time_since_grabbing = ros::Time::now() - start_grabbing;
-      if(time_since_grabbing.toSec() > timeout_grabbing)
+      if((time_since_grabbing.toSec() > timeout_grabbing) && (nearest_index_gcoptime == gcop_trajectory.N))
       {
         //Disable_Camera and fold arm:
         cout<<"Timeout Done"<<endl;
+        if(!gripper_control && arm_hardwareinst)
+          arm_hardwareinst->foldarm();
         stateTransitionCameraController(false);
       }
       else

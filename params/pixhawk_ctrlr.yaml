@@ -25,5 +25,7 @@ ctrlr/quadoffsetobjectz: 0.05
 ctrlr/armbasewrtquadz: -0.07
 
 ctrlr/partialcam_control: true
-ctrlr/timeout_grabbing: 10
+ctrlr/timeout_grabbing: 2
 ctrlr/openloop_mode: true
+
+ctrlr/gripper_control: false #If True will try to pickup an object otherwise just releases the gripper at the end of Trajectory
