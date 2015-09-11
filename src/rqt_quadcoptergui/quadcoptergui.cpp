@@ -87,6 +87,31 @@ void QuadcopterGui::initPlugin(qt_gui_cpp::PluginContext& context)
 
   gcop_trajectory_publisher_ = nh.advertise<gcop_comm::CtrlTraj>("/mbsddp/traj_resp",10);
 
+  workspace_marker_publisher_ = nh.advertise<visualization_msgs::Marker>("/workspace",1, true);
+
+  //Create and Publish workspace marker:
+  visualization_msgs::Marker workspace_marker;
+  tf::Vector3 workspacedims, center_workspace;
+  ros::param::get("/vrpn/workspacex", workspace_marker.scale.x);
+  ros::param::get("/vrpn/workspacey", workspace_marker.scale.y);
+  ros::param::get("/vrpn/workspacez", workspace_marker.scale.z);
+  ros::param::get("/vrpn/center_workspacex", workspace_marker.pose.position.x);
+  ros::param::get("/vrpn/center_workspacey", workspace_marker.pose.position.y);
+  ros::param::get("/vrpn/center_workspacez", workspace_marker.pose.position.z);
+
+  //Set necessary default initializations:
+  workspace_marker.header.frame_id = "/optitrak";
+  workspace_marker.action = visualization_msgs::Marker::ADD;
+  workspace_marker.pose.orientation.w = 1.0;
+  workspace_marker.ns = "trajectory";
+  workspace_marker.id = 1;
+  workspace_marker.type = visualization_msgs::Marker::CUBE;
+  workspace_marker.color.r = 1.0;
+  workspace_marker.color.a = 0.2;
+
+  workspace_marker_publisher_.publish(workspace_marker);
+
+
   //Create Visualizer:
   gcop_trajectory_visualizer_.reset(new GcopTrajectoryVisualizer(nh));
 

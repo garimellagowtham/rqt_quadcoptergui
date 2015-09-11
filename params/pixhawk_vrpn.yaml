@@ -31,3 +31,9 @@ vrpn/centery: 0.7
 #bias_vrpnx: -0.07
 #bias_vrpny: -0.12
 #bias_rateyaw: -0.0121
+vrpn/workspacex: 2.6
+vrpn/workspacey: 2.2
+vrpn/workspacez: 2.2
+vrpn/center_workspacex: 0.555
+vrpn/center_workspacey: 0.838
+vrpn/center_workspacez: 1.1

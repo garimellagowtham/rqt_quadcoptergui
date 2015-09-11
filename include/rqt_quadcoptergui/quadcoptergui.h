@@ -112,6 +112,7 @@ protected:
   //Publisher:
   ros::Publisher gui_command_publisher_;
   ros::Publisher gcop_trajectory_publisher_;
+  ros::Publisher workspace_marker_publisher_;
 
   ////Helper Variables
   QMutex qgui_mutex_;//Mutex for refreshing states
