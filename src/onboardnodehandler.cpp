@@ -1402,11 +1402,17 @@ void OnboardNodeHandler::quadstatetimerCallback(const ros::TimerEvent &event)
     //Find IMU Offset first
     if(count_imu < 10)
     {
-      imu_vrpndiff = (1.0/double(count_imu+1))*(double(count_imu)*imu_vrpndiff + tf::Vector3((vrpnrpy[0] - data.rpydata.x),(vrpnrpy[1] - data.rpydata.y),(vrpnrpy[2] - data.rpydata.z)));
+      tf::Matrix3x3 vrpnrotmat = UV_O.getBasis();
+      tf::Matrix3x3 imurotmat;
+      imurotmat.setEulerYPR(data.rpydata.z, data.rpydata.y, data.rpydata.x);
+      tf::Matrix3x3 imu_vrpnrotmat = vrpnrotmat.transposeTimes(imurotmat);//VRPN To IMU Frame
+      tf::Vector3 imu_vrpndiff_sample;
+      imu_vrpnrotmat.getEulerYPR(imu_vrpndiff_sample[2],imu_vrpndiff_sample[1],imu_vrpndiff_sample[0]);
+
+      imu_vrpndiff = (1.0/double(count_imu+1))*(double(count_imu)*imu_vrpndiff + imu_vrpndiff_sample);
       count_imu++;
       ROS_INFO("Imu Offset: %f,%f,%f\t IMU: %f,%f,%f\t VRPNRPY: %f,%f,%f", imu_vrpndiff[0]*(180.0/M_PI), imu_vrpndiff[1]*(180.0/M_PI), imu_vrpndiff[2]*(180.0/M_PI), data.rpydata.x*(180.0/M_PI), data.rpydata.y*(180.0/M_PI), data.rpydata.z*(180.0/M_PI), vrpnrpy[0]*(180.0/M_PI), vrpnrpy[1]*(180.0/M_PI), vrpnrpy[2]*(180.0/M_PI));
-      //ROS_INFO("Imu Offset: %f,%f,%f\t IMU: %f,%f,%f\t VRPNRPY: %f,%f,%f", imu_vrpndiff[0], imu_vrpndiff[1], imu_vrpndiff[2], data.rpydata.x, data.rpydata.y, data.rpydata.z, vrpnrpy[0], vrpnrpy[1], vrpnrpy[2]);
-      prev_imurpy = data.rpydata;
+      imu_vrpnrotmat_avg.setEulerYPR(imu_vrpndiff[2], imu_vrpndiff[1], imu_vrpndiff[0]);
     }
     else
     {
@@ -1414,7 +1420,12 @@ void OnboardNodeHandler::quadstatetimerCallback(const ros::TimerEvent &event)
       {
         if(reset_imu)
         {
-          parserinstance->reset_attitude(vrpnrpy[0]-imu_vrpndiff[0], vrpnrpy[1]-imu_vrpndiff[1], vrpnrpy[2]-imu_vrpndiff[2]);
+          tf::Vector3 imu_rpy;
+          tf::Matrix3x3 imu_mat = UV_O.getBasis();
+          imu_mat *= imu_vrpnrotmat_avg;//Conver to IMU Frame
+          imu_mat.getEulerYPR(imu_rpy[2], imu_rpy[1], imu_rpy[0]);
+          parserinstance->reset_attitude(imu_rpy[0], imu_rpy[1], imu_rpy[2]);
+          //ROS_INFO("IMU RPY: %f,%f,%f", imu_rpy[0]*(180/M_PI), imu_rpy[1]*(180/M_PI), imu_rpy[2]*(180/M_PI));
         }
       }
     }
