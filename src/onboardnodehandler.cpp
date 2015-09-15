@@ -1,5 +1,5 @@
 #include <rqt_quadcoptergui/onboardnodehandler.h>
-#define ARM_ENABLED
+//#define ARM_ENABLED
 //#define ARM_MOCK_TEST_DEBUG
 
 OnboardNodeHandler::OnboardNodeHandler(ros::NodeHandle &nh_):nh(nh_)
@@ -1159,7 +1159,8 @@ void OnboardNodeHandler::goaltimerCallback(const ros::TimerEvent &event)
             {
               //Disable_Camera and fold arm:
 #ifdef ARM_MOCK_TEST_DEBUG
-              arm_hardwareinst->foldarm();//Can replace this with oneshot timer if needed TODO
+              if(arm_hardwareinst)
+                arm_hardwareinst->foldarm();//Can replace this with oneshot timer if needed TODO
 #else
               if(!gripper_control && arm_hardwareinst)
                 arm_hardwareinst->foldarm();
@@ -1187,7 +1188,8 @@ void OnboardNodeHandler::goaltimerCallback(const ros::TimerEvent &event)
                 //#endif
                 return;
               }
-              arm_hardwareinst->setarmangles(cmd_armstate);//Only using the angles with speed being constant
+              if(arm_hardwareinst)
+                arm_hardwareinst->setarmangles(cmd_armstate);//Only using the angles with speed being constant
             }
           }
           else
