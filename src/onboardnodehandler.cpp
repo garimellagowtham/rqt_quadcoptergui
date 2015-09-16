@@ -1460,7 +1460,7 @@ void OnboardNodeHandler::quadstatetimerCallback(const ros::TimerEvent &event)
     obj_origin = quatRotate(UV_O.getRotation().inverse(), target_object_origin - UV_O.getOrigin());
   // Create a Text message based on the data from the Parser class
   sprintf(buffer,
-          "Battery Percent: %2.2f\t\nTemperature: %2.2f\tPressure: %2.2f\tWindspeed: %2.2f\tAltitude: %2.2f\t\nRoll: %2.2f\tPitch %2.2f\tYaw %2.2f\nMagx: %2.2f\tMagy %2.2f\tMagz %2.2f\naccx: %2.2f\taccy %2.2f\taccz %2.2f\nvelx: %2.2f\tvely %2.2f\tvelz %2.2f\nposx: %2.2f\tposy: %2.2f\tposz: %2.2f\nvrpnr: %2.2f\tvrpnp: %2.2f\tvrpny: %2.2f\nErrorr: %2.2f\tErrorrp: %2.2f\tErrory: %2.2f\nresr: %2.2f\tresp: %2.2f\tresy: %2.2f\trest: %2.2f\nbias_roll: %2.2f\tbias_pitch: %2.2f\tbias_yaw: %2.2f\nObjx: %2.2f\tObjy: %2.2f\tObjz: %2.2f\t\nTipx: %2.2f\tTipy: %2.2f\tTipz: %2.2f\t\nMass: %2.2f\tTimestamp: %2.2f\t\nQuadState: %s",
+          "Battery Percent: %2.2f\t\nTemperature: %2.2f\tPressure: %2.2f\tWindspeed: %2.2f\tAltitude: %2.2f\t\nRoll: %2.2f\tPitch %2.2f\tYaw %2.2f\nMagx: %2.2f\tMagy %2.2f\tMagz %2.2f\naccx: %2.2f\taccy %2.2f\taccz %2.2f\nvelx: %2.2f\tvely %2.2f\tvelz %2.2f\nposx: %2.2f\tposy: %2.2f\tposz: %2.2f\nvrpnr: %2.2f\tvrpnp: %2.2f\tvrpny: %2.2f\nErrorr: %2.2f\tErrorrp: %2.2f\tErrory: %2.2f\nresr: %2.2f\tresp: %2.2f\tresy: %2.2f\trest: %2.2f\nbias_roll: %2.2f\tbias_pitch: %2.2f\tbias_yaw: %2.2f\nObjx: %2.2f\tObjy: %2.2f\tObjz: %2.2f\t\nTipx: %2.2f\tTipy: %2.2f\tTipz: %2.2f\t\nMass: %2.2f\tTimestamp: %2.2f\t\nQuadState: %s\nRC3: %u",
           data.batterypercent
           ,data.temperature,data.pressure
           ,data.wind_speed, data.altitude
@@ -1475,7 +1475,7 @@ void OnboardNodeHandler::quadstatetimerCallback(const ros::TimerEvent &event)
           ,0.0, 0.0, 0.0
           ,obj_origin[0], obj_origin[1], obj_origin[2]
           ,tip_position[0], tip_position[1], tip_position[2]
-          ,data.mass,data.timestamp,data.quadstate.c_str());
+          ,data.mass,data.timestamp,data.quadstate.c_str(), data.servo_in[2]);
 
   //Publish State:
   std_msgs::String string_msg;
