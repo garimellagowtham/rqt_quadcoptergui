@@ -1,10 +1,31 @@
-ctrlr/kpr: 1
-ctrlr/kdr: 3.0
+#ctrlr/kpr: 1.0
+ctrlr/kpr: 1.0
+#ctrlr/kdr: 1.2
+#ctrlr/kdr: 1.4
+ctrlr/kdr: 1.4
 ctrlr/kpt: 1.0
 ctrlr/kdt: 1.0
+#ctrlr/kpr: 1.5
+#ctrlr/kdr: 2.0
+#ctrlr/kpt: 2.0
+#ctrlr/kdt: 2.2
 ctrlr/throtbound: 0.5
 ctrlr/rpbound: 20
 ctrlr/cmdrate_throttle: 2
-ctrlr/targetx: 1.63
-ctrlr/targety: 0.7834
-ctrlr/targetz: 1.26
+
+ctrlr/targetx: 0.95
+ctrlr/targety: 1.7
+#ctrlr/targetz: 1.5
+ctrlr/targetz: 1.8
+
+ctrlr/quadoffsetobjectx: 0
+ctrlr/quadoffsetobjecty: -0.63
+ctrlr/quadoffsetobjectz: 0.05
+
+ctrlr/armbasewrtquadz: -0.07
+
+ctrlr/partialcam_control: true
+ctrlr/timeout_grabbing: 2
+ctrlr/openloop_mode: true
+
+ctrlr/gripper_control: false #If True will try to pickup an object otherwise just releases the gripper at the end of Trajectory

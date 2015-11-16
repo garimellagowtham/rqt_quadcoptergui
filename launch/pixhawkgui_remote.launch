@@ -1,0 +1,8 @@
+<?xml version="1.0"?>
+<launch>
+  <!--param name="/gui/logdir" type="string" value="$(find rqt_quadcoptergui)/logfiles"/-->
+  <arg name="display" default="true"/>
+  <node pkg="rqt_gui" type="rqt_gui" name="gui" output="screen" if="$(arg display)"/>
+  <!--node pkg="mavlink_ros" name="serial_link" type="mavlink_ros_serial" args= "-p $(arg port)"/-->
+	<include file="$(find ros_vrpn_client)/launch/pixhawk.launch"/>
+</launch>

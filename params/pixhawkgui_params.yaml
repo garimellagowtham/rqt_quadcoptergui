@@ -1,6 +1,10 @@
 # Specify the Quadcopter parser plugin to use:
 gui/parser_plugin: "pixhawk_parser/PixhawkParser"
 # this is used for calling the set function from SetptCtrlr
-gui/vrpn_pose: "/pixhawk/pose"
+#gui/vrpn_pose: "/pixhawk/pose"
+gui/vrpn_pose: "/serial_receiver/pixhawk/pose"
 gui/test_ctrlr: false
-
+gui/uav_name: "pixhawk"
+#gui/reset_imu: true
+gui/reset_imu: true
+gui/publishrpy: true

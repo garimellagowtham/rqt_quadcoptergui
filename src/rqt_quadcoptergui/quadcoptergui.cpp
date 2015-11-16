@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, Dorian Scholz, TU Darmstadt
+ * Copyright (c) 2011,  Gowtham Garimella JHU
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -30,67 +30,23 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "quadcoptergui.h"
+#include <rqt_quadcoptergui/quadcoptergui.h>
 
 #include <pluginlib/class_list_macros.h>
+
+//#define ARM_ENABLED
+//#define LOG_DEBUG
 
 namespace rqt_quadcoptergui {
 
 QuadcopterGui::QuadcopterGui() : rqt_gui_cpp::Plugin()
-  , context_(0)
-  , widget_(0)
-	, goalcount(0),goalyaw(0)
-	,startcontrol(false) ,testctrlr(true)
-	, corrected_thrustbias(0)
-	, enable_logging(false)
-	, reconfiginit(false)
-	, throttlecmdrate(1), ratecount(0)
-	, enable_joy(true)
-	, armcmdrate(4), armratecount(0)
-	, followtraj(false), traj_amp(0), traj_freq(0), traj_skew(1)
-	, joymsg_prevbutton(0), buttoncount(0)
-	, joymsg_prevbutton1(0), buttoncount1(0)
-	, trajectoryPtr(new visualization_msgs::Marker())
-	, targetPtr(new visualization_msgs::Marker())
-	{
-		setObjectName("QuadcopterGui");
-		parser_loader.reset(new pluginlib::ClassLoader<parsernode::Parser>("parsernode","parsernode::Parser"));
-		UV_O.setIdentity();
-		errorrpy.setValue(0,0,0);
-		target.setValue(0,0,0);//Initializing the target extraction point
-		quadtobase.setIdentity();
-		quadtobase.setOrigin(tf::Vector3(0.0732,0,-0.06));//The z distance needs to adjusted exactly
-		//armpwm.resize(3);//Number of arms for now just hardcoded
-
-		targetPtr->id = 1;
-		targetPtr->ns = "targetpickup";
-		targetPtr->header.frame_id = "/optitrak";
-		targetPtr->action = visualization_msgs::Marker::ADD;
-		targetPtr->pose.orientation.w = 1.0;
-		targetPtr->type = visualization_msgs::Marker::CUBE;
-		targetPtr->scale.x = 0.1;
-		targetPtr->scale.y = 0.1;
-		targetPtr->scale.z = 0.1;
-		targetPtr->color.r = 1.0;
-		targetPtr->color.a = 1.0;
-
-
-		trajectoryPtr->id = 1;
-		trajectoryPtr->points.resize(31);//Just fixed number of points in trajectoryPtr
-		trajectoryPtr->header.frame_id = "/optitrak";
-		trajectoryPtr->ns = "desired_traj";
-		trajectoryPtr->action = visualization_msgs::Marker::ADD;
-		trajectoryPtr->pose.orientation.w = 1.0;
-		trajectoryPtr->id = 1;
-		trajectoryPtr->type = visualization_msgs::Marker::LINE_STRIP;
-		trajectoryPtr->scale.x = 0.05;//Need thick line
-		trajectoryPtr->color.b = 1.0;
-		trajectoryPtr->color.a = 1.0;
-
-		//Indices:  2     3     5     7    11    17    23    37    61   101
-
-		//The sampling frequency is 103.289 and window freq = 0.020017 (Around 50 Sec)
-	}
+                                , context_(0)
+                                , widget_(0)
+                                , update_component_id()
+                                , trajectory_file_name()
+{
+  setObjectName("QuadcopterGui");
+}
 
 QuadcopterGui::~QuadcopterGui()
 {
@@ -98,190 +54,96 @@ QuadcopterGui::~QuadcopterGui()
 
 void QuadcopterGui::initPlugin(qt_gui_cpp::PluginContext& context)
 {
-	widget_ = new QWidget();
-	ui_.setupUi(widget_); 
+  widget_ = new QWidget();
+  ui_.setupUi(widget_);
 
 
-	context_ = &context;
+  context_ = &context;
 
-	widget_->setWindowTitle("Quadcoptergui[*]");
+  widget_->setWindowTitle("Quadcoptergui[*]");
 
-	if (context.serialNumber() != 1)
-	{
-		widget_->setWindowTitle(widget_->windowTitle() + " (" + QString::number(context.serialNumber()) + ")");
-	}
+  if (context.serialNumber() != 1)
+  {
+    widget_->setWindowTitle(widget_->windowTitle() + " (" + QString::number(context.serialNumber()) + ")");
+  }
 
-	context.addWidget(widget_);
+  context.addWidget(widget_);
 
-	// trigger deleteLater for plugin when widget or frame is closed
-	widget_->installEventFilter(this);
+  // trigger deleteLater for plugin when widget or frame is closed
+  widget_->installEventFilter(this);
 
-	//set ui textbrowser to be read only:
-	ui_.textBrowser->setReadOnly(true);
+  //set ui textbrowser to be read only:
+  ui_.textBrowser->setReadOnly(true);
 
-	//Get ros NodeHandle from parent nodelet manager:
-	ros::NodeHandle nh = getNodeHandle();
+  //Get ros NodeHandle from parent nodelet manager:
+  ros::NodeHandle nh = getNodeHandle();
+  //Subscribers:
+  gui_state_subscriber_ = nh.subscribe("/gui_state",10,&QuadcopterGui::guistateCallback, this);
 
-	//stringdata_pub = nh.advertise<std_msgs::String>("stringout",1);
+  quad_state_subscriber_ = nh.subscribe("/quad_status",10,&QuadcopterGui::quadstateCallback,this);
 
-	//Load Target:
-	nh.getParam("/ctrlr/targetx",target[0]);
-	nh.getParam("/ctrlr/targety",target[1]);
-	nh.getParam("/ctrlr/targetz",target[2]);
+  //Publishers:
+  gui_command_publisher_ = nh.advertise<rqt_quadcoptergui::GuiCommandMessage>("/gui_commands",10);
 
-	try
-	{
-		string parserplugin_name;
-		if(!nh.getParam("/gui/parser_plugin",parserplugin_name))
-		{
-			ROS_ERROR("Cannot find parser_plugin parameter to load the parser");
-			return;
-		}
-		parserinstance = parser_loader->createInstance(parserplugin_name);
-		parserinstance->initialize(nh);
-	}
-	catch(pluginlib::PluginlibException& ex)
-	{
-		ROS_ERROR("The plugin failed to load for some reason. Error: %s", ex.what());
-	}
+  gcop_trajectory_publisher_ = nh.advertise<gcop_comm::CtrlTraj>("/mbsddp/traj_resp",10);
 
-	//Connect all the slots as needed
+  workspace_marker_publisher_ = nh.advertise<visualization_msgs::Marker>("/workspace",1, true);
 
-	//Setup the timer:
-	timer = new QTimer(widget_);
-	connect(timer, SIGNAL(timeout()), this, SLOT(RefreshGui()));
-	timer->start(50);//20Hz
-	if(!nh.getParam("/gui/test_ctrlr",testctrlr))
-	{
-		testctrlr = true;
-	}
-	if(testctrlr)
-		ROS_INFO("In Test Controller Mode");
-	connect(ui_.Takeoffbutton, SIGNAL(clicked()), this, SLOT(wrappertakeoff()));
-	connect(ui_.TargetCapturebutton, SIGNAL(clicked()), this, SLOT(Capture_Target()));
-	connect(ui_.Landbutton, SIGNAL(clicked()), this, SLOT(wrapperLand()));
-	connect(ui_.Disarmbutton, SIGNAL(clicked()), this, SLOT(wrapperDisarm()));
-	connect(ui_.imucheckbox,SIGNAL(stateChanged(int)),this,SLOT(wrapperimu_recalib(int)));
-	connect(ui_.follow_traj,SIGNAL(stateChanged(int)),this,SLOT(follow_trajectory(int)));
-	connect(ui_.log_checkbox,SIGNAL(stateChanged(int)),this,SLOT(enable_disablelog(int)));
-	connect(ui_.enable_joycheckbox,SIGNAL(stateChanged(int)),this,SLOT(enable_disablemanualarmctrl(int)));
-	connect(ui_.integrator_checkbox,SIGNAL(stateChanged(int)),this,SLOT(integrator_control(int)));
-	connect(ui_.enable_controller,SIGNAL(stateChanged(int)),this,SLOT(enable_disablecontroller(int)));
-	//connect(ui_.ctrlcheckbox,SIGNAL(stateChanged(int)),this,SLOT(switchctrlr(int)));
+  //Create and Publish workspace marker:
+  visualization_msgs::Marker workspace_marker;
+  tf::Vector3 workspacedims, center_workspace;
+  ros::param::get("/vrpn/workspacex", workspace_marker.scale.x);
+  ros::param::get("/vrpn/workspacey", workspace_marker.scale.y);
+  ros::param::get("/vrpn/workspacez", workspace_marker.scale.z);
+  ros::param::get("/vrpn/center_workspacex", workspace_marker.pose.position.x);
+  ros::param::get("/vrpn/center_workspacey", workspace_marker.pose.position.y);
+  ros::param::get("/vrpn/center_workspacez", workspace_marker.pose.position.z);
 
-	//Create a controller instance from the controllers library:
-	//Get the parameter to know whether to test the controller or directly use it. In testing mode, the thrust value is set to be a very small value and roll and pitch are normal. This way you can move and see if it is doing what its supposed to do
-	ctrlrinst.reset(new SetptCtrl(nh));
-	arminst.reset(new gcop::Arm);
-	arminst->l1 = 0.175;
-	//arminst->l2 = 0.35;
-	arminst->l2 = 0.35;
-	arminst->x1 = 0.025;//Need to change this after measuring again TODO
-	parserinstance->getquaddata(data);
-	ctrlrinst->setextbias(data.thrustbias); //Fext initial guess comes from the parser. We will need to estimate it for some quadcopters if its used in commanding it.
-	//bias_vrpn.setValue(2.33*(M_PI/180),-0.3*(M_PI/180),0);
-	bias_vrpn.setValue(0,0,0);
-	nh.getParam("/bias_vrpnroll",bias_vrpn[0]);
-	nh.getParam("/bias_vrpnpitch",bias_vrpn[1]);
-	nh.getParam("/bias_vrpnyaw",bias_vrpn[2]);
-	bias_count = 200;//Initial bias so we dont vary mean very much
+  //Set necessary default initializations:
+  workspace_marker.header.frame_id = "/optitrak";
+  workspace_marker.action = visualization_msgs::Marker::ADD;
+  workspace_marker.pose.orientation.w = 1.0;
+  workspace_marker.ns = "trajectory";
+  workspace_marker.id = 1;
+  workspace_marker.type = visualization_msgs::Marker::CUBE;
+  workspace_marker.color.r = 1.0;
+  workspace_marker.color.a = 0.2;
 
-	// Logger
-	string logdir = "/home/gowtham";//Default name
-	if(!nh.getParam("/gui/logdir",logdir))
-	{
-		ROS_WARN("Cannot find log directory");
-	}
-	else
-	{
-		logdir = logdir + "/session";
-		string logdir_stamped = parsernode::common::addtimestring(logdir);
-		ROS_INFO("Creating Log dir: %s",logdir_stamped.c_str());
-		mkdir(logdir_stamped.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);//Create the directory see http://pubs.opengroup.org/onlinepubs/009695399/functions/mkdir.html
-		vrpnfile.open((logdir_stamped+"/vrpn.dat").c_str());//TODO add warning if we cannot open the file
-		vrpnfile.precision(9);
-		vrpnfile<<"#Time \t Pos.X \t Pos.Y \t Pos.Z \t Quat.X \t Quat.Y \t Quat.Z \t Quat.W"<<endl;
-		//cmdfile.open(logdir_stamped+"/cmd.dat");//TODO add warning if we cannot open the file
-		parserinstance->setlogdir(logdir_stamped);
-		ctrlrinst->setlogdir(logdir_stamped);
-	}
+  workspace_marker_publisher_.publish(workspace_marker);
 
-	//subscribe to vrpndata for now
-	string uav_posename;
-	if(!nh.getParam("/gui/vrpn_pose",uav_posename))
-	{
-		ROS_ERROR("Cannot load uav pose parameter");
-		return;
-	}
-	vrpndata_sub = nh.subscribe(uav_posename,1,&QuadcopterGui::cmdCallback,this);
-	joydata_sub = nh.subscribe("/joy",1,&QuadcopterGui::joyCallback,this);
 
-	desiredtraj_pub = nh.advertise<visualization_msgs::Marker>("desired_traj", 5);
+  //Create Visualizer:
+  gcop_trajectory_visualizer_.reset(new GcopTrajectoryVisualizer(nh));
 
-	//Connect to dynamic reconfigure server:
-	reconfigserver.reset(new dynamic_reconfigure::Server<rqt_quadcoptergui::QuadcopterInterfaceConfig>(nh));
-	reconfigcallbacktype = boost::bind(&QuadcopterGui::paramreqCallback, this, _1, _2);
-	reconfigserver->setCallback(reconfigcallbacktype);
-	//Create timer for moving Goal Dynamically:
-	goaltimer = nh.createTimer(ros::Duration(0.02), &QuadcopterGui::goaltimerCallback,this);//50Hz So the goal can go upto 25 Hz  Nyquist rate
-	goaltimer.stop();
+  //Setup the timer to refresh Gui
+  timer = new QTimer(widget_);
+  connect(timer, SIGNAL(timeout()), this, SLOT(RefreshGui()));
+  timer->start(50);//20Hz
+
+  //Connect all the slots as needed
+  connect(ui_.Takeoffbutton, SIGNAL(clicked()), this, SLOT(wrappertakeoff()));
+  //connect(ui_.TargetCapturebutton, SIGNAL(clicked()), this, SLOT(Capture_Target()));
+  connect(ui_.Landbutton, SIGNAL(clicked()), this, SLOT(wrapperLand()));
+  connect(ui_.LoadTrajectorybutton, SIGNAL(clicked()), this, SLOT(loadTrajectory()));
+  connect(ui_.SendTrajectorybutton, SIGNAL(clicked()), this, SLOT(sendTrajectory()));
+  connect(ui_.Disarmbutton, SIGNAL(clicked()), this, SLOT(wrapperDisarm()));
+  //connect(ui_.imucheckbox,SIGNAL(stateChanged(int)),this,SLOT(wrapperimu_recalib(int)));
+  connect(ui_.follow_traj,SIGNAL(stateChanged(int)),this,SLOT(follow_trajectory(int)));
+  connect(ui_.log_checkbox,SIGNAL(stateChanged(int)),this,SLOT(enable_disablelog(int)));
+  connect(ui_.enable_joycheckbox,SIGNAL(stateChanged(int)),this,SLOT(enable_disablemanualarmctrl(int)));
+  connect(ui_.integrator_checkbox,SIGNAL(stateChanged(int)),this,SLOT(integrator_control(int)));
+  connect(ui_.enable_controller,SIGNAL(stateChanged(int)),this,SLOT(enable_disablecontroller(int)));
+  connect(ui_.camcheckbox,SIGNAL(stateChanged(int)),this,SLOT(enable_disablecamctrl(int)));
+  connect(ui_.manualtargetcheckbox,SIGNAL(stateChanged(int)),this,SLOT(enable_disablemanualtargetretrieval(int)));
 }
 
 void QuadcopterGui::RefreshGui()
 {
-	if(!parserinstance)
-	{
-		ROS_ERROR("No parser instance created");
-		return;
-	}
-	parserinstance->getquaddata(data);
-	Matrix3x3 rotmat = UV_O.getBasis();
-	tf::Vector3 vrpnrpy;
-	rotmat.getEulerYPR(vrpnrpy[2],vrpnrpy[1],vrpnrpy[0]);
-	if(ui_.bias_estcheckbox->isChecked())
-	{
-		bias_vrpn += (1/(bias_count+1))*(vrpnrpy - bias_vrpn);
-		bias_count += 1;//Increase the count
-  }
-	errorrpy = (vrpnrpy - bias_vrpn) - tf::Vector3(data.rpydata.x, data.rpydata.y,data.rpydata.z);
-	//errorrpy.setValue(0,0,0);
-	tf::Vector3 quadorigin = UV_O.getOrigin();
-	// Create a Text message based on the data from the Parser class
-	sprintf(buffer,
-			"Battery Percent: %2.2f\t\nTemperature: %2.2f\tPressure: %2.2f\tWindspeed: %2.2f\tAltitude: %2.2f\t\nRoll: %2.2f\tPitch %2.2f\tYaw %2.2f\nMagx: %2.2f\tMagy %2.2f\tMagz %2.2f\naccx: %2.2f\taccy %2.2f\taccz %2.2f\nvelx: %2.2f\tvely %2.2f\tvelz %2.2f\nposx: %2.2f\tposy: %2.2f\tposz: %2.2f\nvrpnr: %2.2f\tvrpnp: %2.2f\tvrpny: %2.2f\nErrorr: %2.2f\tErrorrp: %2.2f\tErrory: %2.2f\nresr: %2.2f\tresp: %2.2f\tresy: %2.2f\trest: %2.2f\nbias_r: %2.2f\tbias_p: %2.2f\tbias_y: %2.2f\nMass: %2.2f\tTimestamp: %2.2f\t\nQuadState: %s", 
-			data.batterypercent
-			,data.temperature,data.pressure
-			,data.wind_speed, data.altitude
-			,data.rpydata.x*(180/M_PI),data.rpydata.y*(180/M_PI),data.rpydata.z*(180/M_PI)//IMU rpy angles
-			,data.magdata.x,data.magdata.y,data.magdata.z
-			,data.linacc.x,data.linacc.y,data.linacc.z
-			,data.linvel.x,data.linvel.y,data.linvel.z
-			,quadorigin[0], quadorigin[1], quadorigin[2]
-			,vrpnrpy[0]*(180/M_PI),vrpnrpy[1]*(180/M_PI),vrpnrpy[2]*(180/M_PI)
-			,errorrpy[0]*(180/M_PI),errorrpy[1]*(180/M_PI),errorrpy[2]*(180/M_PI)
-			,(rescmdmsg.x)*(180/M_PI), (rescmdmsg.y)*(180/M_PI), rescmdmsg.z, rescmdmsg.w
-			,bias_vrpn[0]*(180/M_PI),bias_vrpn[1]*(180/M_PI),bias_vrpn[2]*(180/M_PI)
-			,data.mass,data.timestamp,data.quadstate.c_str());
-	//, (rescmdmsg.x-data.rpydata.x)*(180/M_PI), (rescmdmsg.y-data.rpydata.y)*(180/M_PI), rescmdmsg.z*(180/M_PI), rescmdmsg.w
-
-	//Also  add status about the vrpn data and controller errors etc
-
-	QString msg = QString::fromStdString(buffer);
-	ui_.textBrowser->setPlainText(msg);
+  qgui_mutex_.lock();
+  QString msg = QString::fromStdString(quad_status);
+  qgui_mutex_.unlock();
+  ui_.textBrowser->setPlainText(msg);
 }
-
-/*void QuadcopterGui::StringCallback(const std_msgs::String::ConstPtr &stringdata)
-	{
-	ROS_INFO("Hello");
-	qgui_mutex_.lock();
-	str =  QString::fromStdString(stringdata->data);
-	qgui_mutex_.unlock();
-	std_msgs::String stringpubdata;
-	stringpubdata.data = stringdata->data;
-	stringdata_pub.publish(stringpubdata);
-	refreshtext = true;
-	}
- */
 
 
 bool QuadcopterGui::eventFilter(QObject* watched, QEvent* event)
@@ -291,496 +153,342 @@ bool QuadcopterGui::eventFilter(QObject* watched, QEvent* event)
 		ROS_INFO("Closing...");
 		event->ignore();
 		context_->closePlugin();
-		//stringdata_sub.shutdown();
 		return true;
 	}
 	return QObject::eventFilter(watched, event);
 }
 
+///////////////////SLOTS//////////////////////
+
+void QuadcopterGui::enable_disablelog(int state)//0
+{
+  if(checkUpdateState(0))//Check if input is from onboard Node
+   return;
+  GuiCommandMessage msg;
+  if(state == Qt::Checked)
+    msg.command = true;
+  else
+    msg.command = false;
+  msg.commponent_name = msg.enable_log;
+  gui_command_publisher_.publish(msg);
+}
+
+void QuadcopterGui::integrator_control(int state)//1
+{
+  if(checkUpdateState(1))//Check if input is from onboard Node
+   return;
+  GuiCommandMessage msg;
+  if(state == Qt::Checked)
+    msg.command = true;
+  else
+    msg.command = false;
+  msg.commponent_name = msg.enable_integrator;
+  gui_command_publisher_.publish(msg);
+}
+
+
+void QuadcopterGui::follow_trajectory(int state)//2
+{
+  if(checkUpdateState(2))//Check if input is from onboard Node
+   return;
+
+  GuiCommandMessage msg;
+  if(state == Qt::Checked)
+    msg.command = true;
+  else
+    msg.command = false;
+  msg.commponent_name = msg.traj_on;
+  gui_command_publisher_.publish(msg);
+}
+
+void QuadcopterGui::enable_disablecontroller(int state)//3
+{
+  if(checkUpdateState(3))//Check if input is from onboard Node
+   return;
+  GuiCommandMessage msg;
+  if(state == Qt::Checked)
+    msg.command = true;
+  else
+    msg.command = false;
+  msg.commponent_name = msg.enable_ctrl;
+  gui_command_publisher_.publish(msg);
+}
+void QuadcopterGui::enable_disablemanualarmctrl(int state)//4
+{
+  if(checkUpdateState(4))//Check if input is from onboard Node
+   return;
+  GuiCommandMessage msg;
+  if(state == Qt::Checked)
+    msg.command = true;
+  else
+    msg.command = false;
+  msg.commponent_name = msg.enable_joy;
+  gui_command_publisher_.publish(msg);
+}
+
+void QuadcopterGui::enable_disablecamctrl(int state)//5
+{
+  if(checkUpdateState(5))//Check if input is from onboard Node
+   return;
+  GuiCommandMessage msg;
+  if(state == Qt::Checked)
+    msg.command = true;
+  else
+    msg.command = false;
+  msg.commponent_name = msg.enable_cam;
+  gui_command_publisher_.publish(msg);
+}
+
+void QuadcopterGui::enable_disablemanualtargetretrieval(int state)//6
+{
+  if(checkUpdateState(6))//Check if input is from onboard Node
+   return;
+  GuiCommandMessage msg;
+  if(state == Qt::Checked)
+    msg.command = true;
+  else
+    msg.command = false;
+  msg.commponent_name = msg.manual_targetretrievalstatus;
+  gui_command_publisher_.publish(msg);
+}
+
+////////////Buttons Callback Functions
 void QuadcopterGui::wrappertakeoff()
 {
-	if(!parserinstance)
-	{
-		ROS_WARN("Parser Instance not defined. Cannot take off");
-		return;
-	}
-	//Set the extbias back to nominal value
-	ctrlrinst->setextbias(data.thrustbias); //Set the external force back to nominal value Just extra safety its already set in check_control etc
-	parserinstance->takeoff();
+  GuiCommandMessage msg;
+  msg.commponent_name = msg.arm_quad;
+  gui_command_publisher_.publish(msg);
 }
 
 void QuadcopterGui::wrapperLand()
 {
-	if(!parserinstance)
-	{
-		ROS_WARN("Parser Instance not defined. Cannot take off");
-		return;
-	}
-	startcontrol = false;//Stop the controller
-	parserinstance->land();
-	rescmdmsg.x = 0;rescmdmsg.y = 0; rescmdmsg.z = 0; rescmdmsg.w = 0;//reset command
-	//Uncheck the controller checkbox to be consistent:
-	ui_.enable_controller->setCheckState(Qt::Unchecked);
+  GuiCommandMessage msg;
+  msg.commponent_name = msg.land_quad;
+  gui_command_publisher_.publish(msg);
 }
 
 void QuadcopterGui::wrapperDisarm()
 {
-	if(!parserinstance)
-	{
-		ROS_WARN("Parser Instance not defined. Cannot take off");
-		return;
-	}
-	startcontrol = false;//Stop the controller
-	rescmdmsg.x = 0;rescmdmsg.y = 0; rescmdmsg.z = 0; rescmdmsg.w = 0;//reset command
-	parserinstance->disarm();
-	//Uncheck the controller checkbox to be consistent:
-	ui_.enable_controller->setCheckState(Qt::Unchecked);
+  GuiCommandMessage msg;
+  msg.commponent_name = msg.disarm_quad;
+  gui_command_publisher_.publish(msg);
 }
 
-/*void QuadcopterGui::wrapper_estthrustbias(int state)
-	{
-	if(!parserinstance)
-	{
-	ROS_WARN("Parser Instance not defined. Cannot take off");
-	return;
-	}
-	if(state == Qt::Checked)
-	{
-	parserinstance->estimatethrustbias();
-	parserinstance->getquaddata(data);
-	ctrlrinst->setextbias(data.thrustbias); //Set the new update thrustbias
-	}
-	}
- */
-void QuadcopterGui::enable_disablemanualarmctrl(int state) //This is also useful for folding the arm before landing
+void QuadcopterGui::loadTrajectory()
 {
-	//Get ros NodeHandle from parent nodelet manager:
-	ros::NodeHandle nh = getNodeHandle();
-	joymsg_prevbutton = 0; buttoncount = 0;
-	joymsg_prevbutton1 = 0; buttoncount1 = 0;
-	//cout<<"________________________I Am called _____________________"<<endl;
-	if(state == Qt::Checked)
-	{
-		enable_joy = true;
-	}
-	else
-	{
-		enable_joy = false;
-	}
-	if(parserinstance)
-		parserinstance->foldarm();//Just fold the arm whenever you switch between two modes
-}
+  //Load a trajectory from FileBox:
+  trajectory_file_name = std::string();//Empty
+  if(ros::param::has("/trajectory_file_name"))
+    ros::param::get("/trajectory_file_name", trajectory_file_name);
+  std::ifstream ifile;
+  if(trajectory_file_name.empty())
+  {
+    QString filename = QFileDialog::getOpenFileName(widget_, "Open Trajectory File", "/home","All files (*.*)");
+    trajectory_file_name = filename.toStdString();
+  }
+  ROS_INFO("Opening File: %s",trajectory_file_name.c_str());
 
-void QuadcopterGui::Capture_Target()
+  ifile.open(trajectory_file_name);
+
+  if(!ifile.is_open())
+  {
+    std::cerr<<"Cannot Open File"<<trajectory_file_name<<std::endl;
+    return;
+  }
+  //Read First line into a string
+  std::string first_line;
+  std::getline(ifile, first_line, '\n');
+  bool armdata_provided = false;
+  //Check what is the Format of the file:
+  {
+    std::stringstream fin(first_line);
+    std::string word;
+    int count = 0;
+    while(fin>>word)
+    {
+      count++;
+      //DEBUG
+      std::cout<<"Word: "<<word<<std::endl;
+    }
+    //DEBUG:
+    std::cout<<"Number of Words in First Line" <<count<<std::endl;
+    if(count ==8)
+      armdata_provided = false;
+    else if(count == 12)
+      armdata_provided = true;
+    else
+    {
+      std::cerr<<"Unknown File Header!"<<std::endl;
+      return;
+    }
+  }
+  //File should have t, traj_x,y,z, yaw; traj_vx,vy,vz in global frame (Optionally Arm Joint Angles and Velocities);
+  quadcopter_trajectory.reset(new gcop_comm::CtrlTraj());
+  
+  gcop_comm::State desired_state;
+  if(armdata_provided)
+    desired_state.statevector.resize(4);
+  quadcopter_trajectory->N = -1;
+  //Get Current Goal from reconfig params
+  double xg = 0, yg = 0, zg = 0, yawg = 0;
+  ros::param::get("/onboard_node/xg",xg);
+  ros::param::get("/onboard_node/yg",yg);
+  ros::param::get("/onboard_node/zg",zg);
+  ros::param::get("/onboard_node/yawg",yawg);
+  double data[8];
+  double armdata[4];
+  while(1)
+  {
+    //While EOF has not been reached:
+    ifile>>data[0]>>data[1]>>data[2]>>data[3]>>data[4]>>data[5]>>data[6]>>data[7];
+    if(armdata_provided)
+      ifile>>armdata[0]>>armdata[1]>>armdata[2]>>armdata[3];
+    if(ifile.eof())//Break if EOF is reached
+    {
+      ROS_INFO("EOF Reached!");
+      break;
+    }
+    //Printing File for DEBUG
+    std::cout<<data[0]<<"\t"<<data[1]<<"\t"<<data[2]<<"\t"<<data[3]<<"\t"<<data[4]<<"\t"<<data[5]<<"\t"<<data[6]<<"\t"<<data[7];
+    if(armdata_provided)
+    {
+      std::cout<<"\t"<<armdata[0]<<"\t"<<armdata[1]<<"\t"<<armdata[2]<<"\t"<<armdata[3]<<std::endl;
+    }
+    else
+    {
+      std::cout<<std::endl;
+    }
+    quadcopter_trajectory->time.push_back(data[0]);
+    quadcopter_trajectory->N++;
+    //State:
+    desired_state.basepose.rotation = tf::createQuaternionMsgFromYaw(data[4]+yawg);
+    desired_state.basepose.translation.x = xg+data[1];
+    desired_state.basepose.translation.y = yg+data[2];
+    desired_state.basepose.translation.z = zg+data[3];
+    desired_state.basetwist.linear.x = data[5];
+    desired_state.basetwist.linear.y = data[6];
+    desired_state.basetwist.linear.z = data[7];
+    if(armdata_provided)
+    {
+      desired_state.statevector[0] = armdata[0];
+      desired_state.statevector[1] = armdata[1];
+      desired_state.statevector[2] = armdata[2];
+      desired_state.statevector[3] = armdata[3];
+    }
+    quadcopter_trajectory->statemsg.push_back(desired_state);
+  }
+  ifile.close();
+  gcop_trajectory_visualizer_->publishTrajectory(*quadcopter_trajectory);
+}
+void QuadcopterGui::sendTrajectory()
 {
-	if(!ctrlrinst || !parserinstance || !arminst)
-	{
-		ROS_WARN("Cannot find ctrlr or parser or arm");
-		return;
-	}
-	// We want to capture the position of the final target from knowing the transformation of the quadcopter, known joint angles
-	//and  the transformation from quad to base of the arm using forward kinematics
-	buttoncount1 = (buttoncount1+1)%2;
-	//The button should be pressed two times for first time it will open the arm and wait for you to press the second time when it will capture it
-	if(buttoncount1 == 1)
-	{
-		armangles[0] = 0;
-		armangles[1] = 0;
-		armangles[2] = 0;//Neutral This is not an angle
-		parserinstance->setarmangles(armangles);//Set the angles
-	}
-	else if(buttoncount1 == 0)
-	{
-		//Matrix3x3 rotmat = UV_O.getBasis();
-		//tf::Vector3 vrpnrpy;
-		//rotmat.getEulerYPR(vrpnrpy[2],vrpnrpy[1],vrpnrpy[0]);
-		armangles[0] = 0; armangles[1] = 0; armangles[2] = 0;//Set the  current arm angles
-		//The yaw of the quadcopter is directly used no need to set armgoal[0] 
-		double terminal_pos[3];
-		arminst->Fk(terminal_pos,armangles);
-		tf::Vector3 localpos(terminal_pos[0],terminal_pos[1],terminal_pos[2]);
-		target = UV_O*(quadtobase*localpos);//Setting the target with respect to global frame
-		ROS_INFO("Target Position: %f\t%f\t%f",terminal_pos[0],terminal_pos[1],terminal_pos[2]);
-
-		//Done setting the target folding back the arm
-		parserinstance->foldarm();
-	}
+  //To send quadcopter trajectory to Onboard Node:
+  if(quadcopter_trajectory)
+    gcop_trajectory_publisher_.publish(quadcopter_trajectory);
 }
-
-void QuadcopterGui::enable_disablelog(int state)
+/*void QuadcopterGui::wrapperimu_recalib(int state)
 {
-	if(!parserinstance)
-	{
-		ROS_WARN("Parser Instance not defined. Cannot Log");
-		return;
-	}
-	if(!ctrlrinst)
-	{
-		ROS_WARN("Controller Instance not defined. Cannot Log");
-		return;
-	}
-	if(state == Qt::Checked)
-	{
-		if(enable_logging == false)
-		{
-			ROS_INFO("I am called");
-			enable_logging = true;
-			parserinstance->controllog(true);
-			ctrlrinst->controllog(true);
-		}
-	}
-	else
-	{
-		if(enable_logging == true)
-		{
-			ROS_INFO("I am called2");
-			enable_logging = false;
-			parserinstance->controllog(false);
-			ctrlrinst->controllog(false);
-		}
-	}
+  ROS_WARN("Not Implemented");
 }
+*/
 
-void QuadcopterGui::enable_disablecontroller(int state)
-{
-	//Set the extbias back to nominal value
-	ctrlrinst->setextbias(data.thrustbias); //Set the external force back to nominal value
-	if(state == Qt::Checked)
-	{
-		ctrlrinst->integratethrust(true);
-		ui_.integrator_checkbox->setCheckState(Qt::Checked);
-		ui_.log_checkbox->setCheckState(Qt::Checked);
-		startcontrol = true;
-		goaltimer.start();
-	}
-	else
-	{
-		ctrlrinst->integratethrust(false);
-		startcontrol = false;
-		ui_.integrator_checkbox->setCheckState(Qt::Unchecked);
-		goaltimer.stop();
-	}
-}
 
-void QuadcopterGui::wrapperimu_recalib(int state)
-{
-	if(!parserinstance)
-	{
-		ROS_WARN("Parser Instance not defined. Cannot take off");
-		return;
-	}
-	if(state == Qt::Checked)
-	{
-		parserinstance->calibrateimubias();
-		ui_.imucheckbox->setCheckState(Qt::Unchecked);
-	}
-}
-
-void QuadcopterGui::integrator_control(int state)
-{
-	if(!ctrlrinst)
-	{
-		ROS_WARN("Ctrl inst not defined");
-	}
-	if(state == Qt::Checked)
-	{
-		ctrlrinst->integratethrust(true);
-	}
-	else if(state == Qt::Unchecked)
-	{
-		ctrlrinst->integratethrust(false);
-	}
-}
-
-void QuadcopterGui::follow_trajectory(int state)
-{
-	if(state == Qt::Checked)
-	{
-		followtraj = true;
-	}
-	else if(state == Qt::Unchecked)
-	{
-		followtraj = false;
-		goalcount = 1;
-		diff_goal.setValue(0,0,0);//Will set the goal back to the curr_goal without perturbations
-		diff_velgoal.setValue(0,0,0);//Will set the goal back to the curr_goal without perturbations
-		//////Stop the arm movement TODO Also add a checkbox for the arm and uncheck it when not following the trajectory
-	}
-}
 
 void QuadcopterGui::shutdownPlugin()
 {
-	parserinstance.reset();
-	parser_loader.reset();
-	ctrlrinst.reset();
-	arminst.reset();
-	vrpndata_sub.shutdown();
-	reconfigserver.reset();
-	goaltimer.stop();
-	vrpnfile.close();//Close the file
-	trajectoryPtr.reset();
-	targetPtr.reset();
-	desiredtraj_pub.shutdown();
-	//cmdfile.close();//Close the file
-	//stringdata_sub.shutdown();
-	//stringdata_pub.shutdown();
+  gui_state_subscriber_.shutdown();
+  quad_state_subscriber_.shutdown();
+
+  gui_command_publisher_.shutdown();
+  gcop_trajectory_publisher_.shutdown();
+
+  //Clear Variables:
+  quadcopter_trajectory.reset();
+  gcop_trajectory_visualizer_.reset();
+  //delete update_component_id;
+  //delete timer;
+  //delete widget_;
 }
 
-void QuadcopterGui::joyCallback(const sensor_msgs::Joy::ConstPtr &joymsg)
+////////////////CALLBACKS///////////////
+
+void QuadcopterGui::guistateCallback(const GuiStateMessage &statemsg)
 {
-	if(!parserinstance)
-	{
-		ROS_WARN("Parser not instantiated");
-		return;
-	}
-	//cout<<"Arm pwm: "<<joymsg->axes[0]<<"\t"<<joymsg->axes[1]<<"\t"<<joymsg->axes[2]<<"\t"<<joymsg->axes[3]<<"\t"<<endl;
-	if((joymsg->buttons[0] - joymsg_prevbutton) > 0)
-	{
-		buttoncount = (buttoncount+1)%3;
-		cout<<buttoncount<<endl;
-	}
-	joymsg_prevbutton = joymsg->buttons[0];
-	if(buttoncount == 0)//Three state gripper
-		armpwm[2] = 0;//Neutral
-	else if(buttoncount == 1)
-		armpwm[2] = -0.3; //Hold
-	else if(buttoncount == 2)
-		armpwm[2] = 0.3;//Release
-	//For starting to move arm:
-
-	if(enable_joy)//If the joystick is not enable return
-	{
-		if((joymsg->buttons[1] - joymsg_prevbutton1) > 0)
-		{
-			buttoncount1 = (buttoncount1+1)%2;
-			cout<<buttoncount1<<endl;
-		}
-		joymsg_prevbutton1 = joymsg->buttons[1];
-		if(buttoncount1 == 1)
-		{
-			armpwm[0] = joymsg->axes[1];
-			armpwm[1] = joymsg->axes[0];//Will convert them also into angles later
-			parserinstance->setarmpwm(armpwm);
-			cout<<"Settting armpwm"<<endl;
-		}
-		else
-		{
-			parserinstance->foldarm();
-		}
-	}
+  //Change UI states:
+  switch(statemsg.commponent_id)
+  {
+  case statemsg.camera_controlstatus:
+    if(statemsg.status != ui_.camcheckbox->isChecked())
+    {
+      qgui_mutex_.lock();
+      update_component_id[statemsg.commponent_id] = true;
+      qgui_mutex_.unlock();
+      ui_.camcheckbox->setCheckState(CHECKSTATE(statemsg.status));
+    }
+    break;
+  case statemsg.controller_status:
+    if(statemsg.status != ui_.enable_controller->isChecked())
+    {
+      qgui_mutex_.lock();
+      update_component_id[statemsg.commponent_id] = true;
+      qgui_mutex_.unlock();
+      ui_.enable_controller->setCheckState(CHECKSTATE(statemsg.status));
+    }
+    break;
+  case statemsg.integrator_status:
+    if(statemsg.status != ui_.integrator_checkbox->isChecked())
+    {
+      qgui_mutex_.lock();
+      update_component_id[statemsg.commponent_id] = true;
+      qgui_mutex_.unlock();
+      ui_.integrator_checkbox->setCheckState(CHECKSTATE(statemsg.status));
+    }
+    break;
+  case statemsg.joystick_status:
+    if(statemsg.status != ui_.enable_joycheckbox->isChecked())
+    {
+      qgui_mutex_.lock();
+      update_component_id[statemsg.commponent_id] = true;
+      qgui_mutex_.unlock();
+      ui_.enable_joycheckbox->setCheckState(CHECKSTATE(statemsg.status));
+    }
+    break;
+  case statemsg.log_status:
+    if(statemsg.status != ui_.log_checkbox->isChecked())
+    {
+      qgui_mutex_.lock();
+      update_component_id[statemsg.commponent_id] = true;
+      qgui_mutex_.unlock();
+      ui_.log_checkbox->setCheckState(CHECKSTATE(statemsg.status));
+    }
+    break;
+  case statemsg.trajectory_tracking_status:
+    if(statemsg.status != ui_.follow_traj->isChecked())
+    {
+      qgui_mutex_.lock();
+      update_component_id[statemsg.commponent_id] = true;
+      qgui_mutex_.unlock();
+      ui_.follow_traj->setCheckState(CHECKSTATE(statemsg.status));
+    }
+    break;
+  case statemsg.manual_targetretrievalstatus:
+    if(statemsg.status != ui_.manualtargetcheckbox->isChecked())
+    {
+      qgui_mutex_.lock();
+      update_component_id[statemsg.commponent_id] = true;
+      qgui_mutex_.unlock();
+      ui_.manualtargetcheckbox->setCheckState(CHECKSTATE(statemsg.status));
+    }
+    break;
+  }
 }
-void QuadcopterGui::cmdCallback(const geometry_msgs::TransformStamped::ConstPtr &currframe)
+
+void QuadcopterGui::quadstateCallback(const std_msgs::String & statemsg)
 {
-	//static tf::TransformBroadcaster br;
-	/////Add arm angle setting based on current posn and goal for the final tip TODO
-	/*	if(data.quadstate != "Flying")
-			{
-			transformStampedMsgToTF(*currframe,UV_O);//converts to the right format 
-			return;
-			}
-	 */
-
-	//Call the ctrlr to set the ctrl and then send the command to the quadparser
-	if(!ctrlrinst)
-	{
-		ROS_WARN("Controller not instantiated");
-		return;
-	}
-	controllers::ctrl_command rescmd;
-	transformStampedMsgToTF(*currframe,UV_O);//converts to the right format 
-	//Store the current position of the quadcopter for display
-	//ctrlrinst->Set(UV_O, rescmd);
-	ctrlrinst->Set(UV_O, errorrpy, rescmd);
-	if(!parserinstance)
-	{
-		ROS_WARN("Parser not instantiated");
-		return;
-	}
-	rescmdmsg.x = rescmd.roll; rescmdmsg.y = rescmd.pitch; rescmdmsg.z = rescmd.rateyaw; rescmdmsg.w = rescmd.thrust;
-	if(testctrlr)
-	{
-		rescmdmsg.w = 0.2*data.thrustbias;
-	}
-	//Computing the arm angles
-	//Convert the extraction point into local frame:
-	tf::Vector3 localtarget = (UV_O*quadtobase).inverse()*target;
-	//cout<<"Local Target: "<<localtarget[0]<<"\t"<<localtarget[1]<<"\t"<<localtarget[2]<<endl;
-	armlocaltarget[0] = localtarget[0]; armlocaltarget[1] = localtarget[1]; armlocaltarget[2] = localtarget[2];
-	double armres = arminst->Ik(as,armlocaltarget);
-	//cout<<"Metric for in workspace or not: "<<armres<<endl;
-	//Workspace constraints are not considered but joint constraints are considered in pixhawk
-	//No need to map angles just pass them directly
-	//Use always lower elbow solution i.e second one in the above soln
-	//armangles[2] this is gripper will have to see how to close gripper too
-	//int solnindex = 0;//Upper Elbow when localtargetz > 0
-	//if(localtarget[2] < 0)
-	int	solnindex = 1;//When localtargetz < 0 //For now only choosing lower elbow
-	//Convert the angles into right frame i.e the arm angles = 0 means it is x+ straightened
-	armangles[0] = as[solnindex][1]>(-M_PI/2)?as[solnindex][1]-M_PI/2:as[solnindex][1]+1.5*M_PI;
-	//armangles[1] = as[solnindex][2]>(-M_PI/2)?as[solnindex][2]-M_PI/2:as[solnindex][2]+1.5*M_PI;
-	armangles[1] = as[solnindex][2];//Relative angle wrt to first joint no transformation needed
-	armangles[2] = armpwm[2];//Using the joystick for gripping	
-	//cout<<"Resulting arm angles"<<as[solnindex][0]<<"\t"<<armangles[0]<<"\t"<<armangles[1]<<endl;
-
-	if(!enable_joy)
-	{
-		if((++armratecount == armcmdrate))//default makes it 25 Hz
-		{
-			armratecount = 0;
-			if(arminst && parserinstance) //Can also add startcontrol flag for starting this only when controller has started TODO
-			{
-				if(armres > -0.1) //Check if in reachable workspace
-				{
-					//Set the goal yaw of the quadcopter goalyaw
-					goalyaw = as[solnindex][0];//Target yaw for Quadcopter
-					parserinstance->setarmangles(armangles);
-				}
-				else
-				{
-					parserinstance->foldarm();
-				}
-			}
-		}
-	}
-	if(data.armed && startcontrol)
-	{
-		if((++ratecount) == throttlecmdrate)//Throttling down the rate of sending commands to the uav
-		{
-			ratecount = 0;
-			parserinstance->cmdrpythrust(rescmdmsg,true);//Also controlling yaw	
-			//ROS_INFO("Setting cmd");
-		}
-	}	
-	if(enable_logging)
-	{
-		//Logging save to file
-		vrpnfile<<(UV_O.stamp_.toNSec())<<"\t"<<(currframe->transform.translation.x)<<"\t"<<(currframe->transform.translation.y)<<"\t"<<(currframe->transform.translation.z)<<"\t"<<(currframe->transform.rotation.x)<<"\t"<<(currframe->transform.rotation.y)<<"\t"<<(currframe->transform.rotation.z)<<"\t"<<(currframe->transform.rotation.w)<<endl;
-	}	
-	if(!data.armed)//Once the quadcopter is armed we do not set the goal position to quad's origin, the user will set the goal. But the goal will not move until u set the enable_control The user should not give random goal once it is initialized.
-	{
-		curr_goal = UV_O.getOrigin();//set the current goal to be same as the quadcopter origin we dont care abt the orientation as of now
-		ctrlrinst->setgoal(curr_goal[0],curr_goal[1],curr_goal[2],goalyaw);//Set the goal to be same as the current position of the quadcopter the velgoal is by default 0
-	}
-
-	//Set the altitude of the quadcopter in the data
-	parserinstance->setaltitude(currframe->transform.translation.z);
-	//#ifdef PRINT
-	//ROS_INFO("Rescmd: %f\t%f\t%f",rescmdmsg.x,rescmdmsg.y,rescmdmsg.w);
-	//#endif
+  qgui_mutex_.lock();
+  quad_status = statemsg.data;
+  qgui_mutex_.unlock();
 }
 
-void QuadcopterGui::paramreqCallback(rqt_quadcoptergui::QuadcopterInterfaceConfig &config , uint32_t level)
-{
-	//ROS_INFO("Request recvd");
-	// Use the config values to set the goals and gains for quadcopter
-	if(!parserinstance || !ctrlrinst)
-	{
-		ROS_WARN("Parser or ctrlr not defined");
-		return;
-	}
-	if(!reconfiginit)
-	{
-		//Get parameters
-		ros::param::get("/ctrlr/kpr",config.kpr);
-		ros::param::get("/ctrlr/kdr",config.kdr);
-		ros::param::get("/ctrlr/kpt",config.kpt);
-		ros::param::get("/ctrlr/kdt",config.kdt);
-		ros::param::get("/ctrlr/throtbound",config.throtbound);
-		ros::param::get("/ctrlr/rpbound",config.rpbound);
-		ros::param::get("/ctrlr/cmdrate_throttle",config.cmdrate_throttle);
-		ros::param::get("/ctrlr/traj_amp",config.traj_amp);
-		ros::param::get("/ctrlr/traj_freq",config.traj_freq);
-		reconfiginit = true;
-	}
-	ctrlrinst->setgains(config.kpr, config.kdr, config.kpt, config.kdt, config.kit);
-	ctrlrinst->setbounds(config.throtbound, (M_PI/180.0)*config.rpbound);//This throttle bound is different from throttle bias which needs to be estimated for some quadcopters. This just cuts off the throttle values that are beyond thrustbias +/- throtbound
-
-	throttlecmdrate = config.cmdrate_throttle;
-
-	//setting perturbation parameters
-	traj_freq = config.traj_freq;
-	traj_amp = config.traj_amp;
-	traj_skew = config.traj_skew;
-	if(level&0x0002)
-	{
-		tf::Vector3 quadorigin = UV_O.getOrigin();
-		goalyaw = config.yawg;
-		//Should not put anything else in level 2 #IMPORTANT
-		if(data.armed)
-		{
-			goalcount = config.goalT*(5);//Just a hack to ensure the total time is ok TODO
-			diff_goal.setValue((-curr_goal[0] + config.xg)/goalcount, (-curr_goal[1] + config.yg)/goalcount,(-curr_goal[2] + config.zg)/goalcount);
-			diff_velgoal.setValue(0,0,0);
-			//goaltimer.start();
-		}
-		else
-		{
-			config.xg = quadorigin[0];
-			config.yg = quadorigin[1];
-			config.zg = quadorigin[2];
-			curr_goal = quadorigin;
-			//goaltimer.start();
-			//diff_goal.setValue(0, 0, (-curr_goal[2] + config.zg)/goalcount);
-		}
-	}
-	//publish a trajectory marker
-	for(int count1 = 0;count1 <= 30;count1++)
-	{
-		trajectoryPtr->points[count1].x = config.xg + traj_amp*cos((count1/30.0)*2*M_PI);
-		trajectoryPtr->points[count1].y = config.yg;
-		trajectoryPtr->points[count1].z = config.zg + traj_amp*traj_skew*sin((count1/30.0)*2*M_PI);
-	}
-	targetPtr->pose.position.x = target[0];
-	targetPtr->pose.position.y = target[1];
-	targetPtr->pose.position.z = target[2];
-	desiredtraj_pub.publish(trajectoryPtr);
-	desiredtraj_pub.publish(targetPtr);
-
-	//traj_axis = config.traj_axis;
-	//corrected_thrustbias = config.add_thrustbias + data.thrustbias;
-	//ctrlrinst->setextbias(corrected_thrustbias);//Set the corrected thrustbias
-}
-
-//Not much load to run this timer
-void QuadcopterGui::goaltimerCallback(const ros::TimerEvent &event)
-{
-	//if(data.quadstate == "Flying")
-	//{
-	if(!followtraj)
-	{
-		if(goalcount > 0)
-		{
-			curr_goal = curr_goal + diff_goal;
-			//cout<<curr_goal[0]<<"\t"<<curr_goal[1]<<"\t"<<curr_goal[2]<<endl;
-			if(!ctrlrinst)
-			{
-				ROS_WARN("Controller not instantiated");
-				return;
-			}
-			ctrlrinst->setgoal(curr_goal[0],curr_goal[1],curr_goal[2],goalyaw);//By default the vel = 0;
-			goalcount--;
-		}
-		trajtime_offset = ros::Time::now();
-	}
-	else
-	{ 
-		ros::Duration currduration = ros::Time::now() - trajtime_offset;
-		float anglearg = 2*M_PI*traj_freq*currduration.toSec();
-		//	float signal = 0, signalder = 0;
-
-		//cout<<"Signal: "<<signal<<"\t Signalder: "<<signalder<<endl;
-		diff_goal.setValue(traj_amp*cos(anglearg),0,traj_amp*traj_skew*sin(anglearg));//Can add axis for the trajectory too
-		diff_velgoal.setValue(-traj_amp*2*M_PI*traj_freq*sin(anglearg),0,traj_skew*traj_amp*2*M_PI*traj_freq*cos(anglearg));//Can make this ellipse/hyperbola by adding two more parameters a, b
-		tf::Vector3 final_goal = curr_goal + diff_goal;
-		ctrlrinst->setgoal(final_goal[0],final_goal[1],final_goal[2],goalyaw,diff_velgoal[0], diff_velgoal[1], diff_velgoal[2]);
-	}
-	/*
-		 else
-		 {
-		 goaltimer.stop();
-		 }
-	 */
-	//}
-}
 }
 PLUGINLIB_DECLARE_CLASS(rqt_quadcoptergui, QuadcopterGui, rqt_quadcoptergui::QuadcopterGui, rqt_gui_cpp::Plugin)
