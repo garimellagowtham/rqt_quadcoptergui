@@ -1,7 +1,7 @@
 #include <ros/ros.h>
 #include <rqt_quadcoptergui/onboardnodehandler.h>
 
-#define MULTITHREAD_ENABLE
+//#define MULTITHREAD_ENABLE
 
 #ifndef NUMBER_THREADS
 #define NUMBER_THREADS 2

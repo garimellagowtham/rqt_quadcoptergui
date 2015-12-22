@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>344</width>
-    <height>513</height>
+    <width>355</width>
+    <height>498</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -30,9 +30,9 @@
    <property name="geometry">
     <rect>
      <x>10</x>
-     <y>140</y>
+     <y>50</y>
      <width>331</width>
-     <height>301</height>
+     <height>391</height>
     </rect>
    </property>
   </widget>
@@ -52,14 +52,17 @@
   <widget class="QLabel" name="label">
    <property name="geometry">
     <rect>
-     <x>100</x>
-     <y>20</y>
+     <x>110</x>
+     <y>10</y>
      <width>81</width>
      <height>31</height>
     </rect>
    </property>
    <property name="text">
     <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;MAV_Status&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+   </property>
+   <property name="alignment">
+    <set>Qt::AlignCenter</set>
    </property>
   </widget>
   <widget class="QPushButton" name="Disarmbutton">
@@ -73,151 +76,6 @@
    </property>
    <property name="text">
     <string>Disarm</string>
-   </property>
-  </widget>
-  <widget class="QCheckBox" name="enable_controller">
-   <property name="geometry">
-    <rect>
-     <x>20</x>
-     <y>80</y>
-     <width>101</width>
-     <height>21</height>
-    </rect>
-   </property>
-   <property name="text">
-    <string>enable_ctrl</string>
-   </property>
-  </widget>
-  <widget class="QCheckBox" name="follow_traj">
-   <property name="geometry">
-    <rect>
-     <x>220</x>
-     <y>50</y>
-     <width>101</width>
-     <height>21</height>
-    </rect>
-   </property>
-   <property name="text">
-    <string>traj_on</string>
-   </property>
-  </widget>
-  <widget class="QCheckBox" name="integrator_checkbox">
-   <property name="geometry">
-    <rect>
-     <x>120</x>
-     <y>50</y>
-     <width>101</width>
-     <height>21</height>
-    </rect>
-   </property>
-   <property name="text">
-    <string>enable_int</string>
-   </property>
-  </widget>
-  <widget class="QCheckBox" name="log_checkbox">
-   <property name="geometry">
-    <rect>
-     <x>20</x>
-     <y>50</y>
-     <width>101</width>
-     <height>21</height>
-    </rect>
-   </property>
-   <property name="text">
-    <string>enable_log</string>
-   </property>
-  </widget>
-  <widget class="QCheckBox" name="enable_joycheckbox">
-   <property name="geometry">
-    <rect>
-     <x>20</x>
-     <y>110</y>
-     <width>101</width>
-     <height>21</height>
-    </rect>
-   </property>
-   <property name="text">
-    <string>enable_joy</string>
-   </property>
-   <property name="checked">
-    <bool>true</bool>
-   </property>
-  </widget>
-  <widget class="QPushButton" name="TargetCapturebutton">
-   <property name="geometry">
-    <rect>
-     <x>20</x>
-     <y>480</y>
-     <width>101</width>
-     <height>24</height>
-    </rect>
-   </property>
-   <property name="text">
-    <string>Target_Capture</string>
-   </property>
-  </widget>
-  <widget class="QCheckBox" name="camcheckbox">
-   <property name="enabled">
-    <bool>true</bool>
-   </property>
-   <property name="geometry">
-    <rect>
-     <x>120</x>
-     <y>110</y>
-     <width>101</width>
-     <height>21</height>
-    </rect>
-   </property>
-   <property name="text">
-    <string>enable_cam</string>
-   </property>
-   <property name="checked">
-    <bool>false</bool>
-   </property>
-  </widget>
-  <widget class="QPushButton" name="LoadTrajectorybutton">
-   <property name="geometry">
-    <rect>
-     <x>130</x>
-     <y>480</y>
-     <width>41</width>
-     <height>21</height>
-    </rect>
-   </property>
-   <property name="text">
-    <string>LT</string>
-   </property>
-  </widget>
-  <widget class="QPushButton" name="SendTrajectorybutton">
-   <property name="geometry">
-    <rect>
-     <x>180</x>
-     <y>480</y>
-     <width>31</width>
-     <height>21</height>
-    </rect>
-   </property>
-   <property name="text">
-    <string>ST</string>
-   </property>
-  </widget>
-  <widget class="QCheckBox" name="manualtargetcheckbox">
-   <property name="enabled">
-    <bool>true</bool>
-   </property>
-   <property name="geometry">
-    <rect>
-     <x>120</x>
-     <y>80</y>
-     <width>111</width>
-     <height>21</height>
-    </rect>
-   </property>
-   <property name="text">
-    <string>manual_target</string>
-   </property>
-   <property name="checked">
-    <bool>false</bool>
    </property>
   </widget>
  </widget>

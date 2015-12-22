@@ -1,0 +1,7 @@
+<?xml version="1.0"?>
+<launch>
+  <rosparam command="load" file="$(find rqt_quadcoptergui)/params/djigui_params.yaml" />
+  <param name="/gui/logdir" type="string" value="$(find rqt_quadcoptergui)/djilogfiles"/>
+  <include file="$(find dji_sdk)/launch/sdk_manifold.launch" ns="onboard_node"/>
+  <node pkg="rqt_quadcoptergui" name="onboard_node" type="onboard_node" output= "screen"/>
+</launch>

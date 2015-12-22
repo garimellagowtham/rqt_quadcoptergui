@@ -1,0 +1,5 @@
+# Specify the Quadcopter parser plugin to use:
+gui/parser_plugin: "dji_parser/DjiParser"
+# this is used for calling the set function from SetptCtrlr
+gui/uav_name: "dji"
+gui/publishrpy: true
