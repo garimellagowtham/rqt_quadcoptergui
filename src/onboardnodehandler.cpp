@@ -415,6 +415,7 @@ void OnboardNodeHandler::receiveRoi(const sensor_msgs::RegionOfInterest &roi_rec
   //Publish velocity
   vel_marker.points[1].x = desired_vel.x; vel_marker.points[1].y = desired_vel.y; vel_marker.points[1].z = desired_vel.z;
   vel_marker_pub_.publish(vel_marker);
+  ROS_DEBUG("Yaw Rate: %f", yaw_rate);
 }
 
 void OnboardNodeHandler::paramreqCallback(rqt_quadcoptergui::QuadcopterInterfaceConfig &config, uint32_t level)
