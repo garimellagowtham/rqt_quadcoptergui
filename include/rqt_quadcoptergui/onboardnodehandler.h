@@ -7,6 +7,9 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
+//Roi Vel Include:
+#include <rqt_quadcoptergui/roi_to_vel.h>
+
 //Arm Controller
 #include <dynamixelsdk/arm_helper.h>
 #include <controllers/SetptCtrl.h>
@@ -27,9 +30,9 @@
 #include <std_msgs/String.h>
 #include <sensor_msgs/Joy.h>
 #include <sensor_msgs/JointState.h>
+#include <sensor_msgs/RegionOfInterest.h>
+#include <sensor_msgs/CameraInfo.h>
 #include <visualization_msgs/Marker.h>
-#include <gcop_comm/CtrlTraj.h>
-#include <gcop_comm/Iteration_req.h>
 #include <rqt_quadcoptergui/GuiCommandMessage.h>
 #include <rqt_quadcoptergui/GuiStateMessage.h>
 
@@ -38,6 +41,7 @@
 #include <sys/stat.h>
 #include <tf/transform_listener.h>
 #include <tf/transform_broadcaster.h>
+#include <tf/transform_datatypes.h>
 
 #define NOFJOINTS 2 //Arm joints
 
@@ -60,6 +64,10 @@ protected:
 
     ros::Subscriber gui_command_subscriber_;
 
+    ros::Subscriber roi_subscriber_;///< Subscribe to the roi of object
+
+    ros::Subscriber camera_info_subscriber_;///< Subscribe to camera info
+
     /////Publishers
     ros::Publisher gui_state_publisher_;
 
@@ -71,8 +79,11 @@ protected:
 
     ros::Publisher imu_rpy_pub_;
 
+    ros::Publisher vel_marker_pub_;
+
+
     //// TF:
-    //boost::shared_ptr<tf::TransformBroadcaster> broadcaster;//Transform Broadcaster
+    boost::shared_ptr<tf::TransformBroadcaster> broadcaster;//Transform Broadcaster
 
     ////Timers
     //ros::Timer goaltimer;//REFACTOR
@@ -100,12 +111,13 @@ protected:
     //// State Variables
     bool enable_logging;///< If logging is enabled
     //bool enable_camctrl;///< If Camera control is enabled
-    //bool enable_control;///< Tells whether the controller is enabled or not
+    bool enable_tracking;///< If we are tracking an object or not
 
 
     //// ROS Messages
     ////sensor_msgs::JointState jointstate_msg;///< For publishing arm state
-    ////visualization_msgs::Marker target_marker;//For visualizing the object to grab
+    visualization_msgs::Marker vel_marker;//For visualizing the object to grab
+    boost::shared_ptr<sensor_msgs::CameraInfo> intrinsics;
 
     /////Arm Variables:
     /*double as[2][3];//Arm inverse kinematics output
@@ -129,16 +141,19 @@ protected:
 
     //// Parameters:
     bool publish_rpy;///< Publish roll pitch yaw on a topic or not
-    //std::string uav_name;///< Name of UAV used in setting ID for tf
-    //int dyn_deviceInd;///< Dynamixel Device Index (ttyUSB*)
-    //int dyn_baudnum;///< Dynamixel Baudrate (57600, 115200, etc)
+    std::string uav_name;///< Name of UAV used in setting ID for tf
+    double yaw_gain;///< Gain on Yaw vel for tracking object
+    double vel_mag;///< Magnitude of vel for tracking object
     string logdir;///< Log Directory Used by Logger
     string parserplugin_name;///< Name of the quadcopter Parser
-    tf::StampedTransform CAM_QUAD_transform;
+    tf::StampedTransform CAM_QUAD_transform;///<transform from camera to Quadcopter
+    bool reconfig_init;///< Initialize reconfig with params
 
 protected:
     // Helper Functions
     void publishGuiState(const rqt_quadcoptergui::GuiStateMessage &state_msg);
+
+    inline void setupMemberVariables();
 
     inline void loadParameters();
 
@@ -156,6 +171,7 @@ protected:
     //inline void stateTransitionCameraController(bool);
     //inline void stateTransitionTrajectoryTracking(bool);
     inline void stateTransitionLogging(bool);
+    inline void stateTransitionTracking(bool);
     //inline void stateTransitionJoyControl(bool);
     //inline void stateTransitionIntegrator(bool);
 
@@ -168,6 +184,10 @@ protected:
     //void vrpnCallback(const geometry_msgs::TransformStamped::ConstPtr &currframe);
 
     void receiveGuiCommands(const rqt_quadcoptergui::GuiCommandMessage &command_msg);
+
+    void receiveCameraInfo(const sensor_msgs::CameraInfo &info);
+
+    void receiveRoi(const sensor_msgs::RegionOfInterest &roi_rect);
 
     //void camcmdCallback(const geometry_msgs::TransformStamped::ConstPtr &currframe);
 

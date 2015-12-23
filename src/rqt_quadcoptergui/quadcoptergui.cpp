@@ -78,7 +78,7 @@ void QuadcopterGui::initPlugin(qt_gui_cpp::PluginContext& context)
   //Get ros NodeHandle from parent nodelet manager:
   ros::NodeHandle nh = getNodeHandle();
   //Subscribers:
-  //gui_state_subscriber_ = nh.subscribe("/gui_state",10,&QuadcopterGui::guistateCallback, this);
+  gui_state_subscriber_ = nh.subscribe("/gui_state",10,&QuadcopterGui::guistateCallback, this);
 
   quad_state_subscriber_ = nh.subscribe("/quad_status",10,&QuadcopterGui::quadstateCallback,this);
 
@@ -94,16 +94,9 @@ void QuadcopterGui::initPlugin(qt_gui_cpp::PluginContext& context)
   connect(ui_.Takeoffbutton, SIGNAL(clicked()), this, SLOT(wrappertakeoff()));
   connect(ui_.Landbutton, SIGNAL(clicked()), this, SLOT(wrapperLand()));
   connect(ui_.Disarmbutton, SIGNAL(clicked()), this, SLOT(wrapperDisarm()));
+  connect(ui_.tracking_checkbox, SIGNAL(stateChanged(int)),SLOT(stateChangeTracking(int)));
+  connect(ui_.log_checkbox, SIGNAL(stateChanged(int)),SLOT(stateChangeLogging(int)));
 }
-
-void QuadcopterGui::RefreshGui()
-{
-  qgui_mutex_.lock();
-  QString msg = QString::fromStdString(quad_status);
-  qgui_mutex_.unlock();
-  ui_.textBrowser->setPlainText(msg);
-}
-
 
 bool QuadcopterGui::eventFilter(QObject* watched, QEvent* event)
 {
@@ -117,7 +110,7 @@ bool QuadcopterGui::eventFilter(QObject* watched, QEvent* event)
 	return QObject::eventFilter(watched, event);
 }
 
-////////////Buttons Callback Functions
+////////////SLOT Functions
 void QuadcopterGui::wrappertakeoff()
 {
   GuiCommandMessage msg;
@@ -139,6 +132,40 @@ void QuadcopterGui::wrapperDisarm()
   gui_command_publisher_.publish(msg);
 }
 
+void QuadcopterGui::RefreshGui()
+{
+  qgui_mutex_.lock();
+  QString msg = QString::fromStdString(quad_status);
+  qgui_mutex_.unlock();
+  ui_.textBrowser->setPlainText(msg);
+}
+
+void QuadcopterGui::stateChangeLogging(int state)
+{
+  if(checkUpdateState(state_msg.log_status))//Check if input is from onboard Node
+    return;
+  GuiCommandMessage msg;
+  if(state == Qt::Checked)
+    msg.command = true;
+  else
+    msg.command = false;
+  msg.commponent_name = msg.enable_log;
+  gui_command_publisher_.publish(msg);
+}
+
+void QuadcopterGui::stateChangeTracking(int state)
+{
+  if(checkUpdateState(state_msg.tracking_status))//Check if input is from onboard Node
+    return;
+  GuiCommandMessage msg;
+  if(state == Qt::Checked)
+    msg.command = true;
+  else
+    msg.command = false;
+  msg.commponent_name = msg.enable_tracking;
+  gui_command_publisher_.publish(msg);
+}
+
 void QuadcopterGui::shutdownPlugin()
 {
   gui_state_subscriber_.shutdown();
@@ -148,6 +175,32 @@ void QuadcopterGui::shutdownPlugin()
 }
 
 ////////////////CALLBACKS///////////////
+
+void QuadcopterGui::guistateCallback(const GuiStateMessage & statemsg)
+{
+  //Change UI states:
+  switch(statemsg.commponent_id)
+  {
+  case statemsg.log_status:
+    if(statemsg.status != ui_.log_checkbox->isChecked())
+    {
+      qgui_mutex_.lock();
+      update_component_id[statemsg.commponent_id] = true;
+      qgui_mutex_.unlock();
+      ui_.log_checkbox->setCheckState(CHECKSTATE(statemsg.status));
+    }
+    break;
+  case statemsg.tracking_status:
+    if(statemsg.status != ui_.tracking_checkbox->isChecked())
+    {
+      qgui_mutex_.lock();
+      update_component_id[statemsg.commponent_id] = true;
+      qgui_mutex_.unlock();
+      ui_.log_checkbox->setCheckState(CHECKSTATE(statemsg.status));
+    }
+    break;
+  }
+}
 
 void QuadcopterGui::quadstateCallback(const std_msgs::String & statemsg)
 {
