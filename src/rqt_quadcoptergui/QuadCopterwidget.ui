@@ -30,9 +30,9 @@
    <property name="geometry">
     <rect>
      <x>10</x>
-     <y>50</y>
+     <y>110</y>
      <width>331</width>
-     <height>391</height>
+     <height>331</height>
     </rect>
    </property>
   </widget>
@@ -76,6 +76,32 @@
    </property>
    <property name="text">
     <string>Disarm</string>
+   </property>
+  </widget>
+  <widget class="QCheckBox" name="log_checkbox">
+   <property name="geometry">
+    <rect>
+     <x>10</x>
+     <y>70</y>
+     <width>79</width>
+     <height>21</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>enable_log</string>
+   </property>
+  </widget>
+  <widget class="QCheckBox" name="tracking_checkbox">
+   <property name="geometry">
+    <rect>
+     <x>100</x>
+     <y>70</y>
+     <width>111</width>
+     <height>21</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>enable_tracking</string>
    </property>
   </widget>
  </widget>

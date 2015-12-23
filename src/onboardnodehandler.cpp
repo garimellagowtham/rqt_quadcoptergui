@@ -6,7 +6,8 @@ OnboardNodeHandler::OnboardNodeHandler(ros::NodeHandle &nh_):nh(nh_)
                                                             //, broadcaster(new tf::TransformBroadcaster())
                                                             , logdir_created(false), enable_logging(false)
                                                             , publish_rpy(false)
-                                                            //, reconfiginit(false)
+                                                            , enable_tracking(false)
+                                                            , reconfig_init(false)
                                                             //, armcmdrate(4), armratecount(0), gripped_already(false), newcamdata(false)
                                                             //, enable_control(false), enable_integrator(false), enable_camctrl(false), enable_manualtargetretrieval(false)
                                                             //, tip_position(), goalcount(1), diff_goal(), count_imu(0)
@@ -30,6 +31,9 @@ OnboardNodeHandler::OnboardNodeHandler(ros::NodeHandle &nh_):nh(nh_)
   ROS_INFO("Subscribing to Callbacks");
   //Subscribe to GuiCommands
   gui_command_subscriber_ = nh_.subscribe("/gui_commands", 10, &OnboardNodeHandler::receiveGuiCommands, this);
+  //Subscribe to roi
+  roi_subscriber_ = nh_.subscribe("roi", 10, &OnboardNodeHandler::receiveRoi, this);
+  camera_info_subscriber_ = nh.subscribe("camera_info",1,&OnboardNodeHandler::receiveCameraInfo, this);
   //Subscribe to Camera Estimator:
   //camdata_sub = nh_.subscribe("/Pose_Est/objpose",1,&OnboardNodeHandler::camcmdCallback,this);
 
@@ -127,18 +131,22 @@ inline void OnboardNodeHandler::loadParameters()
     ROS_ERROR("Cannot find parser_plugin parameter to load the parser");
   }
 
+  //Tracking Parameters
+  nh.param<double>("/tracking/vel_mag",vel_mag, 0.1);
+  nh.param<double>("/tracking/yaw_gain",yaw_gain, 0.01);
+
   //Where the arm base is in quadcopter's frame Orientations are assumed to be known #TODO Add them as a paremeter too
   /*nh.param<double>("/ctrlr/armbasewrtquadx",arm_basewrtquad[0],0.0732);
   nh.param<double>("/ctrlr/armbasewrtquady",arm_basewrtquad[1], 0.0);
   nh.param<double>("/ctrlr/armbasewrtquadz",arm_basewrtquad[2], -0.07);//was -0.1
 */
 
-  //nh.param<std::string>("/gui/uav_name",uav_name,"pixhawk");
+  nh.param<std::string>("/gui/uav_name",uav_name,"dji");
   nh.param<std::string>("/gui/logdir",logdir,"/home/gowtham");
   nh.param<bool>("/gui/publishrpy",publish_rpy,false);
 
   //Find Camera pose in Quad frame
-  /*static tf::TransformListener listener;//Will make it a class member later (for other functions to use TODO)
+  static tf::TransformListener listener;//Will make it a class member later (for other functions to use TODO)
   try{
     bool result = listener.waitForTransform(uav_name, "camera",
                                             ros::Time(0), ros::Duration(1.0));
@@ -146,14 +154,11 @@ inline void OnboardNodeHandler::loadParameters()
                              ros::Time(0), CAM_QUAD_transform);
     if(!result)
       cout<<"Cannot find QUAD to CAM Transform"<<endl;
-    //Look for object modification transform
-    result = listener.waitForTransform("object", "object_mod",
-                                       ros::Time(0), ros::Duration(1.0));
   }
   catch (tf::TransformException ex){
     ROS_ERROR("%s",ex.what());
     ros::Duration(1.0).sleep();
-  }*/
+  }
 }
 
 inline bool OnboardNodeHandler::createParserInstance()
@@ -262,6 +267,26 @@ PUBLISH_LOGGING_STATE:
   gui_state_publisher_.publish(state_message);
 }
 
+inline void OnboardNodeHandler::stateTransitionTracking(bool state)
+{
+  if(!parserinstance)
+  {
+    ROS_WARN("Parser Instance not defined. Cannot Track");
+		goto PUBLISH_TRACKING_STATE;
+  }
+
+  //Check if we are in air otherwise do not track
+  if(data.armed)
+    enable_tracking = state;
+  
+  //Publish Change of State:
+PUBLISH_TRACKING_STATE:
+  rqt_quadcoptergui::GuiStateMessage state_message;
+  state_message.status = enable_tracking;
+  state_message.commponent_id = state_message.tracking_status;
+  gui_state_publisher_.publish(state_message);
+}
+
 ////////////////////////Gui Button Commands////////////
 inline void OnboardNodeHandler::armQuad()
 {
@@ -285,6 +310,8 @@ inline void OnboardNodeHandler::disarmQuad()
     return;
   }
   parserinstance->disarm();
+  stateTransitionTracking(false);
+  stateTransitionLogging(false);
 }
 
 inline void OnboardNodeHandler::landQuad()
@@ -295,6 +322,8 @@ inline void OnboardNodeHandler::landQuad()
     return;
   }
   parserinstance->land();
+  stateTransitionTracking(false);
+  stateTransitionLogging(false);
 }
 
 ////////////////////////CALLBACKS//////////////////////
@@ -305,6 +334,9 @@ void OnboardNodeHandler::receiveGuiCommands(const rqt_quadcoptergui::GuiCommandM
   {
   case command_msg.enable_log://0
     stateTransitionLogging(command_msg.command);
+    break;
+  case command_msg.enable_tracking://1
+    stateTransitionTracking(command_msg.command);
     break;
   case command_msg.arm_quad ://6
     ROS_INFO("Arming Quad");
@@ -321,6 +353,31 @@ void OnboardNodeHandler::receiveGuiCommands(const rqt_quadcoptergui::GuiCommandM
   }
 }
 
+void OnboardNodeHandler::receiveCameraInfo(const sensor_msgs::CameraInfo &info)
+{
+  intrinsics.reset(new sensor_msgs::CameraInfo());
+  *intrinsics = info;//Copy
+  camera_info_subscriber_.shutdown();
+}
+
+void OnboardNodeHandler::receiveRoi(const sensor_msgs::RegionOfInterest &roi_rect)
+{
+  if(!intrinsics || !parserinstance) 
+  {
+    ROS_WARN("No Camera Info received/ No Parser instance created");
+    return;
+  }
+  if(enable_tracking)
+  {
+    //Get RPY:
+    parserinstance->getquaddata(data);
+    //geometry_msgs::Vector3 desired_vel;
+    //double yaw_rate;
+    //ROItoVel(roi_rect, data.rpydata, *intrinsics, CAM_QUAD_transform, vel_mag, yaw_gain, desired_vel, yaw_rate);
+    //parserinstance->cmdvelguided(desired_vel, yaw_rate);
+  }
+}
+
 void OnboardNodeHandler::paramreqCallback(rqt_quadcoptergui::QuadcopterInterfaceConfig &config, uint32_t level)
 {
   // Use the config values to set the goals and gains for quadcopter
@@ -330,17 +387,24 @@ void OnboardNodeHandler::paramreqCallback(rqt_quadcoptergui::QuadcopterInterface
     return;
   }
 
+  if(!reconfig_init)
+  {
+    config.yaw_gain = yaw_gain;
+    config.vel_mag = vel_mag;
+    reconfig_init = true;
+    return;
+  }
+
 
   if(level&0x0002)
   {
     if(data.armed)
     {
-      if(config.update_vel)
+      if(config.update_vel && !enable_tracking)//Make sure we are not tracking an object
       {
         geometry_msgs::Vector3 vel_cmd;
         vel_cmd.x = config.vx; vel_cmd.y = config.vy; vel_cmd.z = config.vz;
-        parserinstance->cmdvelguided(vel_cmd);
-        config.update_vel = false;
+        parserinstance->cmdvelguided(vel_cmd, config.yaw_rate);
       }
     }
     else
@@ -349,8 +413,8 @@ void OnboardNodeHandler::paramreqCallback(rqt_quadcoptergui::QuadcopterInterface
       config.vy = 0;
       config.vz = 0;
       ROS_INFO("Quad not armed");
-      config.update_vel = false;
     }
+    config.update_vel = false;
   }
 
 /*#ifdef ARM_ENABLED
@@ -393,10 +457,10 @@ void OnboardNodeHandler::quadstatetimerCallback(const ros::TimerEvent &event)
   }
   // Create a Text message based on the data from the Parser class
   sprintf(buffer,
-          "Battery Percent: %2.2f\t\nTemperature: %2.2f\tPressure: %2.2f\tWindspeed: %2.2f\tAltitude: %2.2f\t\nRoll: %2.2f\tPitch %2.2f\tYaw %2.2f\nMagx: %2.2f\tMagy %2.2f\tMagz %2.2f\naccx: %2.2f\taccy %2.2f\taccz %2.2f\nvelx: %2.2f\tvely %2.2f\tvelz %2.2f\nMass: %2.2f\tTimestamp: %2.2f\t\nQuadState: %s",
+          "Battery Percent: %2.2f\t\nlx: %2.2f\tly: %2.2f\tlz: %2.2f\nAltitude: %2.2f\t\nRoll: %2.2f\tPitch %2.2f\tYaw %2.2f\nMagx: %2.2f\tMagy %2.2f\tMagz %2.2f\naccx: %2.2f\taccy %2.2f\taccz %2.2f\nvelx: %2.2f\tvely %2.2f\tvelz %2.2f\nMass: %2.2f\tTimestamp: %2.2f\t\nQuadState: %s",
           data.batterypercent
-          ,data.temperature,data.pressure
-          ,data.wind_speed, data.altitude
+          ,data.localpos.x, data.localpos.y, data.localpos.z
+          ,data.altitude
           ,data.rpydata.x*(180/M_PI),data.rpydata.y*(180/M_PI),data.rpydata.z*(180/M_PI)//IMU rpy angles
           ,data.magdata.x,data.magdata.y,data.magdata.z
           ,data.linacc.x,data.linacc.y,data.linacc.z
@@ -406,6 +470,7 @@ void OnboardNodeHandler::quadstatetimerCallback(const ros::TimerEvent &event)
   //Publish State:
   std_msgs::String string_msg;
   string_msg.data = std::string(buffer);
-  quad_state_publisher_.publish(string_msg);
+  quad_state_publisher_.publish(string_msg); 
+
 }
 

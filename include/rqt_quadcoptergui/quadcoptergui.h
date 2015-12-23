@@ -113,6 +113,7 @@ protected:
   QMutex qgui_mutex_;//Mutex for refreshing states
   bool update_component_id[9];// Only update gui and do not execute signal functions
   std::string trajectory_file_name;//Prespecified file name
+  GuiStateMessage state_msg;//Dummy state message to get tags for enable_log etc
 
 
 protected:
@@ -138,7 +139,7 @@ protected:
     pt.z = vector.z;
   }
   //////Callbacks
-  //void guistateCallback(const rqt_quadcoptergui::GuiStateMessage&);
+  void guistateCallback(const rqt_quadcoptergui::GuiStateMessage&);
 
   void quadstateCallback(const std_msgs::String &);
 
@@ -147,6 +148,8 @@ protected slots:
   virtual void wrapperLand();
   virtual void wrapperDisarm();
   virtual void RefreshGui();
+  virtual void stateChangeTracking(int);
+  virtual void stateChangeLogging(int);
 };
 
 }
