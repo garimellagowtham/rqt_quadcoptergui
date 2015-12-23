@@ -161,6 +161,9 @@ class_loader_hide_library_symbols(${PROJECT_NAME})
 target_link_libraries(${PROJECT_NAME} ${catkin_LIBRARIES}  ${GCOP_LIBRARIES} ${OpenCV_LIBS} ${TINYXML_LIBRARIES})
 target_link_libraries(onboardnodehandler ${catkin_LIBRARIES}  ${GCOP_LIBRARIES} ${OpenCV_LIBS} ${TINYXML_LIBRARIES})
 
+catkin_add_gtest(roi_to_vel_test tests/roi_to_vel_test.cpp)
+target_link_libraries(roi_to_vel_test ${catkin_LIBRARIES})
+
 ## Declare a cpp executable
 # add_executable(rqt_quadcoptergui_node src/rqt_quadcoptergui_node.cpp)
 add_executable(onboard_node src/onboard_node.cpp)
