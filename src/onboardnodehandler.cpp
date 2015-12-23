@@ -3,7 +3,7 @@
 //#define ARM_MOCK_TEST_DEBUG
 
 OnboardNodeHandler::OnboardNodeHandler(ros::NodeHandle &nh_):nh(nh_)
-                                                            //, broadcaster(new tf::TransformBroadcaster())
+                                                            , broadcaster(new tf::TransformBroadcaster())
                                                             , logdir_created(false), enable_logging(false)
                                                             , publish_rpy(false)
                                                             , enable_tracking(false)
@@ -12,6 +12,10 @@ OnboardNodeHandler::OnboardNodeHandler(ros::NodeHandle &nh_):nh(nh_)
                                                             //, enable_control(false), enable_integrator(false), enable_camctrl(false), enable_manualtargetretrieval(false)
                                                             //, tip_position(), goalcount(1), diff_goal(), count_imu(0)
 {
+  //initialize member variables
+  ROS_INFO("Setting up Member Variables");
+  setupMemberVariables();
+
   //Load Parameters:
   ROS_INFO("Loading Parameters");
   loadParameters();
@@ -44,8 +48,8 @@ OnboardNodeHandler::OnboardNodeHandler(ros::NodeHandle &nh_):nh(nh_)
   quad_state_publisher_ = nh_.advertise<std_msgs::String>("/quad_status", 10);
   //Advertise Joint States of Manipulator
   //jointstate_pub = nh_.advertise<sensor_msgs::JointState>("/movingrobot/joint_states",10);
-  //Advertise Target position of Manipulator
-  //armtarget_pub = nh_.advertise<visualization_msgs::Marker>("armtarget", 10);
+  //Advertise Target velocity for tracking
+  vel_marker_pub_ = nh_.advertise<visualization_msgs::Marker>("targetvel", 10);
 
   if(publish_rpy)
   {
@@ -104,7 +108,7 @@ OnboardNodeHandler::~OnboardNodeHandler()
   //armtarget_pub.shutdown();
   //iterationreq_pub.shutdown();
 
-  //broadcaster.reset();
+  broadcaster.reset();
 
   reconfigserver.reset();
 
@@ -120,7 +124,26 @@ OnboardNodeHandler::~OnboardNodeHandler()
 //////////////////////HELPER Functions///////////////////
 void OnboardNodeHandler::publishGuiState(const rqt_quadcoptergui::GuiStateMessage &state_msg)
 {
-  gui_state_publisher_.publish(state_msg);
+    gui_state_publisher_.publish(state_msg);
+}
+
+void OnboardNodeHandler::setupMemberVariables()
+{
+  // Prepare Target cube pointer for visualizing object
+  vel_marker.id = 1;
+  vel_marker.header.frame_id = uav_name;
+  vel_marker.action = visualization_msgs::Marker::ADD;
+  vel_marker.type = visualization_msgs::Marker::ARROW;
+  //Setting points
+  geometry_msgs::Point pt;
+  pt.x = pt.y = pt.z = 0;
+  vel_marker.points.push_back(pt);
+  pt.z = 0.1;//Start
+  vel_marker.points.push_back(pt);
+  vel_marker.scale.x = 0.02;//Shaft dia
+  vel_marker.scale.y = 0.05;//Head Dia
+  vel_marker.color.r = 1.0;//red arrow
+  vel_marker.color.a = 1.0;
 }
 
 inline void OnboardNodeHandler::loadParameters()
@@ -376,18 +399,22 @@ void OnboardNodeHandler::receiveRoi(const sensor_msgs::RegionOfInterest &roi_rec
     ROS_WARN("No Camera Info received/ No Parser instance created");
     return;
   }
+  //Get RPY:
+  parserinstance->getquaddata(data);
+  geometry_msgs::Vector3 desired_vel;
+  double yaw_rate;
+  roiToVel(roi_rect,
+           data.rpydata, *intrinsics,
+           CAM_QUAD_transform,vel_mag,yaw_gain,
+           desired_vel, yaw_rate);
   if(enable_tracking)
   {
-    //Get RPY:
-    parserinstance->getquaddata(data);
-    geometry_msgs::Vector3 desired_vel;
-    double yaw_rate;
-    roiToVel(roi_rect,
-       data.rpydata, *intrinsics,
-       CAM_QUAD_transform,vel_mag,yaw_gain,
-       desired_vel, yaw_rate);
     parserinstance->cmdvelguided(desired_vel, yaw_rate);
+    //Publish vector to rviz
   }
+  //Publish velocity
+  vel_marker.points[1].x = desired_vel.x; vel_marker.points[1].y = desired_vel.y; vel_marker.points[1].z = desired_vel.z;
+  vel_marker_pub_.publish(vel_marker);
 }
 
 void OnboardNodeHandler::paramreqCallback(rqt_quadcoptergui::QuadcopterInterfaceConfig &config, uint32_t level)
@@ -483,6 +510,8 @@ void OnboardNodeHandler::quadstatetimerCallback(const ros::TimerEvent &event)
   std_msgs::String string_msg;
   string_msg.data = std::string(buffer);
   quad_state_publisher_.publish(string_msg); 
-
+  //Publish TF of the quadcopter position:
+  tf::Transform quad_transform(tf::createQuaternionFromYaw(data.rpydata.z), tf::Vector3(data.localpos.x, data.localpos.y, data.localpos.z));
+  broadcaster->sendTransform(tf::StampedTransform(quad_transform, ros::Time::now(), "world", uav_name));
 }
 

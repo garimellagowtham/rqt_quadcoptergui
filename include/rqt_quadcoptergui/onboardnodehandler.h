@@ -41,6 +41,7 @@
 #include <sys/stat.h>
 #include <tf/transform_listener.h>
 #include <tf/transform_broadcaster.h>
+#include <tf/transform_datatypes.h>
 
 #define NOFJOINTS 2 //Arm joints
 
@@ -78,9 +79,11 @@ protected:
 
     ros::Publisher imu_rpy_pub_;
 
+    ros::Publisher vel_marker_pub_;
+
 
     //// TF:
-    //boost::shared_ptr<tf::TransformBroadcaster> broadcaster;//Transform Broadcaster
+    boost::shared_ptr<tf::TransformBroadcaster> broadcaster;//Transform Broadcaster
 
     ////Timers
     //ros::Timer goaltimer;//REFACTOR
@@ -113,7 +116,7 @@ protected:
 
     //// ROS Messages
     ////sensor_msgs::JointState jointstate_msg;///< For publishing arm state
-    ////visualization_msgs::Marker target_marker;//For visualizing the object to grab
+    visualization_msgs::Marker vel_marker;//For visualizing the object to grab
     boost::shared_ptr<sensor_msgs::CameraInfo> intrinsics;
 
     /////Arm Variables:
@@ -149,6 +152,8 @@ protected:
 protected:
     // Helper Functions
     void publishGuiState(const rqt_quadcoptergui::GuiStateMessage &state_msg);
+
+    inline void setupMemberVariables();
 
     inline void loadParameters();
 
