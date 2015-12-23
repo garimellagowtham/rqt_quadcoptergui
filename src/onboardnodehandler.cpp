@@ -277,7 +277,16 @@ inline void OnboardNodeHandler::stateTransitionTracking(bool state)
 
   //Check if we are in air otherwise do not track
   if(data.armed)
+  {
     enable_tracking = state;
+    if(!enable_tracking)//If we are not tracking and we are in air, we should send zero vel to it
+    {
+      geometry_msgs::Vector3 velocity;
+      velocity.x = velocity.y = velocity.z = 0;
+      double yaw_rate = 0;
+      parserinstance->cmdvelguided(velocity, yaw_rate);
+    }
+  }
   
   //Publish Change of State:
 PUBLISH_TRACKING_STATE:
@@ -371,10 +380,13 @@ void OnboardNodeHandler::receiveRoi(const sensor_msgs::RegionOfInterest &roi_rec
   {
     //Get RPY:
     parserinstance->getquaddata(data);
-    //geometry_msgs::Vector3 desired_vel;
-    //double yaw_rate;
-    //ROItoVel(roi_rect, data.rpydata, *intrinsics, CAM_QUAD_transform, vel_mag, yaw_gain, desired_vel, yaw_rate);
-    //parserinstance->cmdvelguided(desired_vel, yaw_rate);
+    geometry_msgs::Vector3 desired_vel;
+    double yaw_rate;
+    roiToVel(roi_rect,
+       data.rpydata, *intrinsics,
+       CAM_QUAD_transform,vel_mag,yaw_gain,
+       desired_vel, yaw_rate);
+    parserinstance->cmdvelguided(desired_vel, yaw_rate);
   }
 }
 
