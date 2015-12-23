@@ -120,6 +120,7 @@ TEST(RoiToVelTests, testLevelRoiLeft)
   body_rpy.z = 0;
 
   tf::Transform cam_transform(tf::createQuaternionFromRPY(-M_PI/2,0,-M_PI/2));
+  cam_transform.setOrigin(tf::Vector3(3,3,3));
   double vel_mag = 1;
   double yaw_gain = 1;
 

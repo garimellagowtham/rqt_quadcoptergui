@@ -37,7 +37,7 @@ void roiToVel(const sensor_msgs::RegionOfInterest& roi,
   tf::Vector3 roi3d(roi3d_x, roi3d_y, 1);
   roi3d.normalize();
   tf::Transform body_rpy_tf(tf::createQuaternionFromRPY(body_rpy.x ,body_rpy.y, 0));
-  tf::Vector3 roi_dir = body_rpy_tf*cam_transform*roi3d;
+  tf::Vector3 roi_dir = body_rpy_tf*(cam_transform.getBasis()*roi3d);
 
   body_vel.x = vel_mag*roi_dir.getX();
   body_vel.y = 0;
