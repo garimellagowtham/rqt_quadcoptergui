@@ -12,13 +12,13 @@ OnboardNodeHandler::OnboardNodeHandler(ros::NodeHandle &nh_):nh(nh_)
                                                             //, enable_control(false), enable_integrator(false), enable_camctrl(false), enable_manualtargetretrieval(false)
                                                             //, tip_position(), goalcount(1), diff_goal(), count_imu(0)
 {
-  //initialize member variables
-  ROS_INFO("Setting up Member Variables");
-  setupMemberVariables();
-
   //Load Parameters:
   ROS_INFO("Loading Parameters");
   loadParameters();
+
+  //initialize member variables
+  ROS_INFO("Setting up Member Variables");
+  setupMemberVariables();
  
   ROS_INFO("Creating Parser");
   if(!createParserInstance())
@@ -167,6 +167,8 @@ inline void OnboardNodeHandler::loadParameters()
   nh.param<std::string>("/gui/uav_name",uav_name,"dji");
   nh.param<std::string>("/gui/logdir",logdir,"/home/gowtham");
   nh.param<bool>("/gui/publishrpy",publish_rpy,false);
+
+  ROS_INFO("UAV Name: %s",uav_name.c_str());
 
   //Find Camera pose in Quad frame
   static tf::TransformListener listener;//Will make it a class member later (for other functions to use TODO)
