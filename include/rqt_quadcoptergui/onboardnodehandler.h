@@ -107,6 +107,8 @@ protected:
 
     ///// Helper Variables
     char buffer[1500];//buffer for creating Text data
+    geometry_msgs::Vector3 desired_vel_track;///< Tracking velocity
+    double desired_yaw_rate;///< Tracking yaw rate
 
     //// State Variables
     bool enable_logging;///< If logging is enabled
