@@ -335,14 +335,25 @@ inline void OnboardNodeHandler::stateTransitionControl(bool state)
   if(!enable_control)
     cmdtimer.stop();
 
-  result = parserinstance->flowControl(enable_control);
-
-  if(enable_control && result)//If we enabled quadcopter control
+  if(data.armed && enable_control)//If we are in air and asked to enable control of quadcopter
   {
-    desired_vel.x = desired_vel.y = desired_vel.z = desired_yaw_rate = 0;
-    reconfig_update = true;
-    //Start Timer to send vel to quadcopter
-    cmdtimer.start();
+    result = parserinstance->flowControl(enable_control);//get control
+    if(!result)
+    {
+        enable_control = false;
+        ROS_WARN("Failed to get control of quadcopter");
+    }
+    else
+    {
+      desired_vel.x = desired_vel.y = desired_vel.z = desired_yaw_rate = 0;
+      reconfig_update = true;
+      //Start Timer to send vel to quadcopter
+      cmdtimer.start();
+    }
+  }
+  else
+  {
+      enable_control = false;
   }
   
   //Publish Change of State:
