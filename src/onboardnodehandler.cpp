@@ -502,6 +502,9 @@ void OnboardNodeHandler::paramreqCallback(rqt_quadcoptergui::QuadcopterInterface
     config.update_vel = false;
   }
 
+  yaw_gain = config.yaw_gain;
+  vel_mag = config.vel_mag;
+
 /*#ifdef ARM_ENABLED
   if((level&0x0008))
   {
@@ -542,7 +545,7 @@ void OnboardNodeHandler::quadstatetimerCallback(const ros::TimerEvent &event)
   }
   // Create a Text message based on the data from the Parser class
   sprintf(buffer,
-          "Battery Percent: %2.2f\t\nlx: %2.2f\tly: %2.2f\tlz: %2.2f\nAltitude: %2.2f\t\nRoll: %2.2f\tPitch %2.2f\tYaw %2.2f\nMagx: %2.2f\tMagy %2.2f\tMagz %2.2f\naccx: %2.2f\taccy %2.2f\taccz %2.2f\nvelx: %2.2f\tvely %2.2f\tvelz %2.2fTrvelx: %2.2f\tTrvelz: %2.2f\tTryawr: %2.2f\nMass: %2.2f\tTimestamp: %2.2f\t\nQuadState: %s",
+          "Battery Percent: %2.2f\t\nlx: %2.2f\tly: %2.2f\tlz: %2.2f\nAltitude: %2.2f\t\nRoll: %2.2f\tPitch %2.2f\tYaw %2.2f\nMagx: %2.2f\tMagy %2.2f\tMagz %2.2f\naccx: %2.2f\taccy %2.2f\taccz %2.2f\nvelx: %2.2f\tvely %2.2f\tvelz %2.2f\nTrvelx: %2.2f\tTrvelz: %2.2f\tTryawr: %2.2f\nMass: %2.2f\tTimestamp: %2.2f\t\nQuadState: %s",
           data.batterypercent
           ,data.localpos.x, data.localpos.y, data.localpos.z
           ,data.altitude
@@ -550,7 +553,7 @@ void OnboardNodeHandler::quadstatetimerCallback(const ros::TimerEvent &event)
           ,data.magdata.x,data.magdata.y,data.magdata.z
           ,data.linacc.x,data.linacc.y,data.linacc.z
           ,data.linvel.x,data.linvel.y,data.linvel.z
-          ,desired_vel.x,desired_vel.z,desired_yaw_rate
+          ,desired_vel.x,desired_vel.z,desired_yaw_rate*(180/M_PI)
           ,data.mass,data.timestamp,data.quadstate.c_str());
 
   //Publish State:
