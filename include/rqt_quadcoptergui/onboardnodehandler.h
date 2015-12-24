@@ -87,7 +87,7 @@ protected:
 
     ////Timers
     //ros::Timer goaltimer;//REFACTOR
-    //ros::Timer cmdtimer;//REFACTOR #TODO
+    ros::Timer cmdtimer;//REFACTOR #TODO
     ros::Timer quadstatetimer;// Send quad state to GUI
 
     /////Reconfigure Server
@@ -107,13 +107,14 @@ protected:
 
     ///// Helper Variables
     char buffer[1500];//buffer for creating Text data
-    geometry_msgs::Vector3 desired_vel_track;///< Tracking velocity
-    double desired_yaw_rate;///< Tracking yaw rate
+    geometry_msgs::Vector3 desired_vel;///< Commanded velocity to quadcopter
+    double desired_yaw_rate;///< commanded yaw rate
 
     //// State Variables
     bool enable_logging;///< If logging is enabled
     //bool enable_camctrl;///< If Camera control is enabled
     bool enable_tracking;///< If we are tracking an object or not
+    bool enable_control;///< If we enable quadcopter control
 
 
     //// ROS Messages
@@ -150,6 +151,7 @@ protected:
     string parserplugin_name;///< Name of the quadcopter Parser
     tf::StampedTransform CAM_QUAD_transform;///<transform from camera to Quadcopter
     bool reconfig_init;///< Initialize reconfig with params
+    bool reconfig_update;///< Update reconfig with vel
 
 protected:
     // Helper Functions
@@ -174,6 +176,7 @@ protected:
     //inline void stateTransitionTrajectoryTracking(bool);
     inline void stateTransitionLogging(bool);
     inline void stateTransitionTracking(bool);
+    inline void stateTransitionControl(bool);
     //inline void stateTransitionJoyControl(bool);
     //inline void stateTransitionIntegrator(bool);
 
@@ -201,7 +204,7 @@ protected:
 
     //void goaltimerCallback(const ros::TimerEvent&);
 
-    //void cmdtimerCallback(const ros::TimerEvent&);
+    void cmdtimerCallback(const ros::TimerEvent&);
 
     void quadstatetimerCallback(const ros::TimerEvent&);
 

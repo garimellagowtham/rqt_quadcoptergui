@@ -6,8 +6,8 @@ OnboardNodeHandler::OnboardNodeHandler(ros::NodeHandle &nh_):nh(nh_)
                                                             , broadcaster(new tf::TransformBroadcaster())
                                                             , logdir_created(false), enable_logging(false)
                                                             , publish_rpy(false)
-                                                            , enable_tracking(false)
-                                                            , reconfig_init(false)
+                                                            , enable_tracking(false), enable_control(false)
+                                                            , reconfig_init(false), reconfig_update(false)
                                                             //, armcmdrate(4), armratecount(0), gripped_already(false), newcamdata(false)
                                                             //, enable_control(false), enable_integrator(false), enable_camctrl(false), enable_manualtargetretrieval(false)
                                                             //, tip_position(), goalcount(1), diff_goal(), count_imu(0)
@@ -75,8 +75,8 @@ OnboardNodeHandler::OnboardNodeHandler(ros::NodeHandle &nh_):nh(nh_)
   //timer_relaxgrip = nh_.createTimer(ros::Duration(4), &OnboardNodeHandler::oneshotGrab, this, true);//One shot timer
   //timer_relaxgrip.stop();
   //Timer for commanding quadcopter
-  //cmdtimer = nh_.createTimer(ros::Duration(0.02), &OnboardNodeHandler::cmdtimerCallback,this);//50Hz is the update rate of Quadcopter cmd
-  //cmdtimer.start();
+  cmdtimer = nh_.createTimer(ros::Duration(0.02), &OnboardNodeHandler::cmdtimerCallback,this);//50Hz is the update rate of Quadcopter cmd
+  cmdtimer.stop();
   //Timer for sending quadcopter state
   quadstatetimer = nh_.createTimer(ros::Duration(0.05), &OnboardNodeHandler::quadstatetimerCallback, this);//20Hz update GUI quad state
 }
@@ -113,7 +113,7 @@ OnboardNodeHandler::~OnboardNodeHandler()
   reconfigserver.reset();
 
   //goaltimer.stop();
-  //cmdtimer.stop();
+  cmdtimer.stop();
   quadstatetimer.stop();
 
   vrpnfile.close();//Close the file
@@ -300,16 +300,15 @@ inline void OnboardNodeHandler::stateTransitionTracking(bool state)
 		goto PUBLISH_TRACKING_STATE;
   }
 
-  //Check if we are in air otherwise do not track
-  if(data.armed)
+  //Check if we are in air and control is enabled; otherwise do not track
+  if(data.armed && enable_control)
   {
     enable_tracking = state;
-    if(!enable_tracking)//If we are not tracking and we are in air, we should send zero vel to it
+    //If we are switching of tracking set desired vel to 0
+    if(!enable_tracking)
     {
-      geometry_msgs::Vector3 velocity;
-      velocity.x = velocity.y = velocity.z = 0;
-      double yaw_rate = 0;
-      parserinstance->cmdvelguided(velocity, yaw_rate);
+      desired_vel.x = desired_vel.y = desired_vel.z = desired_yaw_rate = 0;
+      reconfig_update = true;
     }
   }
   
@@ -318,6 +317,39 @@ PUBLISH_TRACKING_STATE:
   rqt_quadcoptergui::GuiStateMessage state_message;
   state_message.status = enable_tracking;
   state_message.commponent_id = state_message.tracking_status;
+  gui_state_publisher_.publish(state_message);
+}
+
+inline void OnboardNodeHandler::stateTransitionControl(bool state)
+{
+  bool result = false;
+  if(!parserinstance)
+  {
+    ROS_WARN("Parser Instance not defined. Cannot Control Quad");
+		goto PUBLISH_CONTROL_STATE;
+  }
+
+  enable_control = state;
+
+  //Stop Control Timer if state is false:
+  if(!enable_control)
+    cmdtimer.stop();
+
+  result = parserinstance->flowControl(enable_control);
+
+  if(enable_control && result)//If we enabled quadcopter control
+  {
+    desired_vel.x = desired_vel.y = desired_vel.z = desired_yaw_rate = 0;
+    reconfig_update = true;
+    //Start Timer to send vel to quadcopter
+    cmdtimer.start();
+  }
+  
+  //Publish Change of State:
+PUBLISH_CONTROL_STATE:
+  rqt_quadcoptergui::GuiStateMessage state_message;
+  state_message.status = enable_control;
+  state_message.commponent_id = state_message.control_status;
   gui_state_publisher_.publish(state_message);
 }
 
@@ -343,8 +375,9 @@ inline void OnboardNodeHandler::disarmQuad()
     ROS_WARN("Parser Instance not defined. Cannot take off");
     return;
   }
-  parserinstance->disarm();
   stateTransitionTracking(false);
+  stateTransitionControl(false);//Stop Control
+  parserinstance->disarm();
   stateTransitionLogging(false);
 }
 
@@ -355,8 +388,9 @@ inline void OnboardNodeHandler::landQuad()
     ROS_WARN("Parser Instance not defined. Cannot take off");
     return;
   }
+  stateTransitionTracking(false);//Stop Tracking
+  stateTransitionControl(false);//Stop Control
   parserinstance->land();
-  stateTransitionTracking(false);
   stateTransitionLogging(false);
 }
 
@@ -371,6 +405,9 @@ void OnboardNodeHandler::receiveGuiCommands(const rqt_quadcoptergui::GuiCommandM
     break;
   case command_msg.enable_tracking://1
     stateTransitionTracking(command_msg.command);
+    break;
+  case command_msg.enable_control://2
+    stateTransitionControl(command_msg.command);
     break;
   case command_msg.arm_quad ://6
     ROS_INFO("Arming Quad");
@@ -406,14 +443,14 @@ void OnboardNodeHandler::receiveRoi(const sensor_msgs::RegionOfInterest &roi_rec
   roiToVel(roi_rect,
            data.rpydata, *intrinsics,
            CAM_QUAD_transform,vel_mag,yaw_gain,
-           desired_vel_track, desired_yaw_rate);
+           desired_vel, desired_yaw_rate);
   if(enable_tracking)
   {
-    parserinstance->cmdvelguided(desired_vel_track, desired_yaw_rate);
+    parserinstance->cmdvelguided(desired_vel, desired_yaw_rate);
     //Publish vector to rviz
   }
   //Publish velocity
-  vel_marker.points[1].x = desired_vel_track.x; vel_marker.points[1].y = desired_vel_track.y; vel_marker.points[1].z = desired_vel_track.z;
+  vel_marker.points[1].x = desired_vel.x; vel_marker.points[1].y = desired_vel.y; vel_marker.points[1].z = desired_vel.z;
   vel_marker_pub_.publish(vel_marker);
   ROS_DEBUG("Yaw Rate: %f", desired_yaw_rate);
 }
@@ -434,17 +471,25 @@ void OnboardNodeHandler::paramreqCallback(rqt_quadcoptergui::QuadcopterInterface
     reconfig_init = true;
     return;
   }
+  if(reconfig_update || enable_tracking)//If we are tracking or reconfig is being updated
+  {
+    config.vx = desired_vel.x;
+    config.vy = desired_vel.y;
+    config.vz = desired_vel.z;
+    config.yaw_rate = desired_yaw_rate;
+    config.update_vel = false;
+    reconfig_update = false;
+    return;
+  }
 
 
   if(level&0x0002)
   {
     if(data.armed)
     {
-      if(config.update_vel && !enable_tracking)//Make sure we are not tracking an object
+      if(config.update_vel)
       {
-        geometry_msgs::Vector3 vel_cmd;
-        vel_cmd.x = config.vx; vel_cmd.y = config.vy; vel_cmd.z = config.vz;
-        parserinstance->cmdvelguided(vel_cmd, config.yaw_rate);
+        desired_vel.x = config.vx; desired_vel.y = config.vy; desired_vel.z = config.vz; desired_yaw_rate = config.yaw_rate;
       }
     }
     else
@@ -505,7 +550,7 @@ void OnboardNodeHandler::quadstatetimerCallback(const ros::TimerEvent &event)
           ,data.magdata.x,data.magdata.y,data.magdata.z
           ,data.linacc.x,data.linacc.y,data.linacc.z
           ,data.linvel.x,data.linvel.y,data.linvel.z
-          ,desired_vel_track.x,desired_vel_track.z,desired_yaw_rate
+          ,desired_vel.x,desired_vel.z,desired_yaw_rate
           ,data.mass,data.timestamp,data.quadstate.c_str());
 
   //Publish State:
@@ -515,5 +560,12 @@ void OnboardNodeHandler::quadstatetimerCallback(const ros::TimerEvent &event)
   //Publish TF of the quadcopter position:
   tf::Transform quad_transform(tf::createQuaternionFromYaw(data.rpydata.z), tf::Vector3(data.localpos.x, data.localpos.y, data.localpos.z));
   broadcaster->sendTransform(tf::StampedTransform(quad_transform, ros::Time::now(), "world", uav_name));
+}
+
+void OnboardNodeHandler::cmdtimerCallback(const ros::TimerEvent& event)
+{
+  //send command of the velocity
+  if(parserinstance)
+    parserinstance->cmdvelguided(desired_vel, desired_yaw_rate);
 }
 
