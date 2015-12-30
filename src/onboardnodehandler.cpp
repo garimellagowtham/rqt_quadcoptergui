@@ -323,20 +323,33 @@ PUBLISH_TRACKING_STATE:
 inline void OnboardNodeHandler::stateTransitionControl(bool state)
 {
   bool result = false;
+
   if(!parserinstance)
   {
     ROS_WARN("Parser Instance not defined. Cannot Control Quad");
 		goto PUBLISH_CONTROL_STATE;
   }
 
+  //First check if tracking is on; If on, switch it off:
+  if(enable_tracking)
+  {
+    ROS_INFO("Setting Tracking to False");
+    stateTransitionTracking(false);
+  }
+
   enable_control = state;
+  ROS_INFO("State: %d",enable_control);
 
   //Stop Control Timer if state is false:
   if(!enable_control)
+  {
+    ROS_INFO("Stopping Cmdtimer");
     cmdtimer.stop();
+  }
 
   if(data.armed && enable_control)//If we are in air and asked to enable control of quadcopter
   {
+    ROS_INFO("Calling Enable Control");
     result = parserinstance->flowControl(enable_control);//get control
     if(!result)
     {
@@ -353,7 +366,13 @@ inline void OnboardNodeHandler::stateTransitionControl(bool state)
   }
   else
   {
+      ROS_INFO("Releasing Control of Quadcopter");
       enable_control = false;
+      result = parserinstance->flowControl(enable_control);//get control
+      if(!result)
+      {
+        ROS_WARN("Failed to release control of quadcopter");
+      }
   }
   
   //Publish Change of State:
@@ -387,8 +406,10 @@ inline void OnboardNodeHandler::disarmQuad()
     return;
   }
   stateTransitionTracking(false);
-  stateTransitionControl(false);//Stop Control
+  ROS_INFO("Stopping cmd timer");
+  cmdtimer.stop();
   parserinstance->disarm();
+  stateTransitionControl(false);
   stateTransitionLogging(false);
 }
 
@@ -400,7 +421,8 @@ inline void OnboardNodeHandler::landQuad()
     return;
   }
   stateTransitionTracking(false);//Stop Tracking
-  stateTransitionControl(false);//Stop Control
+  ROS_INFO("Stopping cmd timer");
+  cmdtimer.stop();
   parserinstance->land();
   stateTransitionLogging(false);
 }
@@ -501,6 +523,7 @@ void OnboardNodeHandler::paramreqCallback(rqt_quadcoptergui::QuadcopterInterface
       if(config.update_vel)
       {
         desired_vel.x = config.vx; desired_vel.y = config.vy; desired_vel.z = config.vz; desired_yaw_rate = config.yaw_rate;
+        ROS_INFO("Desired vel:  %f, %f, %f, %f",desired_vel.x, desired_vel.y, desired_vel.z, desired_yaw_rate);
       }
     }
     else
