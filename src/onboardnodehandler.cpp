@@ -471,21 +471,30 @@ void OnboardNodeHandler::receiveRoi(const sensor_msgs::RegionOfInterest &roi_rec
     ROS_WARN("No Camera Info received/ No Parser instance created");
     return;
   }
+  geometry_msgs::Vector3 temp_desired_vel;
+  double temp_desired_yaw_rate;
   //Get RPY:
   parserinstance->getquaddata(data);
   roiToVel(roi_rect,
            data.rpydata, *intrinsics,
            CAM_QUAD_transform,vel_mag,yaw_gain,
-           desired_vel, desired_yaw_rate);
+           temp_desired_vel, temp_desired_yaw_rate);
   if(enable_tracking)
+  {
+    desired_vel = temp_desired_vel;
+    desired_yaw_rate = -temp_desired_yaw_rate;
+  }
+/*  if(enable_tracking)
   {
     parserinstance->cmdvelguided(desired_vel, desired_yaw_rate);
     //Publish vector to rviz
   }
+  */
   //Publish velocity
-  vel_marker.points[1].x = desired_vel.x; vel_marker.points[1].y = desired_vel.y; vel_marker.points[1].z = desired_vel.z;
+  vel_marker.points[1].x = temp_desired_vel.x; vel_marker.points[1].y = temp_desired_vel.y; vel_marker.points[1].z = temp_desired_vel.z;
   vel_marker_pub_.publish(vel_marker);
-  ROS_DEBUG("Yaw Rate: %f", desired_yaw_rate);
+  if(enable_tracking)
+    ROS_INFO("Yaw Rate: %f", -temp_desired_yaw_rate);
 }
 
 void OnboardNodeHandler::paramreqCallback(rqt_quadcoptergui::QuadcopterInterfaceConfig &config, uint32_t level)
