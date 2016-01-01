@@ -8,6 +8,7 @@ OnboardNodeHandler::OnboardNodeHandler(ros::NodeHandle &nh_):nh(nh_)
                                                             , publish_rpy(false)
                                                             , enable_tracking(false), enable_control(false)
                                                             , reconfig_init(false), reconfig_update(false)
+                                                            , last_roi_update_time_(0)
                                                             //, armcmdrate(4), armratecount(0), gripped_already(false), newcamdata(false)
                                                             //, enable_control(false), enable_integrator(false), enable_camctrl(false), enable_manualtargetretrieval(false)
                                                             //, tip_position(), goalcount(1), diff_goal(), count_imu(0)
@@ -466,6 +467,7 @@ void OnboardNodeHandler::receiveCameraInfo(const sensor_msgs::CameraInfo &info)
 
 void OnboardNodeHandler::receiveRoi(const sensor_msgs::RegionOfInterest &roi_rect)
 {
+  last_roi_update_time_ = ros::Time::now();
   if(!intrinsics || !parserinstance) 
   {
     ROS_WARN("No Camera Info received/ No Parser instance created");
@@ -482,7 +484,7 @@ void OnboardNodeHandler::receiveRoi(const sensor_msgs::RegionOfInterest &roi_rec
   if(enable_tracking)
   {
     desired_vel = temp_desired_vel;
-    desired_yaw_rate = -temp_desired_yaw_rate;
+    desired_yaw_rate = temp_desired_yaw_rate;
   }
 /*  if(enable_tracking)
   {
@@ -492,9 +494,7 @@ void OnboardNodeHandler::receiveRoi(const sensor_msgs::RegionOfInterest &roi_rec
   */
   //Publish velocity
   vel_marker.points[1].x = temp_desired_vel.x; vel_marker.points[1].y = temp_desired_vel.y; vel_marker.points[1].z = temp_desired_vel.z;
-  vel_marker_pub_.publish(vel_marker);
-  if(enable_tracking)
-    ROS_INFO("Yaw Rate: %f", -temp_desired_yaw_rate);
+  vel_marker_pub_.publish(vel_marker); 
 }
 
 void OnboardNodeHandler::paramreqCallback(rqt_quadcoptergui::QuadcopterInterfaceConfig &config, uint32_t level)
@@ -610,6 +610,15 @@ void OnboardNodeHandler::quadstatetimerCallback(const ros::TimerEvent &event)
 
 void OnboardNodeHandler::cmdtimerCallback(const ros::TimerEvent& event)
 {
+  //Check if roi has not been updated for more than 0.5 sec; Then disable tracking automatically:
+  if(enable_tracking)
+  {
+    if((ros::Time::now() - last_roi_update_time_).toSec() > 0.5)
+    {
+      ROS_WARN("Roi has not been updated for 0.5 sec");
+      stateTransitionTracking(false);
+    }
+  }
   //send command of the velocity
   if(parserinstance)
     parserinstance->cmdvelguided(desired_vel, desired_yaw_rate);

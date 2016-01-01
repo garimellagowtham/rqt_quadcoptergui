@@ -109,6 +109,7 @@ protected:
     char buffer[1500];//buffer for creating Text data
     geometry_msgs::Vector3 desired_vel;///< Commanded velocity to quadcopter
     double desired_yaw_rate;///< commanded yaw rate
+    ros::Time last_roi_update_time_;///< Keep track of when roi got updated last
 
     //// State Variables
     bool enable_logging;///< If logging is enabled
