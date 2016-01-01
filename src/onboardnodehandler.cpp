@@ -619,8 +619,12 @@ void OnboardNodeHandler::cmdtimerCallback(const ros::TimerEvent& event)
       stateTransitionTracking(false);
     }
   }
-  //send command of the velocity
-  if(parserinstance)
-    parserinstance->cmdvelguided(desired_vel, desired_yaw_rate);
+  else
+  {
+    //DEBUG: If tracking is enabled only see the values of vel rather than command it
+    //send command of the velocity
+    if(parserinstance)
+      parserinstance->cmdvelguided(desired_vel, desired_yaw_rate);
+  }
 }
 
