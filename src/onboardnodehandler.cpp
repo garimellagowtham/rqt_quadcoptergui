@@ -9,6 +9,7 @@ OnboardNodeHandler::OnboardNodeHandler(ros::NodeHandle &nh_):nh(nh_)
                                                             , enable_tracking(false), enable_control(false)
                                                             , reconfig_init(false), reconfig_update(false)
                                                             , last_roi_update_time_(0)
+                                                            , desired_yaw_rate(0), feedforward_yaw(0)
                                                             //, armcmdrate(4), armratecount(0), gripped_already(false), newcamdata(false)
                                                             //, enable_control(false), enable_integrator(false), enable_camctrl(false), enable_manualtargetretrieval(false)
                                                             //, tip_position(), goalcount(1), diff_goal(), count_imu(0)
@@ -622,9 +623,11 @@ void OnboardNodeHandler::cmdtimerCallback(const ros::TimerEvent& event)
   else
   {
     //DEBUG: If tracking is enabled only see the values of vel rather than command it
+    //Feedforward yaw:
+    feedforward_yaw = feedforward_yaw + desired_yaw_rate*(ros::Time::now() - event.last_real).toSec();
     //send command of the velocity
     if(parserinstance)
-      parserinstance->cmdvelguided(desired_vel, desired_yaw_rate);
+      parserinstance->cmdvelguided(desired_vel, feedforward_yaw);
   }
 }
 
