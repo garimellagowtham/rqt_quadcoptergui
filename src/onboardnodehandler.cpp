@@ -625,6 +625,10 @@ void OnboardNodeHandler::cmdtimerCallback(const ros::TimerEvent& event)
     //DEBUG: If tracking is enabled only see the values of vel rather than command it
     //Feedforward yaw:
     feedforward_yaw = feedforward_yaw + desired_yaw_rate*(ros::Time::now() - event.last_real).toSec();
+    if(feedforward_yaw > 180)//Wrapping Around
+      feedforward_yaw = feedforward_yaw - 360;
+    if(feedforward_yaw < -180)
+      feedforward_yaw = feedforward_yaw + 360;
     //send command of the velocity
     if(parserinstance)
       parserinstance->cmdvelguided(desired_vel, feedforward_yaw);
