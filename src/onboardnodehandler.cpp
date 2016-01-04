@@ -6,7 +6,7 @@ OnboardNodeHandler::OnboardNodeHandler(ros::NodeHandle &nh_):nh(nh_)
                                                             , broadcaster(new tf::TransformBroadcaster())
                                                             , logdir_created(false), enable_logging(false)
                                                             , publish_rpy(false)
-                                                            , enable_tracking(false), enable_control(false)
+                                                            , enable_tracking(false), enable_velcontrol(false), enable_rpytcontrol(false)
                                                             , reconfig_init(false), reconfig_update(false)
                                                             , last_roi_update_time_(0)
                                                             , desired_yaw_rate(0), feedforward_yaw(0)
@@ -79,6 +79,8 @@ OnboardNodeHandler::OnboardNodeHandler(ros::NodeHandle &nh_):nh(nh_)
   //Timer for commanding quadcopter
   cmdtimer = nh_.createTimer(ros::Duration(0.02), &OnboardNodeHandler::cmdtimerCallback,this);//50Hz is the update rate of Quadcopter cmd
   cmdtimer.stop();
+  rpytimer = nh_.createTimer(ros::Duration(0.02), &OnboardNodeHandler::rpytimerCallback,this);//50Hz is the update rate of Quadcopter cmd
+  rpytimer.stop();
   //Timer for sending quadcopter state
   quadstatetimer = nh_.createTimer(ros::Duration(0.05), &OnboardNodeHandler::quadstatetimerCallback, this);//20Hz update GUI quad state
 }
@@ -118,7 +120,7 @@ OnboardNodeHandler::~OnboardNodeHandler()
   cmdtimer.stop();
   quadstatetimer.stop();
 
-  vrpnfile.close();//Close the file
+  //vrpnfile.close();//Close the file
   camfile.close();//Close the file
   tipfile.close();//Close the file
 }
@@ -146,6 +148,9 @@ void OnboardNodeHandler::setupMemberVariables()
   vel_marker.scale.y = 0.05;//Head Dia
   vel_marker.color.r = 1.0;//red arrow
   vel_marker.color.a = 1.0;
+  //Initial command:
+  rpytcmd.x = rpytcmd.y = rpytcmd.z = 0;
+  rpytcmd.w = 10;
 }
 
 inline void OnboardNodeHandler::loadParameters()
@@ -226,11 +231,15 @@ inline void OnboardNodeHandler::setupLogDir()
   std::string logdir_append = logdir + "/session";
   std::string logdir_stamped = parsernode::common::addtimestring(logdir_append);
   ROS_INFO("Creating Log dir: %s",logdir_stamped.c_str());
-  mkdir(logdir_stamped.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);//Create the directory see http://pubs.opengroup.org/onlinepubs/009695399/functions/mkdir.html
+  int status = mkdir(logdir_stamped.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);//Create the directory see http://pubs.opengroup.org/onlinepubs/009695399/functions/mkdir.html
+  if(status != 0)
+  {
+      ROS_WARN("Cannot create directory");
+  }
 
-  vrpnfile.open((logdir_stamped+"/vrpn.dat").c_str());
+  //vrpnfile.open((logdir_stamped+"/vrpn.dat").c_str());
 	//Check if we cannot open file:
-	if(!vrpnfile.is_open())
+    /*if(!vrpnfile.is_open())
 	{
 		ROS_WARN("Cannot Open File");
 		return;
@@ -251,6 +260,7 @@ inline void OnboardNodeHandler::setupLogDir()
 	tipfile.rdbuf()->pubsetbuf(tipfile_buffer, FILE_BUFFER_SIZE);//Tip File Buffer
   tipfile<<"#Time \t Pos.X \t Pos.Y \t Pos.Z\t DesPos.X\t DesPos.Y\t DesPos.Z\t Act_armangle0\t Act_armangle1\t Des_armangle0\t Des_armangle1"<<endl;
 
+    */
   if(parserinstance)
     parserinstance->setlogdir(logdir_stamped);
 
@@ -303,7 +313,7 @@ inline void OnboardNodeHandler::stateTransitionTracking(bool state)
   }
 
   //Check if we are in air and control is enabled; otherwise do not track
-  if(data.armed && enable_control)
+  if(data.armed && enable_velcontrol)
   {
     enable_tracking = state;
     //If we are switching of tracking set desired vel to 0
@@ -322,7 +332,7 @@ PUBLISH_TRACKING_STATE:
   gui_state_publisher_.publish(state_message);
 }
 
-inline void OnboardNodeHandler::stateTransitionControl(bool state)
+inline void OnboardNodeHandler::stateTransitionVelControl(bool state)
 {
   bool result = false;
 
@@ -331,6 +341,8 @@ inline void OnboardNodeHandler::stateTransitionControl(bool state)
     ROS_WARN("Parser Instance not defined. Cannot Control Quad");
 		goto PUBLISH_CONTROL_STATE;
   }
+  if(enable_rpytcontrol)
+      stateTransitionRpytControl(false);
 
   //First check if tracking is on; If on, switch it off:
   if(enable_tracking)
@@ -339,23 +351,23 @@ inline void OnboardNodeHandler::stateTransitionControl(bool state)
     stateTransitionTracking(false);
   }
 
-  enable_control = state;
-  ROS_INFO("State: %d",enable_control);
+  enable_velcontrol = state;
+  ROS_INFO("State: %d",enable_velcontrol);
 
   //Stop Control Timer if state is false:
-  if(!enable_control)
+  if(!enable_velcontrol)
   {
     ROS_INFO("Stopping Cmdtimer");
     cmdtimer.stop();
   }
 
-  if(data.armed && enable_control)//If we are in air and asked to enable control of quadcopter
+  if(data.armed && enable_velcontrol)//If we are in air and asked to enable control of quadcopter
   {
     ROS_INFO("Calling Enable Control");
-    result = parserinstance->flowControl(enable_control);//get control
+    result = parserinstance->flowControl(enable_velcontrol);//get control
     if(!result)
     {
-        enable_control = false;
+        enable_velcontrol = false;
         ROS_WARN("Failed to get control of quadcopter");
     }
     else
@@ -369,8 +381,8 @@ inline void OnboardNodeHandler::stateTransitionControl(bool state)
   else
   {
       ROS_INFO("Releasing Control of Quadcopter");
-      enable_control = false;
-      result = parserinstance->flowControl(enable_control);//get control
+      enable_velcontrol = false;
+      result = parserinstance->flowControl(enable_velcontrol);//get control
       if(!result)
       {
         ROS_WARN("Failed to release control of quadcopter");
@@ -380,9 +392,39 @@ inline void OnboardNodeHandler::stateTransitionControl(bool state)
   //Publish Change of State:
 PUBLISH_CONTROL_STATE:
   rqt_quadcoptergui::GuiStateMessage state_message;
-  state_message.status = enable_control;
+  state_message.status = enable_velcontrol;
   state_message.commponent_id = state_message.control_status;
   gui_state_publisher_.publish(state_message);
+}
+
+void OnboardNodeHandler::stateTransitionRpytControl(bool state)
+{
+  if(!parserinstance)
+  {
+    ROS_WARN("Parser Instance not defined. Cannot create rpyt control");
+    return;
+  }
+  if(!parserinstance->initialized)
+    return;
+  if(enable_velcontrol)
+      stateTransitionVelControl(false);
+
+  if(state)
+  {
+    bool result = parserinstance->flowControl(true);//get control
+
+    if(!result)
+      return;
+    //Enable rpyttimer:
+    rpytimer.start();
+  }
+  else
+  {
+      rpytimer.stop();
+      //Set current vel to 0:
+      desired_vel.x = desired_vel.y = desired_vel.z = feedforward_yaw = 0;
+      parserinstance->cmdvelguided(desired_vel, feedforward_yaw);
+  }
 }
 
 ////////////////////////Gui Button Commands////////////
@@ -411,7 +453,7 @@ inline void OnboardNodeHandler::disarmQuad()
   ROS_INFO("Stopping cmd timer");
   cmdtimer.stop();
   parserinstance->disarm();
-  stateTransitionControl(false);
+  stateTransitionVelControl(false);
   stateTransitionLogging(false);
 }
 
@@ -442,7 +484,7 @@ void OnboardNodeHandler::receiveGuiCommands(const rqt_quadcoptergui::GuiCommandM
     stateTransitionTracking(command_msg.command);
     break;
   case command_msg.enable_control://2
-    stateTransitionControl(command_msg.command);
+    stateTransitionVelControl(command_msg.command);
     break;
   case command_msg.arm_quad ://6
     ROS_INFO("Arming Quad");
@@ -587,9 +629,19 @@ void OnboardNodeHandler::quadstatetimerCallback(const ros::TimerEvent &event)
     rpymsg.z = (data.rpydata.z)*(180/M_PI);
     imu_rpy_pub_.publish(rpymsg);
   }
+  //Convert data servo_in to rpytcmd:
+  if(!enable_rpytcontrol)
+  {
+    rpytcmd.x = parsernode::common::map(data.servo_in[0],-10000, 10000, -M_PI/6, M_PI/6);
+    rpytcmd.y = parsernode::common::map(data.servo_in[1],-10000, 10000, -M_PI/6, M_PI/6);
+    rpytcmd.w = parsernode::common::map(data.servo_in[2],-10000, 10000, -10, 100);
+    rpytcmd.z = parsernode::common::map(data.servo_in[3],-10000, 10000, -M_PI, M_PI);
+  }
   // Create a Text message based on the data from the Parser class
   sprintf(buffer,
-          "Battery Percent: %2.2f\t\nlx: %2.2f\tly: %2.2f\tlz: %2.2f\nAltitude: %2.2f\t\nRoll: %2.2f\tPitch %2.2f\tYaw %2.2f\nMagx: %2.2f\tMagy %2.2f\tMagz %2.2f\naccx: %2.2f\taccy %2.2f\taccz %2.2f\nvelx: %2.2f\tvely %2.2f\tvelz %2.2f\nTrvelx: %2.2f\tTrvelz: %2.2f\tTryawr: %2.2f\nMass: %2.2f\tTimestamp: %2.2f\t\nQuadState: %s",
+          "Battery Percent: %2.2f\t\nlx: %2.2f\tly: %2.2f\tlz: %2.2f\nAltitude: %2.2f\t\nRoll: %2.2f\tPitch %2.2f\tYaw %2.2f\n"
+          "Magx: %2.2f\tMagy %2.2f\tMagz %2.2f\naccx: %2.2f\taccy %2.2f\taccz %2.2f\nvelx: %2.2f\tvely %2.2f\tvelz %2.2f\n"
+          "Trvelx: %2.2f\tTrvelz: %2.2f\tTryawr: %2.2f\nCmdr: %2.2f\tCmdp: %2.2f\tCmdt: %2.2f\tCmdy: %2.2f\nMass: %2.2f\tTimestamp: %2.2f\t\nQuadState: %s",
           data.batterypercent
           ,data.localpos.x, data.localpos.y, data.localpos.z
           ,data.altitude
@@ -598,6 +650,7 @@ void OnboardNodeHandler::quadstatetimerCallback(const ros::TimerEvent &event)
           ,data.linacc.x,data.linacc.y,data.linacc.z
           ,data.linvel.x,data.linvel.y,data.linvel.z
           ,desired_vel.x,desired_vel.z,desired_yaw_rate*(180/M_PI)
+          ,rpytcmd.x*(180/M_PI), rpytcmd.y*(180/M_PI), rpytcmd.w, rpytcmd.z*(180/M_PI)
           ,data.mass,data.timestamp,data.quadstate.c_str());
 
   //Publish State:
@@ -607,6 +660,19 @@ void OnboardNodeHandler::quadstatetimerCallback(const ros::TimerEvent &event)
   //Publish TF of the quadcopter position:
   tf::Transform quad_transform(tf::createQuaternionFromYaw(data.rpydata.z), tf::Vector3(data.localpos.x, data.localpos.y, data.localpos.z));
   broadcaster->sendTransform(tf::StampedTransform(quad_transform, ros::Time::now(), "world", uav_name));
+}
+
+void OnboardNodeHandler::rpytimerCallback(const ros::TimerEvent& event)
+{
+  if(parserinstance)
+  {
+    parserinstance->getquaddata(data);
+    rpytcmd.x = parsernode::common::map(data.servo_in[0],-10000, 10000, -M_PI/6, M_PI/6);
+    rpytcmd.y = parsernode::common::map(data.servo_in[1],-10000, 10000, -M_PI/6, M_PI/6);
+    rpytcmd.w = parsernode::common::map(data.servo_in[2],-10000, 10000, 10, 100);
+    rpytcmd.z = parsernode::common::map(data.servo_in[3],-10000, 10000, -M_PI, M_PI);
+    parserinstance->cmdrpythrust(rpytcmd);
+  }
 }
 
 void OnboardNodeHandler::cmdtimerCallback(const ros::TimerEvent& event)
@@ -620,18 +686,15 @@ void OnboardNodeHandler::cmdtimerCallback(const ros::TimerEvent& event)
       stateTransitionTracking(false);
     }
   }
-  else
-  {
-    //DEBUG: If tracking is enabled only see the values of vel rather than command it
-    //Feedforward yaw:
-    feedforward_yaw = feedforward_yaw + desired_yaw_rate*(ros::Time::now() - event.last_real).toSec();
-    if(feedforward_yaw > 180)//Wrapping Around
-      feedforward_yaw = feedforward_yaw - 360;
-    if(feedforward_yaw < -180)
-      feedforward_yaw = feedforward_yaw + 360;
-    //send command of the velocity
-    if(parserinstance)
-      parserinstance->cmdvelguided(desired_vel, feedforward_yaw);
-  }
+  //DEBUG: If tracking is enabled only see the values of vel rather than command it
+  //Feedforward yaw:
+  feedforward_yaw = feedforward_yaw + desired_yaw_rate*(ros::Time::now() - event.last_real).toSec();
+  if(feedforward_yaw > 180)//Wrapping Around
+    feedforward_yaw = feedforward_yaw - 360;
+  if(feedforward_yaw < -180)
+    feedforward_yaw = feedforward_yaw + 360;
+  //send command of the velocity
+  if(parserinstance)
+    parserinstance->cmdvelguided(desired_vel, feedforward_yaw);
 }
 

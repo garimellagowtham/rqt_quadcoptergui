@@ -35,6 +35,8 @@
 #include <visualization_msgs/Marker.h>
 #include <rqt_quadcoptergui/GuiCommandMessage.h>
 #include <rqt_quadcoptergui/GuiStateMessage.h>
+#include <geometry_msgs/Quaternion.h>
+#include <geometry_msgs/Vector3.h>
 
 
 //TF#include <sys/types.h>
@@ -88,6 +90,7 @@ protected:
     ////Timers
     //ros::Timer goaltimer;//REFACTOR
     ros::Timer cmdtimer;//REFACTOR #TODO
+    ros::Timer rpytimer;//REFACTOR #TODO
     ros::Timer quadstatetimer;// Send quad state to GUI
 
     /////Reconfigure Server
@@ -108,6 +111,7 @@ protected:
     ///// Helper Variables
     char buffer[1500];//buffer for creating Text data
     geometry_msgs::Vector3 desired_vel;///< Commanded velocity to quadcopter
+    geometry_msgs::Quaternion rpytcmd;///< Commanded rpyt msg
     double feedforward_yaw;///< Commanded Yaw from feedforward
     double desired_yaw_rate;///< commanded yaw rate
     ros::Time last_roi_update_time_;///< Keep track of when roi got updated last
@@ -115,8 +119,9 @@ protected:
     //// State Variables
     bool enable_logging;///< If logging is enabled
     //bool enable_camctrl;///< If Camera control is enabled
+    bool enable_rpytcontrol;///< If rpyt control is enabled
     bool enable_tracking;///< If we are tracking an object or not
-    bool enable_control;///< If we enable quadcopter control
+    bool enable_velcontrol;///< If we enable quadcopter control
 
 
     //// ROS Messages
@@ -178,7 +183,8 @@ protected:
     //inline void stateTransitionTrajectoryTracking(bool);
     inline void stateTransitionLogging(bool);
     inline void stateTransitionTracking(bool);
-    inline void stateTransitionControl(bool);
+    inline void stateTransitionVelControl(bool);
+    inline void stateTransitionRpytControl(bool);
     //inline void stateTransitionJoyControl(bool);
     //inline void stateTransitionIntegrator(bool);
 
@@ -209,6 +215,8 @@ protected:
     void cmdtimerCallback(const ros::TimerEvent&);
 
     void quadstatetimerCallback(const ros::TimerEvent&);
+
+    void rpytimerCallback(const ros::TimerEvent&);
 
     //void closeAfterGrabbing(const ros::TimerEvent &); //Timer Callback for Closing after grabbing an object
 
