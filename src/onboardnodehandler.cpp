@@ -405,7 +405,7 @@ void OnboardNodeHandler::stateTransitionRpytControl(bool state)
     goto PUBLISH_RPYT_CONTROL_STATE;
   }
   if(!parserinstance->initialized)
-    return;
+    goto PUBLISH_RPYT_CONTROL_STATE;
   if(enable_velcontrol)
       stateTransitionVelControl(false);
 
@@ -414,16 +414,23 @@ void OnboardNodeHandler::stateTransitionRpytControl(bool state)
     bool result = parserinstance->flowControl(true);//get control
 
     if(!result)
-      return;
+    {
+      ROS_INFO("Cannot open sdk");
+      goto PUBLISH_RPYT_CONTROL_STATE;
+    }
     //Enable rpyttimer:
+    ROS_INFO("Starting rpy timer");
     rpytimer.start();
+    enable_rpytcontrol = true;
   }
   else
   {
-      rpytimer.stop();
-      //Set current vel to 0:
-      desired_vel.x = desired_vel.y = desired_vel.z = feedforward_yaw = 0;
-      parserinstance->cmdvelguided(desired_vel, feedforward_yaw);
+    ROS_INFO("Stopping rpy timer");
+    rpytimer.stop();
+    enable_rpytcontrol = false;
+    //Set current vel to 0:
+    desired_vel.x = desired_vel.y = desired_vel.z = feedforward_yaw = 0;
+    parserinstance->cmdvelguided(desired_vel, feedforward_yaw);
   }
     //Publish Change of State:
 PUBLISH_RPYT_CONTROL_STATE:
@@ -680,7 +687,8 @@ void OnboardNodeHandler::rpytimerCallback(const ros::TimerEvent& event)
     rpytcmd.y = parsernode::common::map(data.servo_in[1],-10000, 10000, -M_PI/6, M_PI/6);
     rpytcmd.w = parsernode::common::map(data.servo_in[2],-10000, 10000, 10, 100);
     rpytcmd.z = parsernode::common::map(data.servo_in[3],-10000, 10000, -M_PI, M_PI);
-    parserinstance->cmdrpythrust(rpytcmd);
+    ROS_INFO("Timer Running");
+    parserinstance->cmdrpythrust(rpytcmd, true);
   }
 }
 
