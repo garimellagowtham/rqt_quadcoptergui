@@ -339,7 +339,7 @@ inline void OnboardNodeHandler::stateTransitionVelControl(bool state)
   if(!parserinstance)
   {
     ROS_WARN("Parser Instance not defined. Cannot Control Quad");
-		goto PUBLISH_CONTROL_STATE;
+    goto PUBLISH_VEL_CONTROL_STATE;
   }
   if(enable_rpytcontrol)
       stateTransitionRpytControl(false);
@@ -390,10 +390,10 @@ inline void OnboardNodeHandler::stateTransitionVelControl(bool state)
   }
   
   //Publish Change of State:
-PUBLISH_CONTROL_STATE:
+PUBLISH_VEL_CONTROL_STATE:
   rqt_quadcoptergui::GuiStateMessage state_message;
   state_message.status = enable_velcontrol;
-  state_message.commponent_id = state_message.control_status;
+  state_message.commponent_id = state_message.vel_control_status;
   gui_state_publisher_.publish(state_message);
 }
 
@@ -402,7 +402,7 @@ void OnboardNodeHandler::stateTransitionRpytControl(bool state)
   if(!parserinstance)
   {
     ROS_WARN("Parser Instance not defined. Cannot create rpyt control");
-    return;
+    goto PUBLISH_RPYT_CONTROL_STATE;
   }
   if(!parserinstance->initialized)
     return;
@@ -425,6 +425,12 @@ void OnboardNodeHandler::stateTransitionRpytControl(bool state)
       desired_vel.x = desired_vel.y = desired_vel.z = feedforward_yaw = 0;
       parserinstance->cmdvelguided(desired_vel, feedforward_yaw);
   }
+    //Publish Change of State:
+PUBLISH_RPYT_CONTROL_STATE:
+  rqt_quadcoptergui::GuiStateMessage state_message;
+  state_message.status = enable_rpytcontrol;
+  state_message.commponent_id = state_message.rpyt_control_status;
+  gui_state_publisher_.publish(state_message);
 }
 
 ////////////////////////Gui Button Commands////////////
@@ -483,8 +489,11 @@ void OnboardNodeHandler::receiveGuiCommands(const rqt_quadcoptergui::GuiCommandM
   case command_msg.enable_tracking://1
     stateTransitionTracking(command_msg.command);
     break;
-  case command_msg.enable_control://2
+  case command_msg.enable_vel_control://2
     stateTransitionVelControl(command_msg.command);
+    break;
+  case command_msg.enable_rpyt_control://2
+    stateTransitionRpytControl(command_msg.command);
     break;
   case command_msg.arm_quad ://6
     ROS_INFO("Arming Quad");

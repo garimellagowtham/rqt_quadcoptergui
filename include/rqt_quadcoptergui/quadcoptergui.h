@@ -150,7 +150,8 @@ protected slots:
   virtual void RefreshGui();
   virtual void stateChangeTracking(int);
   virtual void stateChangeLogging(int);
-  virtual void stateChangeControl(int);
+  virtual void stateChangeVelControl(int);
+  virtual void stateChangeRpyControl(int);
 };
 
 }
