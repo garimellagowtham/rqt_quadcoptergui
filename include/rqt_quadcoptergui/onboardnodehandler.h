@@ -81,7 +81,7 @@ protected:
 
     ros::Publisher imu_rpy_pub_;
 
-    ros::Publisher vel_marker_pub_;
+    ros::Publisher marker_pub_;
 
 
     //// TF:

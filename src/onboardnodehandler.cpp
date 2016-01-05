@@ -52,7 +52,7 @@ OnboardNodeHandler::OnboardNodeHandler(ros::NodeHandle &nh_):nh(nh_)
   //Advertise Joint States of Manipulator
   //jointstate_pub = nh_.advertise<sensor_msgs::JointState>("/movingrobot/joint_states",10);
   //Advertise Target velocity for tracking
-  vel_marker_pub_ = nh_.advertise<visualization_msgs::Marker>("targetvel", 10);
+  marker_pub_ = nh_.advertise<visualization_msgs::Marker>("targetvel", 10);
 
   if(publish_rpy)
   {
@@ -130,6 +130,11 @@ OnboardNodeHandler::~OnboardNodeHandler()
 void OnboardNodeHandler::publishGuiState(const rqt_quadcoptergui::GuiStateMessage &state_msg)
 {
     gui_state_publisher_.publish(state_msg);
+}
+
+inline void copyPtToVec(geometry_msgs::Vector3 in, geometry_msgs::Point out)
+{
+    out.x = in.x; out.y = in.y; out.z = in.z;
 }
 
 void OnboardNodeHandler::setupMemberVariables()
@@ -536,21 +541,44 @@ void OnboardNodeHandler::receiveRoi(const sensor_msgs::RegionOfInterest &roi_rec
     return;
   }
   //Get RPY:
-  parserinstance->getquaddata(data);
-  if(set_desired_obj_dir_)
+  if(enable_tracking)
   {
+    parserinstance->getquaddata(data);
+    if(set_desired_obj_dir_)
+    {
       roi_vel_ctrlr_.setDesiredObjectDir(roi_rect, data.rpydata);
       set_desired_obj_dir_ = false;
       //Get Desired Obj direction and Publish the marker
-  }
-  else if(enable_tracking)
-  {
-    roi_vel_ctrlr_.set(roi_rect,data.rpydata,obj_dist_,desired_vel,desired_yaw);
-  }
+      visualization_msgs::Marker dirxn_marker;
+      dirxn_marker.id = 2;
+      dirxn_marker.header.frame_id = "world";
+      dirxn_marker.action = visualization_msgs::Marker::ADD;
+      dirxn_marker.type = visualization_msgs::Marker::ARROW;
 
-  //Publish velocity
-  vel_marker.points[1].x = desired_vel.x; vel_marker.points[1].y = desired_vel.y; vel_marker.points[1].z = desired_vel.z;
-  vel_marker_pub_.publish(vel_marker); 
+      geometry_msgs::Point pt;
+      copyPtToVec(data.localpos,pt);
+      dirxn_marker.points.push_back(pt);
+
+      geometry_msgs::Vector3 des_obj_dir;
+      roi_vel_ctrlr_.getDesiredObjDir(des_obj_dir);
+      pt.x += 5.0*des_obj_dir.x;
+      pt.y += 5.0*des_obj_dir.y;
+      pt.z += 5.0*des_obj_dir.z;
+      dirxn_marker.points.push_back(pt);
+      dirxn_marker.scale.x = 0.02;//Shaft dia
+      dirxn_marker.scale.y = 0.05;//Head Dia
+      dirxn_marker.color.b = 1.0;//Blue arrow
+      dirxn_marker.color.a = 1.0;
+      marker_pub_.publish(dirxn_marker);
+    }
+    else
+    {
+      roi_vel_ctrlr_.set(roi_rect,data.rpydata,obj_dist_,desired_vel,desired_yaw);
+      //Publish velocity
+      vel_marker.points[1].x = desired_vel.x; vel_marker.points[1].y = desired_vel.y; vel_marker.points[1].z = desired_vel.z;
+      marker_pub_.publish(vel_marker);
+    }
+  }
 }
 
 void OnboardNodeHandler::paramreqCallback(rqt_quadcoptergui::QuadcopterInterfaceConfig &config, uint32_t level)
@@ -683,8 +711,11 @@ void OnboardNodeHandler::cmdtimerCallback(const ros::TimerEvent& event)
       stateTransitionTracking(false);
     }
   }
+  else//{DEBUG}
+  {
   //send command of the velocity
   if(parserinstance)
     parserinstance->cmdvelguided(desired_vel, desired_yaw);
+  }
 }
 
