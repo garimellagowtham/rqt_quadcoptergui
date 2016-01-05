@@ -9,7 +9,7 @@ OnboardNodeHandler::OnboardNodeHandler(ros::NodeHandle &nh_):nh(nh_)
                                                             , enable_tracking(false), enable_velcontrol(false), enable_rpytcontrol(false)
                                                             , reconfig_init(false), reconfig_update(false)
                                                             , last_roi_update_time_(0)
-                                                            , desired_yaw_rate(0), feedforward_yaw(0)
+                                                            , desired_yaw(0)
                                                             //, armcmdrate(4), armratecount(0), gripped_already(false), newcamdata(false)
                                                             //, enable_control(false), enable_integrator(false), enable_camctrl(false), enable_manualtargetretrieval(false)
                                                             //, tip_position(), goalcount(1), diff_goal(), count_imu(0)
@@ -319,7 +319,7 @@ inline void OnboardNodeHandler::stateTransitionTracking(bool state)
     //If we are switching of tracking set desired vel to 0
     if(!enable_tracking)
     {
-      desired_vel.x = desired_vel.y = desired_vel.z = desired_yaw_rate = 0;
+      desired_vel.x = desired_vel.y = desired_vel.z = 0;
       reconfig_update = true;
     }
   }
@@ -372,7 +372,7 @@ inline void OnboardNodeHandler::stateTransitionVelControl(bool state)
     }
     else
     {
-      desired_vel.x = desired_vel.y = desired_vel.z = desired_yaw_rate = 0;
+      desired_vel.x = desired_vel.y = desired_vel.z = 0;
       reconfig_update = true;
       //Start Timer to send vel to quadcopter
       cmdtimer.start();
@@ -429,8 +429,8 @@ void OnboardNodeHandler::stateTransitionRpytControl(bool state)
     rpytimer.stop();
     enable_rpytcontrol = false;
     //Set current vel to 0:
-    desired_vel.x = desired_vel.y = desired_vel.z = feedforward_yaw = 0;
-    parserinstance->cmdvelguided(desired_vel, feedforward_yaw);
+    desired_vel.x = desired_vel.y = desired_vel.z = desired_yaw = 0;
+    parserinstance->cmdvelguided(desired_vel, desired_yaw);
   }
     //Publish Change of State:
 PUBLISH_RPYT_CONTROL_STATE:
@@ -533,24 +533,19 @@ void OnboardNodeHandler::receiveRoi(const sensor_msgs::RegionOfInterest &roi_rec
     return;
   }
   geometry_msgs::Vector3 temp_desired_vel;
-  double temp_desired_yaw_rate;
+  double temp_desired_yaw;
   //Get RPY:
   parserinstance->getquaddata(data);
   roiToVel(roi_rect,
            data.rpydata, *intrinsics,
            CAM_QUAD_transform,vel_mag,yaw_gain,
-           temp_desired_vel, temp_desired_yaw_rate);
+           temp_desired_vel, temp_desired_yaw);
   if(enable_tracking)
   {
     desired_vel = temp_desired_vel;
-    desired_yaw_rate = temp_desired_yaw_rate;
+    desired_yaw = temp_desired_yaw;
   }
-/*  if(enable_tracking)
-  {
-    parserinstance->cmdvelguided(desired_vel, desired_yaw_rate);
-    //Publish vector to rviz
-  }
-  */
+
   //Publish velocity
   vel_marker.points[1].x = temp_desired_vel.x; vel_marker.points[1].y = temp_desired_vel.y; vel_marker.points[1].z = temp_desired_vel.z;
   vel_marker_pub_.publish(vel_marker); 
@@ -577,7 +572,7 @@ void OnboardNodeHandler::paramreqCallback(rqt_quadcoptergui::QuadcopterInterface
     config.vx = desired_vel.x;
     config.vy = desired_vel.y;
     config.vz = desired_vel.z;
-    config.yaw_rate = desired_yaw_rate;
+    config.yaw = desired_yaw;
     config.update_vel = false;
     reconfig_update = false;
     return;
@@ -590,8 +585,8 @@ void OnboardNodeHandler::paramreqCallback(rqt_quadcoptergui::QuadcopterInterface
     {
       if(config.update_vel)
       {
-        desired_vel.x = config.vx; desired_vel.y = config.vy; desired_vel.z = config.vz; desired_yaw_rate = config.yaw_rate;
-        ROS_INFO("Desired vel:  %f, %f, %f, %f",desired_vel.x, desired_vel.y, desired_vel.z, desired_yaw_rate);
+        desired_vel.x = config.vx; desired_vel.y = config.vy; desired_vel.z = config.vz; desired_yaw = config.yaw;
+        ROS_INFO("Desired vel:  %f, %f, %f, %f",desired_vel.x, desired_vel.y, desired_vel.z, desired_yaw);
       }
     }
     else
@@ -665,7 +660,7 @@ void OnboardNodeHandler::quadstatetimerCallback(const ros::TimerEvent &event)
           ,data.magdata.x,data.magdata.y,data.magdata.z
           ,data.linacc.x,data.linacc.y,data.linacc.z
           ,data.linvel.x,data.linvel.y,data.linvel.z
-          ,desired_vel.x,desired_vel.z,desired_yaw_rate*(180/M_PI)
+          ,desired_vel.x,desired_vel.z,desired_yaw*(180/M_PI)
           ,rpytcmd.x*(180/M_PI), rpytcmd.y*(180/M_PI), rpytcmd.w, rpytcmd.z*(180/M_PI)
           ,data.mass,data.timestamp,data.quadstate.c_str());
 
@@ -703,15 +698,8 @@ void OnboardNodeHandler::cmdtimerCallback(const ros::TimerEvent& event)
       stateTransitionTracking(false);
     }
   }
-  //DEBUG: If tracking is enabled only see the values of vel rather than command it
-  //Feedforward yaw:
-  feedforward_yaw = feedforward_yaw + desired_yaw_rate*(ros::Time::now() - event.last_real).toSec();
-  if(feedforward_yaw > 180)//Wrapping Around
-    feedforward_yaw = feedforward_yaw - 360;
-  if(feedforward_yaw < -180)
-    feedforward_yaw = feedforward_yaw + 360;
   //send command of the velocity
   if(parserinstance)
-    parserinstance->cmdvelguided(desired_vel, feedforward_yaw);
+    parserinstance->cmdvelguided(desired_vel, desired_yaw);
 }
 
