@@ -8,7 +8,7 @@
 #include <sys/stat.h>
 
 //Roi Vel Include:
-#include <controllers/roi_to_vel.h>
+#include <controllers/roivelcontroller.h>
 
 //Arm Controller
 #include <dynamixelsdk/arm_helper.h>
@@ -106,6 +106,7 @@ protected:
     //boost::shared_ptr<dynamixelsdk::DynamixelArm> arm_hardwareinst;
     boost::shared_ptr<pluginlib::ClassLoader<parsernode::Parser> > parser_loader;
     boost::shared_ptr<parsernode::Parser> parserinstance;
+    RoiVelController roi_vel_ctrlr_;
     // boost::shared_ptr<SetptCtrl> ctrlrinst;
 
     ///// Helper Variables
@@ -114,12 +115,14 @@ protected:
     geometry_msgs::Quaternion rpytcmd;///< Commanded rpyt msg
     double desired_yaw;///< Commanded Yaw from feedforward
     ros::Time last_roi_update_time_;///< Keep track of when roi got updated last
+    double obj_dist_;///< Distance of object from quadcopter should be given by a stereo camera/ some depth source
 
     //// State Variables
     bool enable_logging;///< If logging is enabled
     //bool enable_camctrl;///< If Camera control is enabled
     bool enable_rpytcontrol;///< If rpyt control is enabled
     bool enable_tracking;///< If we are tracking an object or not
+    bool set_desired_obj_dir_;///< When tracking is enabled, set the desired obj dir for the first time
     bool enable_velcontrol;///< If we enable quadcopter control
 
 
@@ -151,8 +154,6 @@ protected:
     //// Parameters:
     bool publish_rpy;///< Publish roll pitch yaw on a topic or not
     std::string uav_name;///< Name of UAV used in setting ID for tf
-    double yaw_gain;///< Gain on Yaw vel for tracking object
-    double vel_mag;///< Magnitude of vel for tracking object
     string logdir;///< Log Directory Used by Logger
     string parserplugin_name;///< Name of the quadcopter Parser
     tf::StampedTransform CAM_QUAD_transform;///<transform from camera to Quadcopter

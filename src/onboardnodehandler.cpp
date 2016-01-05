@@ -9,7 +9,8 @@ OnboardNodeHandler::OnboardNodeHandler(ros::NodeHandle &nh_):nh(nh_)
                                                             , enable_tracking(false), enable_velcontrol(false), enable_rpytcontrol(false)
                                                             , reconfig_init(false), reconfig_update(false)
                                                             , last_roi_update_time_(0)
-                                                            , desired_yaw(0)
+                                                            , desired_yaw(0), set_desired_obj_dir_(false)
+                                                            , obj_dist_(2.0)
                                                             //, armcmdrate(4), armratecount(0), gripped_already(false), newcamdata(false)
                                                             //, enable_control(false), enable_integrator(false), enable_camctrl(false), enable_manualtargetretrieval(false)
                                                             //, tip_position(), goalcount(1), diff_goal(), count_imu(0)
@@ -161,10 +162,6 @@ inline void OnboardNodeHandler::loadParameters()
     ROS_ERROR("Cannot find parser_plugin parameter to load the parser");
   }
 
-  //Tracking Parameters
-  nh.param<double>("/tracking/vel_mag",vel_mag, 0.1);
-  nh.param<double>("/tracking/yaw_gain",yaw_gain, 0.01);
-
   //Where the arm base is in quadcopter's frame Orientations are assumed to be known #TODO Add them as a paremeter too
   /*nh.param<double>("/ctrlr/armbasewrtquadx",arm_basewrtquad[0],0.0732);
   nh.param<double>("/ctrlr/armbasewrtquady",arm_basewrtquad[1], 0.0);
@@ -285,6 +282,7 @@ inline void OnboardNodeHandler::stateTransitionLogging(bool state)
       }
       enable_logging = true;
       parserinstance->controllog(true);
+      roi_vel_ctrlr_.controllog(true);
     }
   }
   else
@@ -294,6 +292,7 @@ inline void OnboardNodeHandler::stateTransitionLogging(bool state)
       ROS_INFO("I am called2");
       enable_logging = false;
       parserinstance->controllog(false);
+      roi_vel_ctrlr_.controllog(false);
     }
   }
   //Publish Change of State:
@@ -321,6 +320,10 @@ inline void OnboardNodeHandler::stateTransitionTracking(bool state)
     {
       desired_vel.x = desired_vel.y = desired_vel.z = 0;
       reconfig_update = true;
+    }
+    else
+    {
+        set_desired_obj_dir_ = true;
     }
   }
   
@@ -520,7 +523,7 @@ void OnboardNodeHandler::receiveGuiCommands(const rqt_quadcoptergui::GuiCommandM
 void OnboardNodeHandler::receiveCameraInfo(const sensor_msgs::CameraInfo &info)
 {
   intrinsics.reset(new sensor_msgs::CameraInfo());
-  *intrinsics = info;//Copy
+  roi_vel_ctrlr_.setCameraInfo(intrinsics, CAM_QUAD_transform);
   camera_info_subscriber_.shutdown();
 }
 
@@ -532,22 +535,21 @@ void OnboardNodeHandler::receiveRoi(const sensor_msgs::RegionOfInterest &roi_rec
     ROS_WARN("No Camera Info received/ No Parser instance created");
     return;
   }
-  geometry_msgs::Vector3 temp_desired_vel;
-  double temp_desired_yaw;
   //Get RPY:
   parserinstance->getquaddata(data);
-  roiToVel(roi_rect,
-           data.rpydata, *intrinsics,
-           CAM_QUAD_transform,vel_mag,yaw_gain,
-           temp_desired_vel, temp_desired_yaw);
-  if(enable_tracking)
+  if(set_desired_obj_dir_)
   {
-    desired_vel = temp_desired_vel;
-    desired_yaw = temp_desired_yaw;
+      roi_vel_ctrlr_.setDesiredObjectDir(roi_rect, data.rpydata);
+      set_desired_obj_dir_ = false;
+      //Get Desired Obj direction and Publish the marker
+  }
+  else if(enable_tracking)
+  {
+    roi_vel_ctrlr_.set(roi_rect,data.rpydata,obj_dist_,desired_vel,desired_yaw);
   }
 
   //Publish velocity
-  vel_marker.points[1].x = temp_desired_vel.x; vel_marker.points[1].y = temp_desired_vel.y; vel_marker.points[1].z = temp_desired_vel.z;
+  vel_marker.points[1].x = desired_vel.x; vel_marker.points[1].y = desired_vel.y; vel_marker.points[1].z = desired_vel.z;
   vel_marker_pub_.publish(vel_marker); 
 }
 
@@ -562,8 +564,10 @@ void OnboardNodeHandler::paramreqCallback(rqt_quadcoptergui::QuadcopterInterface
 
   if(!reconfig_init)
   {
-    config.yaw_gain = yaw_gain;
-    config.vel_mag = vel_mag;
+    //Tracking Parameters
+    nh.param<double>("/tracking/radial_gain",config.radial_gain);
+    nh.param<double>("/tracking/tangential_gain",config.tangential_gain);
+    nh.param<double>("/tracking/desired_object_distance",config.desired_object_distance);
     reconfig_init = true;
     return;
   }
@@ -598,26 +602,7 @@ void OnboardNodeHandler::paramreqCallback(rqt_quadcoptergui::QuadcopterInterface
     }
     config.update_vel = false;
   }
-
-  yaw_gain = config.yaw_gain;
-  vel_mag = config.vel_mag;
-
-/*#ifdef ARM_ENABLED
-  if((level&0x0008))
-  {
-    if(parserinstance)
-    {
-      parserinstance->grip(config.gripper_state);
-      timer_relaxgrip.setPeriod(ros::Duration(1));//2 seconds
-      timer_relaxgrip.start();//Start oneshot timer;
-    }
-    if(arm_hardwareinst)
-    {
-      arm_hardwareinst->powermotors(config.power_motors);
-    }
-  }
-#endif
-*/
+  roi_vel_ctrlr_.setGains(config.radial_gain, config.tangential_gain, config.desired_object_distance);
 }
 
 
