@@ -540,6 +540,7 @@ inline void OnboardNodeHandler::landQuad()
     return;
   }
   stateTransitionTracking(false);//Stop Tracking
+  stateTransitionVelControl(false);//Stop Vel Control
   ROS_INFO("Stopping cmd timer");
   velcmdtimer.stop();
   poscmdtimer.stop();
@@ -557,6 +558,7 @@ void OnboardNodeHandler::receiveGuiCommands(const rqt_quadcoptergui::GuiCommandM
     stateTransitionLogging(command_msg.command);
     break;
   case command_msg.enable_tracking://1
+    stateTransitionLogging(true);
     stateTransitionTracking(command_msg.command);
     break;
   case command_msg.enable_vel_control://2
