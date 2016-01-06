@@ -70,6 +70,8 @@ protected:
 
     ros::Subscriber camera_info_subscriber_;///< Subscribe to camera info
 
+    ros::Subscriber goal_pose_subscriber_;///< Subscribe to waypoint subscriber
+
     /////Publishers
     ros::Publisher gui_state_publisher_;
 
@@ -88,8 +90,8 @@ protected:
     boost::shared_ptr<tf::TransformBroadcaster> broadcaster;//Transform Broadcaster
 
     ////Timers
-    //ros::Timer goaltimer;//REFACTOR
-    ros::Timer cmdtimer;//REFACTOR #TODO
+    ros::Timer velcmdtimer;//REFACTOR #TODO
+    ros::Timer poscmdtimer;//REFACTOR #TODO
     ros::Timer rpytimer;//REFACTOR #TODO
     ros::Timer quadstatetimer;// Send quad state to GUI
 
@@ -113,9 +115,11 @@ protected:
     char buffer[1500];//buffer for creating Text data
     geometry_msgs::Vector3 desired_vel;///< Commanded velocity to quadcopter
     geometry_msgs::Quaternion rpytcmd;///< Commanded rpyt msg
+    geometry_msgs::Vector3 goal_position;///< Goal position for waypoint control
     double desired_yaw;///< Commanded Yaw from feedforward
     ros::Time last_roi_update_time_;///< Keep track of when roi got updated last
     double obj_dist_;///< Distance of object from quadcopter should be given by a stereo camera/ some depth source
+    double goal_altitude;///< For Position Control goal altitude
 
     //// State Variables
     bool enable_logging;///< If logging is enabled
@@ -124,6 +128,7 @@ protected:
     bool enable_tracking;///< If we are tracking an object or not
     bool set_desired_obj_dir_;///< When tracking is enabled, set the desired obj dir for the first time
     bool enable_velcontrol;///< If we enable quadcopter control
+    bool enable_poscontrol;///< If we enable quadcopter position control
 
 
     //// ROS Messages
@@ -184,6 +189,7 @@ protected:
     inline void stateTransitionLogging(bool);
     inline void stateTransitionTracking(bool);
     inline void stateTransitionVelControl(bool);
+    inline void stateTransitionPosControl(bool);
     inline void stateTransitionRpytControl(bool);
     //inline void stateTransitionJoyControl(bool);
     //inline void stateTransitionIntegrator(bool);
@@ -202,7 +208,7 @@ protected:
 
     void receiveRoi(const sensor_msgs::RegionOfInterest &roi_rect);
 
-    //void camcmdCallback(const geometry_msgs::TransformStamped::ConstPtr &currframe);
+    void receiveGoalPose(const geometry_msgs::PoseStamped &goal_pose);
 
     //void joyCallback(const sensor_msgs::Joy::ConstPtr &joymsg);
 
@@ -212,7 +218,9 @@ protected:
 
     //void goaltimerCallback(const ros::TimerEvent&);
 
-    void cmdtimerCallback(const ros::TimerEvent&);
+    void velcmdtimerCallback(const ros::TimerEvent&);
+
+    void poscmdtimerCallback(const ros::TimerEvent&);
 
     void quadstatetimerCallback(const ros::TimerEvent&);
 

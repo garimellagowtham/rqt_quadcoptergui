@@ -6,7 +6,7 @@ OnboardNodeHandler::OnboardNodeHandler(ros::NodeHandle &nh_):nh(nh_)
                                                             , broadcaster(new tf::TransformBroadcaster())
                                                             , logdir_created(false), enable_logging(false)
                                                             , publish_rpy(false)
-                                                            , enable_tracking(false), enable_velcontrol(false), enable_rpytcontrol(false)
+                                                            , enable_tracking(false), enable_velcontrol(false), enable_rpytcontrol(false), enable_poscontrol(false)
                                                             , reconfig_init(false), reconfig_update(false)
                                                             , last_roi_update_time_(0)
                                                             , desired_yaw(0), set_desired_obj_dir_(false)
@@ -41,6 +41,7 @@ OnboardNodeHandler::OnboardNodeHandler(ros::NodeHandle &nh_):nh(nh_)
   //Subscribe to roi
   roi_subscriber_ = nh_.subscribe("roi", 10, &OnboardNodeHandler::receiveRoi, this);
   camera_info_subscriber_ = nh.subscribe("camera_info",1,&OnboardNodeHandler::receiveCameraInfo, this);
+  goal_pose_subscriber_ = nh.subscribe("goal",1,&OnboardNodeHandler::receiveGoalPose,this);
   //Subscribe to Camera Estimator:
   //camdata_sub = nh_.subscribe("/Pose_Est/objpose",1,&OnboardNodeHandler::camcmdCallback,this);
 
@@ -78,8 +79,10 @@ OnboardNodeHandler::OnboardNodeHandler(ros::NodeHandle &nh_):nh(nh_)
   //timer_relaxgrip = nh_.createTimer(ros::Duration(4), &OnboardNodeHandler::oneshotGrab, this, true);//One shot timer
   //timer_relaxgrip.stop();
   //Timer for commanding quadcopter
-  cmdtimer = nh_.createTimer(ros::Duration(0.02), &OnboardNodeHandler::cmdtimerCallback,this);//50Hz is the update rate of Quadcopter cmd
-  cmdtimer.stop();
+  velcmdtimer = nh_.createTimer(ros::Duration(0.02), &OnboardNodeHandler::velcmdtimerCallback,this);//50Hz is the update rate of Quadcopter cmd
+  velcmdtimer.stop();
+  poscmdtimer = nh_.createTimer(ros::Duration(0.02), &OnboardNodeHandler::poscmdtimerCallback,this);//50Hz is the update rate of Quadcopter cmd
+  poscmdtimer.stop();
   rpytimer = nh_.createTimer(ros::Duration(0.02), &OnboardNodeHandler::rpytimerCallback,this);//50Hz is the update rate of Quadcopter cmd
   rpytimer.stop();
   //Timer for sending quadcopter state
@@ -118,7 +121,8 @@ OnboardNodeHandler::~OnboardNodeHandler()
   reconfigserver.reset();
 
   //goaltimer.stop();
-  cmdtimer.stop();
+  velcmdtimer.stop();
+  poscmdtimer.stop();
   quadstatetimer.stop();
 
   //vrpnfile.close();//Close the file
@@ -349,15 +353,13 @@ inline void OnboardNodeHandler::stateTransitionVelControl(bool state)
     ROS_WARN("Parser Instance not defined. Cannot Control Quad");
     goto PUBLISH_VEL_CONTROL_STATE;
   }
+  // Check if other states are on:
   if(enable_rpytcontrol)
       stateTransitionRpytControl(false);
-
-  //First check if tracking is on; If on, switch it off:
   if(enable_tracking)
-  {
-    ROS_INFO("Setting Tracking to False");
     stateTransitionTracking(false);
-  }
+  if(enable_poscontrol)
+    stateTransitionPosControl(false);
 
   enable_velcontrol = state;
   ROS_INFO("State: %d",enable_velcontrol);
@@ -366,7 +368,7 @@ inline void OnboardNodeHandler::stateTransitionVelControl(bool state)
   if(!enable_velcontrol)
   {
     ROS_INFO("Stopping Cmdtimer");
-    cmdtimer.stop();
+    velcmdtimer.stop();
   }
 
   if(data.armed && enable_velcontrol)//If we are in air and asked to enable control of quadcopter
@@ -383,7 +385,7 @@ inline void OnboardNodeHandler::stateTransitionVelControl(bool state)
       desired_vel.x = desired_vel.y = desired_vel.z = 0;
       reconfig_update = true;
       //Start Timer to send vel to quadcopter
-      cmdtimer.start();
+      velcmdtimer.start();
     }
   }
   else
@@ -405,7 +407,46 @@ PUBLISH_VEL_CONTROL_STATE:
   gui_state_publisher_.publish(state_message);
 }
 
-void OnboardNodeHandler::stateTransitionRpytControl(bool state)
+inline void OnboardNodeHandler::stateTransitionPosControl(bool state)
+{
+  if(!parserinstance)
+  {
+    ROS_WARN("Parser Instance not defined. Cannot Control Quad");
+    goto PUBLISH_POS_CONTROL_STATE;
+  }
+
+  // Check if other states are on:
+  if(enable_rpytcontrol)
+      stateTransitionRpytControl(false);
+  if(enable_tracking)
+    stateTransitionTracking(false);
+  if(enable_velcontrol)
+    stateTransitionVelControl(false);
+
+  enable_poscontrol = state;
+  ROS_INFO("State: %d",enable_poscontrol);
+
+  if(!enable_poscontrol)
+  {
+      poscmdtimer.stop();
+  }
+  else
+  {
+      parserinstance->getquaddata(data);
+      goal_position = data.localpos;
+      desired_yaw = data.rpydata.z;
+      poscmdtimer.start();
+  }
+
+  //Publish Change of State:
+PUBLISH_POS_CONTROL_STATE:
+  rqt_quadcoptergui::GuiStateMessage state_message;
+  state_message.status = enable_poscontrol;
+  state_message.commponent_id = state_message.pos_control_status;
+  gui_state_publisher_.publish(state_message);
+}
+
+inline void OnboardNodeHandler::stateTransitionRpytControl(bool state)
 {
   if(!parserinstance)
   {
@@ -414,8 +455,12 @@ void OnboardNodeHandler::stateTransitionRpytControl(bool state)
   }
   if(!parserinstance->initialized)
     goto PUBLISH_RPYT_CONTROL_STATE;
+  if(enable_tracking)
+      stateTransitionTracking(false);
   if(enable_velcontrol)
       stateTransitionVelControl(false);
+  if(enable_poscontrol)
+      stateTransitionPosControl(false);
 
   if(state)
   {
@@ -472,9 +517,11 @@ inline void OnboardNodeHandler::disarmQuad()
   }
   stateTransitionTracking(false);
   ROS_INFO("Stopping cmd timer");
-  cmdtimer.stop();
+  velcmdtimer.stop();
+  poscmdtimer.stop();
   parserinstance->disarm();
   stateTransitionVelControl(false);
+  stateTransitionPosControl(false);
   stateTransitionLogging(false);
 }
 
@@ -487,7 +534,8 @@ inline void OnboardNodeHandler::landQuad()
   }
   stateTransitionTracking(false);//Stop Tracking
   ROS_INFO("Stopping cmd timer");
-  cmdtimer.stop();
+  velcmdtimer.stop();
+  poscmdtimer.stop();
   parserinstance->land();
   stateTransitionLogging(false);
 }
@@ -509,6 +557,9 @@ void OnboardNodeHandler::receiveGuiCommands(const rqt_quadcoptergui::GuiCommandM
     break;
   case command_msg.enable_rpyt_control://2
     stateTransitionRpytControl(command_msg.command);
+    break;
+  case command_msg.enable_pos_control:
+    stateTransitionPosControl(command_msg.command);
     break;
   case command_msg.arm_quad ://6
     ROS_INFO("Arming Quad");
@@ -581,6 +632,16 @@ void OnboardNodeHandler::receiveRoi(const sensor_msgs::RegionOfInterest &roi_rec
   }
 }
 
+void OnboardNodeHandler::receiveGoalPose(const geometry_msgs::PoseStamped &goal_pose)
+{
+  if(enable_poscontrol)
+  {
+    goal_position.x = goal_pose.pose.position.x;
+    goal_position.y = goal_pose.pose.position.y;
+    desired_yaw = tf::getYaw(goal_pose.pose.orientation);
+  }
+}
+
 void OnboardNodeHandler::paramreqCallback(rqt_quadcoptergui::QuadcopterInterfaceConfig &config, uint32_t level)
 {
   // Use the config values to set the goals and gains for quadcopter
@@ -631,6 +692,7 @@ void OnboardNodeHandler::paramreqCallback(rqt_quadcoptergui::QuadcopterInterface
     config.update_vel = false;
   }
   roi_vel_ctrlr_.setGains(config.radial_gain, config.tangential_gain, config.desired_object_distance);
+  goal_altitude = config.goal_altitude;
 }
 
 
@@ -700,7 +762,7 @@ void OnboardNodeHandler::rpytimerCallback(const ros::TimerEvent& event)
   }
 }
 
-void OnboardNodeHandler::cmdtimerCallback(const ros::TimerEvent& event)
+void OnboardNodeHandler::velcmdtimerCallback(const ros::TimerEvent& event)
 {
   //Check if roi has not been updated for more than 0.5 sec; Then disable tracking automatically:
   if(enable_tracking)
@@ -719,3 +781,11 @@ void OnboardNodeHandler::cmdtimerCallback(const ros::TimerEvent& event)
   }
 }
 
+void OnboardNodeHandler::poscmdtimerCallback(const ros::TimerEvent& event)
+{
+  if(enable_poscontrol)
+  {
+    goal_position.z = goal_altitude;
+    parserinstance->cmdwaypoint(goal_position, desired_yaw);
+  }
+}

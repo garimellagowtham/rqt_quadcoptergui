@@ -130,6 +130,19 @@
     <string>enable_rpycont</string>
    </property>
   </widget>
+  <widget class="QCheckBox" name="poscontrol_checkbox">
+   <property name="geometry">
+    <rect>
+     <x>120</x>
+     <y>40</y>
+     <width>111</width>
+     <height>21</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>enable_poscont</string>
+   </property>
+  </widget>
  </widget>
  <resources/>
  <connections/>
