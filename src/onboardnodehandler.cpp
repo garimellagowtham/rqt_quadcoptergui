@@ -579,6 +579,7 @@ void OnboardNodeHandler::receiveGuiCommands(const rqt_quadcoptergui::GuiCommandM
 void OnboardNodeHandler::receiveCameraInfo(const sensor_msgs::CameraInfo &info)
 {
   intrinsics.reset(new sensor_msgs::CameraInfo());
+  *intrinsics = info;
   roi_vel_ctrlr_.setCameraInfo(intrinsics, CAM_QUAD_transform);
   camera_info_subscriber_.shutdown();
 }
