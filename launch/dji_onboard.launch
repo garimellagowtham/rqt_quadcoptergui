@@ -4,8 +4,9 @@
   <param name="/gui/logdir" type="string" value="$(find rqt_quadcoptergui)/djilogfiles"/>
   <!--<node pkg="rqt_quadcoptergui" name="onboard_node" type="onboard_node" output="screen" launch-prefix="gdb--><!--args">-->
   <node pkg="rqt_quadcoptergui" name="onboard_node" type="onboard_node" output="screen">
-    <remap from="onboard_node/camera_info" to="camera/camera_info"/>
+    <remap from="onboard_node/camera_info" to="duo3d_camera/left/camera_info"/>
     <remap from="onboard_node/roi" to="roi_out"/>
+    <remap from="onboard_node/goal" to="move_base_simple/goal"/>
     <!-- dji parameters -->
     <param name="serial_name" type="string" value="/dev/ttydji"/>
     <param name="baud_rate" type="int" value="230400"/>
@@ -16,5 +17,5 @@
     <param name="enc_key" type="string" value="8667ff1ec3a163d6ef14a7bf6a9fae66210855f309c1876788f61d2195dc58d7"/>
   </node>
   <node pkg="tf2_ros" type="static_transform_publisher" name="dji_to_cam" args="0.13 0 0 -1.5707 0 -1.5707 dji camera"/>
-  <include file="$(find opencv3_tracking)/launch/object_tracker.launch"/>
+  <include file="$(find opencv3_tracking)/launch/duo_object_tracker.launch"/>
 </launch>

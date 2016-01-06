@@ -270,6 +270,8 @@ inline void OnboardNodeHandler::setupLogDir()
   if(parserinstance)
     parserinstance->setlogdir(logdir_stamped);
 
+  roi_vel_ctrlr_.setlogdir(logdir_stamped);
+
   logdir_created = true;//Specify that log directory has been created
 }
 
@@ -425,6 +427,11 @@ inline void OnboardNodeHandler::stateTransitionPosControl(bool state)
 
   enable_poscontrol = state;
   ROS_INFO("State: %d",enable_poscontrol);
+  if(enable_poscontrol)
+  {
+    goal_position = data.localpos;
+    desired_yaw = data.rpydata.z;
+  }
 
   if(!enable_poscontrol)
   {
@@ -591,12 +598,14 @@ void OnboardNodeHandler::receiveRoi(const sensor_msgs::RegionOfInterest &roi_rec
     ROS_WARN("No Camera Info received/ No Parser instance created");
     return;
   }
+  ROS_INFO("Received Roi");
   //Get RPY:
   if(enable_tracking)
   {
     parserinstance->getquaddata(data);
     if(set_desired_obj_dir_)
     {
+      ROS_INFO("Setting Desired Obj Dir");
       roi_vel_ctrlr_.setDesiredObjectDir(roi_rect, data.rpydata);
       set_desired_obj_dir_ = false;
       //Get Desired Obj direction and Publish the marker
@@ -624,6 +633,7 @@ void OnboardNodeHandler::receiveRoi(const sensor_msgs::RegionOfInterest &roi_rec
     }
     else
     {
+      ROS_INFO("Setting desired vel");
       roi_vel_ctrlr_.set(roi_rect,data.rpydata,obj_dist_,desired_vel,desired_yaw);
       //Publish velocity
       vel_marker.points[1].x = desired_vel.x; vel_marker.points[1].y = desired_vel.y; vel_marker.points[1].z = desired_vel.z;
