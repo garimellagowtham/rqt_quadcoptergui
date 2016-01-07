@@ -740,7 +740,7 @@ void OnboardNodeHandler::quadstatetimerCallback(const ros::TimerEvent &event)
   sprintf(buffer,
           "Battery Percent: %2.2f\t\nlx: %2.2f\tly: %2.2f\tlz: %2.2f\nAltitude: %2.2f\t\nRoll: %2.2f\tPitch %2.2f\tYaw %2.2f\n"
           "Magx: %2.2f\tMagy %2.2f\tMagz %2.2f\naccx: %2.2f\taccy %2.2f\taccz %2.2f\nvelx: %2.2f\tvely %2.2f\tvelz %2.2f\n"
-          "Trvelx: %1/.2f\tTrvelz: %2.2f\tTryawr: %2.2f\nCmdr: %2.2f\tCmdp: %2.2f\tCmdt: %2.2f\tCmdy: %2.2f\n"
+          "Trvelx: %2.2f\tTrvely: %2.2f\tTrvelz: %2.2f\tTryawr: %2.2f\nCmdr: %2.2f\tCmdp: %2.2f\tCmdt: %2.2f\tCmdy: %2.2f\n"
           "Goalx: %2.2f\tGoaly: %2.2f\tGoalz: %2.2f\tGoaly: %2.2f\n"
           "Mass: %2.2f\tTimestamp: %2.2f\t\nQuadState: %s",
           data.batterypercent
@@ -750,9 +750,9 @@ void OnboardNodeHandler::quadstatetimerCallback(const ros::TimerEvent &event)
           ,data.magdata.x,data.magdata.y,data.magdata.z
           ,data.linacc.x,data.linacc.y,data.linacc.z
           ,data.linvel.x,data.linvel.y,data.linvel.z
-          ,desired_vel.x,desired_vel.z,desired_yaw*(180/M_PI)
+          ,desired_vel.x,desired_vel.y,desired_vel.z,desired_yaw*(180/M_PI)
           ,rpytcmd.x*(180/M_PI), rpytcmd.y*(180/M_PI), rpytcmd.w, rpytcmd.z*(180/M_PI)
-          ,goal_position.x, goal_position.y, goal_position.y, goal_position.z, desired_yaw
+          ,goal_position.x, goal_position.y, goal_position.z, desired_yaw
           ,data.mass,data.timestamp,data.quadstate.c_str());
 
   //Publish State:
