@@ -118,7 +118,6 @@ protected:
     geometry_msgs::Vector3 goal_position;///< Goal position for waypoint control
     double desired_yaw;///< Commanded Yaw from feedforward
     ros::Time last_roi_update_time_;///< Keep track of when roi got updated last
-    double obj_dist_;///< Distance of object from quadcopter should be given by a stereo camera/ some depth source
     double goal_altitude;///< For Position Control goal altitude
 
     //// State Variables

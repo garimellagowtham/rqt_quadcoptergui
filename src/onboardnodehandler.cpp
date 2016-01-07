@@ -10,7 +10,8 @@ OnboardNodeHandler::OnboardNodeHandler(ros::NodeHandle &nh_):nh(nh_)
                                                             , reconfig_init(false), reconfig_update(false)
                                                             , last_roi_update_time_(0)
                                                             , desired_yaw(0), set_desired_obj_dir_(false)
-                                                            , obj_dist_(2.0)
+                                                            , roi_vel_ctrlr_(nh) 
+                                                            
                                                             //, armcmdrate(4), armratecount(0), gripped_already(false), newcamdata(false)
                                                             //, enable_control(false), enable_integrator(false), enable_camctrl(false), enable_manualtargetretrieval(false)
                                                             //, tip_position(), goalcount(1), diff_goal(), count_imu(0)
@@ -637,7 +638,7 @@ void OnboardNodeHandler::receiveRoi(const sensor_msgs::RegionOfInterest &roi_rec
     else
     {
       ROS_INFO("Setting desired vel");
-      roi_vel_ctrlr_.set(roi_rect,data.rpydata,obj_dist_,desired_vel,desired_yaw);
+      roi_vel_ctrlr_.set(roi_rect,data.rpydata,desired_vel,desired_yaw);
       //Publish velocity
       vel_marker.points[1].x = desired_vel.x; vel_marker.points[1].y = desired_vel.y; vel_marker.points[1].z = desired_vel.z;
       marker_pub_.publish(vel_marker);

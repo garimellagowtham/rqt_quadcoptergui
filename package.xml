@@ -52,6 +52,8 @@
   <build_depend>tf</build_depend>
   <build_depend>visualization_msgs</build_depend>
   <build_depend>gcop_comm</build_depend>
+  <build_depend>cv_bridge</build_depend>
+
 
   <run_depend>controllers</run_depend>
   <run_depend>dynamic_reconfigure</run_depend>
@@ -65,6 +67,7 @@
   <run_depend>tf</run_depend>
   <run_depend>visualization_msgs</run_depend>
   <run_depend>gcop_comm</run_depend>
+  <run_depend>cv_bridge</run_depend>
 
 
   <!-- The export tag contains other, unspecified, tags -->
