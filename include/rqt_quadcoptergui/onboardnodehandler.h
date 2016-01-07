@@ -66,11 +66,7 @@ protected:
 
     ros::Subscriber gui_command_subscriber_;
 
-    ros::Subscriber roi_subscriber_;///< Subscribe to the roi of object
-
-    ros::Subscriber camera_info_subscriber_;///< Subscribe to camera info
-
-    ros::Subscriber goal_pose_subscriber_;///< Subscribe to waypoint subscriber
+    ros::Subscriber goal_pose_subscriber_;///< Subscribe to waypoint command from rviz
 
     /////Publishers
     ros::Publisher gui_state_publisher_;
@@ -108,7 +104,7 @@ protected:
     //boost::shared_ptr<dynamixelsdk::DynamixelArm> arm_hardwareinst;
     boost::shared_ptr<pluginlib::ClassLoader<parsernode::Parser> > parser_loader;
     boost::shared_ptr<parsernode::Parser> parserinstance;
-    RoiVelController roi_vel_ctrlr_;
+    boost::shared_ptr<RoiVelController> roi_vel_ctrlr_;
     // boost::shared_ptr<SetptCtrl> ctrlrinst;
 
     ///// Helper Variables
@@ -117,24 +113,20 @@ protected:
     geometry_msgs::Quaternion rpytcmd;///< Commanded rpyt msg
     geometry_msgs::Vector3 goal_position;///< Goal position for waypoint control
     double desired_yaw;///< Commanded Yaw from feedforward
-    ros::Time last_roi_update_time_;///< Keep track of when roi got updated last
-    double obj_dist_;///< Distance of object from quadcopter should be given by a stereo camera/ some depth source
     double goal_altitude;///< For Position Control goal altitude
+    double waypoint_velgain;///< Gain on how fast waypoint moves from current position to goal position
 
     //// State Variables
     bool enable_logging;///< If logging is enabled
     //bool enable_camctrl;///< If Camera control is enabled
     bool enable_rpytcontrol;///< If rpyt control is enabled
     bool enable_tracking;///< If we are tracking an object or not
-    bool set_desired_obj_dir_;///< When tracking is enabled, set the desired obj dir for the first time
     bool enable_velcontrol;///< If we enable quadcopter control
     bool enable_poscontrol;///< If we enable quadcopter position control
 
 
     //// ROS Messages
     ////sensor_msgs::JointState jointstate_msg;///< For publishing arm state
-    visualization_msgs::Marker vel_marker;//For visualizing the object to grab
-    boost::shared_ptr<sensor_msgs::CameraInfo> intrinsics;
 
     /////Arm Variables:
     /*double as[2][3];//Arm inverse kinematics output
@@ -149,12 +141,12 @@ protected:
 
     //// Logger Variables:
     bool logdir_created;///< Indicates whether logdirectory has been created
-    ofstream vrpnfile;
-    ofstream camfile;
-    ofstream tipfile;
-		char vrpnfile_buffer[FILE_BUFFER_SIZE];
-		char camfile_buffer[FILE_BUFFER_SIZE];
-		char tipfile_buffer[FILE_BUFFER_SIZE];
+    //ofstream vrpnfile;
+    //ofstream camfile;
+    //ofstream tipfile;
+		//char vrpnfile_buffer[FILE_BUFFER_SIZE];
+		//char camfile_buffer[FILE_BUFFER_SIZE];
+		//char tipfile_buffer[FILE_BUFFER_SIZE];
 
     //// Parameters:
     bool publish_rpy;///< Publish roll pitch yaw on a topic or not
