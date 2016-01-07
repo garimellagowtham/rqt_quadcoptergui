@@ -8,9 +8,8 @@ OnboardNodeHandler::OnboardNodeHandler(ros::NodeHandle &nh_):nh(nh_)
                                                             , publish_rpy(false)
                                                             , enable_tracking(false), enable_velcontrol(false), enable_rpytcontrol(false), enable_poscontrol(false)
                                                             , reconfig_init(false), reconfig_update(false)
-                                                            , last_roi_update_time_(0)
-                                                            , desired_yaw(0), set_desired_obj_dir_(false)
-                                                            , obj_dist_(2.0)
+                                                            , desired_yaw(0)
+                                                            , waypoint_velgain(0.05)
                                                             //, armcmdrate(4), armratecount(0), gripped_already(false), newcamdata(false)
                                                             //, enable_control(false), enable_integrator(false), enable_camctrl(false), enable_manualtargetretrieval(false)
                                                             //, tip_position(), goalcount(1), diff_goal(), count_imu(0)
@@ -30,6 +29,10 @@ OnboardNodeHandler::OnboardNodeHandler(ros::NodeHandle &nh_):nh(nh_)
     return;
   }
 
+  //Create RoiVelController:
+  roi_vel_ctrlr_.reset(new RoiVelController(nh,uav_name));
+  roi_vel_ctrlr_->setCameraTransform(CAM_QUAD_transform);
+
 /*#ifdef ARM_ENABLED
   ROS_INFO("Creating Arm Hardware Instance");
   arm_hardwareinst.reset(new dynamixelsdk::DynamixelArm(dyn_deviceInd, dyn_baudnum));
@@ -38,9 +41,6 @@ OnboardNodeHandler::OnboardNodeHandler(ros::NodeHandle &nh_):nh(nh_)
   ROS_INFO("Subscribing to Callbacks");
   //Subscribe to GuiCommands
   gui_command_subscriber_ = nh_.subscribe("/gui_commands", 10, &OnboardNodeHandler::receiveGuiCommands, this);
-  //Subscribe to roi
-  roi_subscriber_ = nh_.subscribe("roi", 10, &OnboardNodeHandler::receiveRoi, this);
-  camera_info_subscriber_ = nh.subscribe("camera_info",1,&OnboardNodeHandler::receiveCameraInfo, this);
   goal_pose_subscriber_ = nh.subscribe("goal",1,&OnboardNodeHandler::receiveGoalPose,this);
   //Subscribe to Camera Estimator:
   //camdata_sub = nh_.subscribe("/Pose_Est/objpose",1,&OnboardNodeHandler::camcmdCallback,this);
@@ -143,21 +143,6 @@ inline void copyPtToVec(geometry_msgs::Vector3 in, geometry_msgs::Point out)
 
 void OnboardNodeHandler::setupMemberVariables()
 {
-  // Prepare Target cube pointer for visualizing object
-  vel_marker.id = 1;
-  vel_marker.header.frame_id = uav_name;
-  vel_marker.action = visualization_msgs::Marker::ADD;
-  vel_marker.type = visualization_msgs::Marker::ARROW;
-  //Setting points
-  geometry_msgs::Point pt;
-  pt.x = pt.y = pt.z = 0;
-  vel_marker.points.push_back(pt);
-  pt.z = 0.1;//Start
-  vel_marker.points.push_back(pt);
-  vel_marker.scale.x = 0.02;//Shaft dia
-  vel_marker.scale.y = 0.05;//Head Dia
-  vel_marker.color.r = 1.0;//red arrow
-  vel_marker.color.a = 1.0;
   //Initial command:
   rpytcmd.x = rpytcmd.y = rpytcmd.z = 0;
   rpytcmd.w = 10;
@@ -270,7 +255,7 @@ inline void OnboardNodeHandler::setupLogDir()
   if(parserinstance)
     parserinstance->setlogdir(logdir_stamped);
 
-  roi_vel_ctrlr_.setlogdir(logdir_stamped);
+  roi_vel_ctrlr_->setlogdir(logdir_stamped);
 
   logdir_created = true;//Specify that log directory has been created
 }
@@ -293,7 +278,7 @@ inline void OnboardNodeHandler::stateTransitionLogging(bool state)
       }
       enable_logging = true;
       parserinstance->controllog(true);
-      roi_vel_ctrlr_.controllog(true);
+      roi_vel_ctrlr_->controllog(true);
     }
   }
   else
@@ -303,7 +288,7 @@ inline void OnboardNodeHandler::stateTransitionLogging(bool state)
       ROS_INFO("I am called2");
       enable_logging = false;
       parserinstance->controllog(false);
-      roi_vel_ctrlr_.controllog(false);
+      roi_vel_ctrlr_->controllog(false);
     }
   }
   //Publish Change of State:
@@ -322,6 +307,9 @@ inline void OnboardNodeHandler::stateTransitionTracking(bool state)
 		goto PUBLISH_TRACKING_STATE;
   }
 
+  if(!state)
+      enable_tracking = false;
+
   //Check if we are in air and control is enabled; otherwise do not track
   if(data.armed && enable_velcontrol)
   {
@@ -332,9 +320,39 @@ inline void OnboardNodeHandler::stateTransitionTracking(bool state)
       desired_vel.x = desired_vel.y = desired_vel.z = 0;
       reconfig_update = true;
     }
-    else
+    else//Tracking is Being Enabled
     {
-        set_desired_obj_dir_ = true;
+      parserinstance->getquaddata(data);
+      geometry_msgs::Vector3 des_obj_dir;
+      bool result = roi_vel_ctrlr_->setDesiredObjectDir(data.rpydata,des_obj_dir);
+      if(!result)
+      {
+          ROS_WARN("Failed to initialize des obj dir");
+          enable_tracking = false;
+      }
+      else
+      {
+        //Get Desired Obj direction and Publish the marker
+        visualization_msgs::Marker dirxn_marker;
+        dirxn_marker.id = 2;
+        dirxn_marker.header.frame_id = "world";
+        dirxn_marker.action = visualization_msgs::Marker::ADD;
+        dirxn_marker.type = visualization_msgs::Marker::ARROW;
+
+        geometry_msgs::Point pt;
+        copyPtToVec(data.localpos,pt);
+        dirxn_marker.points.push_back(pt);
+
+        pt.x += 5.0*des_obj_dir.x;
+        pt.y += 5.0*des_obj_dir.y;
+        pt.z += 5.0*des_obj_dir.z;
+        dirxn_marker.points.push_back(pt);
+        dirxn_marker.scale.x = 0.02;//Shaft dia
+        dirxn_marker.scale.y = 0.05;//Head Dia
+        dirxn_marker.color.b = 1.0;//Blue arrow
+        dirxn_marker.color.a = 1.0;
+        marker_pub_.publish(dirxn_marker);
+      }
     }
   }
   
@@ -427,11 +445,6 @@ inline void OnboardNodeHandler::stateTransitionPosControl(bool state)
 
   enable_poscontrol = state;
   ROS_INFO("State: %d",enable_poscontrol);
-  if(enable_poscontrol)
-  {
-    goal_position = data.localpos;
-    desired_yaw = data.rpydata.z;
-  }
 
   if(!enable_poscontrol)
   {
@@ -441,6 +454,7 @@ inline void OnboardNodeHandler::stateTransitionPosControl(bool state)
   {
       parserinstance->getquaddata(data);
       goal_position = data.localpos;
+      goal_altitude = goal_position.z;
       desired_yaw = data.rpydata.z;
       poscmdtimer.start();
   }
@@ -585,66 +599,6 @@ void OnboardNodeHandler::receiveGuiCommands(const rqt_quadcoptergui::GuiCommandM
   }
 }
 
-void OnboardNodeHandler::receiveCameraInfo(const sensor_msgs::CameraInfo &info)
-{
-  intrinsics.reset(new sensor_msgs::CameraInfo());
-  *intrinsics = info;
-  roi_vel_ctrlr_.setCameraInfo(intrinsics, CAM_QUAD_transform);
-  camera_info_subscriber_.shutdown();
-}
-
-void OnboardNodeHandler::receiveRoi(const sensor_msgs::RegionOfInterest &roi_rect)
-{
-  last_roi_update_time_ = ros::Time::now();
-  if(!intrinsics || !parserinstance) 
-  {
-    ROS_WARN("No Camera Info received/ No Parser instance created");
-    return;
-  }
-  ROS_INFO("Received Roi");
-  //Get RPY:
-  if(enable_tracking)
-  {
-    parserinstance->getquaddata(data);
-    if(set_desired_obj_dir_)
-    {
-      ROS_INFO("Setting Desired Obj Dir");
-      roi_vel_ctrlr_.setDesiredObjectDir(roi_rect, data.rpydata);
-      set_desired_obj_dir_ = false;
-      //Get Desired Obj direction and Publish the marker
-      visualization_msgs::Marker dirxn_marker;
-      dirxn_marker.id = 2;
-      dirxn_marker.header.frame_id = "world";
-      dirxn_marker.action = visualization_msgs::Marker::ADD;
-      dirxn_marker.type = visualization_msgs::Marker::ARROW;
-
-      geometry_msgs::Point pt;
-      copyPtToVec(data.localpos,pt);
-      dirxn_marker.points.push_back(pt);
-
-      geometry_msgs::Vector3 des_obj_dir;
-      roi_vel_ctrlr_.getDesiredObjDir(des_obj_dir);
-      pt.x += 5.0*des_obj_dir.x;
-      pt.y += 5.0*des_obj_dir.y;
-      pt.z += 5.0*des_obj_dir.z;
-      dirxn_marker.points.push_back(pt);
-      dirxn_marker.scale.x = 0.02;//Shaft dia
-      dirxn_marker.scale.y = 0.05;//Head Dia
-      dirxn_marker.color.b = 1.0;//Blue arrow
-      dirxn_marker.color.a = 1.0;
-      marker_pub_.publish(dirxn_marker);
-    }
-    else
-    {
-      ROS_INFO("Setting desired vel");
-      roi_vel_ctrlr_.set(roi_rect,data.rpydata,obj_dist_,desired_vel,desired_yaw);
-      //Publish velocity
-      vel_marker.points[1].x = desired_vel.x; vel_marker.points[1].y = desired_vel.y; vel_marker.points[1].z = desired_vel.z;
-      marker_pub_.publish(vel_marker);
-    }
-  }
-}
-
 void OnboardNodeHandler::receiveGoalPose(const geometry_msgs::PoseStamped &goal_pose)
 {
   if(enable_poscontrol)
@@ -704,7 +658,7 @@ void OnboardNodeHandler::paramreqCallback(rqt_quadcoptergui::QuadcopterInterface
     }
     config.update_vel = false;
   }
-  roi_vel_ctrlr_.setGains(config.radial_gain, config.tangential_gain, config.desired_object_distance);
+  roi_vel_ctrlr_->setGains(config.radial_gain, config.tangential_gain, config.desired_object_distance);
   goal_altitude = config.goal_altitude;
 }
 
@@ -780,18 +734,17 @@ void OnboardNodeHandler::velcmdtimerCallback(const ros::TimerEvent& event)
   //Check if roi has not been updated for more than 0.5 sec; Then disable tracking automatically:
   if(enable_tracking)
   {
-    if((ros::Time::now() - last_roi_update_time_).toSec() > 0.5)
+    parserinstance->getquaddata(data);
+    bool result = roi_vel_ctrlr_->set(data.rpydata,desired_vel, desired_yaw);
+    if(!result)
     {
-      ROS_WARN("Roi has not been updated for 0.5 sec");
-      stateTransitionTracking(false);
+        stateTransitionTracking(false);
+        return;
     }
   }
-  else//{DEBUG}
-  {
   //send command of the velocity
   if(parserinstance)
     parserinstance->cmdvelguided(desired_vel, desired_yaw);
-  }
 }
 
 void OnboardNodeHandler::poscmdtimerCallback(const ros::TimerEvent& event)
@@ -799,6 +752,11 @@ void OnboardNodeHandler::poscmdtimerCallback(const ros::TimerEvent& event)
   if(enable_poscontrol)
   {
     goal_position.z = goal_altitude;
-    parserinstance->cmdwaypoint(goal_position, desired_yaw);
+    double current_desired_yaw = data.rpydata.z + waypoint_velgain*0.02*(desired_yaw - data.rpydata.z);
+    geometry_msgs::Vector3 current_goal;
+    current_goal.x = data.localpos.x + waypoint_velgain*0.02*(goal_position.x - data.localpos.x);
+    current_goal.y = data.localpos.y + waypoint_velgain*0.02*(goal_position.x - data.localpos.x);
+    current_goal.z = data.localpos.z + waypoint_velgain*0.02*(goal_position.x - data.localpos.x);
+    parserinstance->cmdwaypoint(current_goal, current_desired_yaw);
   }
 }
