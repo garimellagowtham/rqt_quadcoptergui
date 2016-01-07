@@ -141,12 +141,12 @@ protected:
 
     //// Logger Variables:
     bool logdir_created;///< Indicates whether logdirectory has been created
-    ofstream vrpnfile;
-    ofstream camfile;
-    ofstream tipfile;
-		char vrpnfile_buffer[FILE_BUFFER_SIZE];
-		char camfile_buffer[FILE_BUFFER_SIZE];
-		char tipfile_buffer[FILE_BUFFER_SIZE];
+    //ofstream vrpnfile;
+    //ofstream camfile;
+    //ofstream tipfile;
+		//char vrpnfile_buffer[FILE_BUFFER_SIZE];
+		//char camfile_buffer[FILE_BUFFER_SIZE];
+		//char tipfile_buffer[FILE_BUFFER_SIZE];
 
     //// Parameters:
     bool publish_rpy;///< Publish roll pitch yaw on a topic or not

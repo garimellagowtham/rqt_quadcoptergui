@@ -126,8 +126,8 @@ OnboardNodeHandler::~OnboardNodeHandler()
   quadstatetimer.stop();
 
   //vrpnfile.close();//Close the file
-  camfile.close();//Close the file
-  tipfile.close();//Close the file
+  //camfile.close();//Close the file
+  //tipfile.close();//Close the file
 }
 
 //////////////////////HELPER Functions///////////////////
