@@ -9,7 +9,7 @@ OnboardNodeHandler::OnboardNodeHandler(ros::NodeHandle &nh_):nh(nh_)
                                                             , enable_tracking(false), enable_velcontrol(false), enable_rpytcontrol(false), enable_poscontrol(false)
                                                             , reconfig_init(false), reconfig_update(false)
                                                             , desired_yaw(0)
-                                                            , waypoint_velgain(0.05)
+                                                            , waypoint_vel(3.0), waypoint_yawvel(M_PI/18)
                                                             //, armcmdrate(4), armratecount(0), gripped_already(false), newcamdata(false)
                                                             //, enable_control(false), enable_integrator(false), enable_camctrl(false), enable_manualtargetretrieval(false)
                                                             //, tip_position(), goalcount(1), diff_goal(), count_imu(0)
@@ -755,11 +755,19 @@ void OnboardNodeHandler::poscmdtimerCallback(const ros::TimerEvent& event)
   if(enable_poscontrol)
   {
     goal_position.z = goal_altitude;
-    double current_desired_yaw = data.rpydata.z + waypoint_velgain*0.02*(desired_yaw - data.rpydata.z);
+    //Position Interpolation
+    tf::Vector3 goal_diff(goal_position.x - data.localpos.x, goal_position.y - data.localpos.y, goal_position.z - data.localpos.z);
     geometry_msgs::Vector3 current_goal;
-    current_goal.x = data.localpos.x + waypoint_velgain*0.02*(goal_position.x - data.localpos.x);
-    current_goal.y = data.localpos.y + waypoint_velgain*0.02*(goal_position.x - data.localpos.x);
-    current_goal.z = data.localpos.z + waypoint_velgain*0.02*(goal_position.x - data.localpos.x);
+    if(goal_diff.length() > waypoint_vel*0.02)
+      goal_diff = waypoint_vel*0.02*goal_diff.normalize();
+    tf::vector3TFToMsg(goal_diff, current_goal);
+    current_goal.x += data.localpos.x; current_goal.y += data.localpos.y; current_goal.z += data.localpos.z;
+    //Yaw Interpolation:
+    double goal_yaw_diff = (desired_yaw - data.rpydata.z);
+    if(std::abs(goal_yaw_diff) > waypoint_yawvel*0.02)
+      goal_yaw_diff = std::copysign(waypoint_yawvel*0.02,goal_yaw_diff);
+    double current_desired_yaw = data.rpydata.z + goal_yaw_diff;
+
     parserinstance->cmdwaypoint(current_goal, current_desired_yaw);
   }
 }
