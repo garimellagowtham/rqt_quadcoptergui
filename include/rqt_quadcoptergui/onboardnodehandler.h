@@ -114,8 +114,8 @@ protected:
     geometry_msgs::Vector3 goal_position;///< Goal position for waypoint control
     double desired_yaw;///< Commanded Yaw from feedforward
     double goal_altitude;///< For Position Control goal altitude
-    double waypoint_vel;///< Velocity with which to move to goal 
-    double waypoint_yawvel;///< Velocity with which to move in yaw towards goal 
+    //double waypoint_vel;///< Velocity with which to move to goal 
+    //double waypoint_yawvel;///< Velocity with which to move in yaw towards goal 
 
     //// State Variables
     bool enable_logging;///< If logging is enabled

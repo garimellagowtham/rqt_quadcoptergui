@@ -9,7 +9,7 @@ OnboardNodeHandler::OnboardNodeHandler(ros::NodeHandle &nh_):nh(nh_)
                                                             , enable_tracking(false), enable_velcontrol(false), enable_rpytcontrol(false), enable_poscontrol(false)
                                                             , reconfig_init(false), reconfig_update(false)
                                                             , desired_yaw(0)
-                                                            , waypoint_vel(3.0), waypoint_yawvel(M_PI/18)
+                                                            //, waypoint_vel(0.1), waypoint_yawvel(0.01)
                                                             //, armcmdrate(4), armratecount(0), gripped_already(false), newcamdata(false)
                                                             //, enable_control(false), enable_integrator(false), enable_camctrl(false), enable_manualtargetretrieval(false)
                                                             //, tip_position(), goalcount(1), diff_goal(), count_imu(0)
@@ -394,11 +394,12 @@ inline void OnboardNodeHandler::stateTransitionVelControl(bool state)
   if(data.armed && enable_velcontrol)//If we are in air and asked to enable control of quadcopter
   {
     ROS_INFO("Calling Enable Control");
-    result = parserinstance->flowControl(enable_velcontrol);//get control
+
+    result = parserinstance->flowControl(true);//get control
     if(!result)
     {
-        enable_velcontrol = false;
-        ROS_WARN("Failed to get control of quadcopter");
+      enable_velcontrol = false;
+      ROS_WARN("Failed to get control of quadcopter");
     }
     else
     {
@@ -408,16 +409,7 @@ inline void OnboardNodeHandler::stateTransitionVelControl(bool state)
       velcmdtimer.start();
     }
   }
-  else
-  {
-      ROS_INFO("Releasing Control of Quadcopter");
-      enable_velcontrol = false;
-      result = parserinstance->flowControl(enable_velcontrol);//get control
-      if(!result)
-      {
-        ROS_WARN("Failed to release control of quadcopter");
-      }
-  }
+  
   
   //Publish Change of State:
 PUBLISH_VEL_CONTROL_STATE:
@@ -452,11 +444,20 @@ inline void OnboardNodeHandler::stateTransitionPosControl(bool state)
   }
   else
   {
-      parserinstance->getquaddata(data);
-      goal_position = data.localpos;
-      goal_altitude = goal_position.z;
-      desired_yaw = data.rpydata.z;
-      poscmdtimer.start();
+      ROS_INFO("Calling Enable Control");
+      bool result = parserinstance->flowControl(true);//get control
+      if(result)
+      {
+        parserinstance->getquaddata(data);
+        goal_position = data.localpos;
+        goal_altitude = goal_position.z;
+        desired_yaw = data.rpydata.z;
+        poscmdtimer.start();
+      }
+      else
+      {
+        ROS_WARN("Failed to Obtain Control of Quadcopter");
+      }
   }
 
   //Publish Change of State:
@@ -690,11 +691,12 @@ void OnboardNodeHandler::quadstatetimerCallback(const ros::TimerEvent &event)
     rpytcmd.w = parsernode::common::map(data.servo_in[2],-10000, 10000, 10, 100);
     rpytcmd.z = parsernode::common::map(data.servo_in[3],-10000, 10000, -M_PI, M_PI);
   }
+  double object_distance = roi_vel_ctrlr_->getObjectDistance();
   // Create a Text message based on the data from the Parser class
   sprintf(buffer,
           "Battery Percent: %2.2f\t\nlx: %2.2f\tly: %2.2f\tlz: %2.2f\nAltitude: %2.2f\t\nRoll: %2.2f\tPitch %2.2f\tYaw %2.2f\n"
           "Magx: %2.2f\tMagy %2.2f\tMagz %2.2f\naccx: %2.2f\taccy %2.2f\taccz %2.2f\nvelx: %2.2f\tvely %2.2f\tvelz %2.2f\n"
-          "Trvelx: %2.2f\tTrvely: %2.2f\tTrvelz: %2.2f\tTryawr: %2.2f\nCmdr: %2.2f\tCmdp: %2.2f\tCmdt: %2.2f\tCmdy: %2.2f\n"
+          "Trvelx: %2.2f\tTrvely: %2.2f\tTrvelz: %2.2f\tTrObjD: %2.2f\nCmdr: %2.2f\tCmdp: %2.2f\tCmdt: %2.2f\tCmdy: %2.2f\n"
           "Goalx: %2.2f\tGoaly: %2.2f\tGoalz: %2.2f\tGoaly: %2.2f\n"
           "Mass: %2.2f\tTimestamp: %2.2f\t\nQuadState: %s",
           data.batterypercent
@@ -704,7 +706,7 @@ void OnboardNodeHandler::quadstatetimerCallback(const ros::TimerEvent &event)
           ,data.magdata.x,data.magdata.y,data.magdata.z
           ,data.linacc.x,data.linacc.y,data.linacc.z
           ,data.linvel.x,data.linvel.y,data.linvel.z
-          ,desired_vel.x,desired_vel.y,desired_vel.z,desired_yaw*(180/M_PI)
+          ,desired_vel.x,desired_vel.y,desired_vel.z,object_distance
           ,rpytcmd.x*(180/M_PI), rpytcmd.y*(180/M_PI), rpytcmd.w, rpytcmd.z*(180/M_PI)
           ,goal_position.x, goal_position.y, goal_position.z, desired_yaw
           ,data.mass,data.timestamp,data.quadstate.c_str());
@@ -754,20 +756,27 @@ void OnboardNodeHandler::poscmdtimerCallback(const ros::TimerEvent& event)
 {
   if(enable_poscontrol)
   {
-    goal_position.z = goal_altitude;
+  /*  goal_position.z = goal_altitude;
     //Position Interpolation
     tf::Vector3 goal_diff(goal_position.x - data.localpos.x, goal_position.y - data.localpos.y, goal_position.z - data.localpos.z);
     geometry_msgs::Vector3 current_goal;
-    if(goal_diff.length() > waypoint_vel*0.02)
-      goal_diff = waypoint_vel*0.02*goal_diff.normalize();
+    if(goal_diff.length() > waypoint_vel)
+      goal_diff = waypoint_vel*goal_diff.normalize();
     tf::vector3TFToMsg(goal_diff, current_goal);
     current_goal.x += data.localpos.x; current_goal.y += data.localpos.y; current_goal.z += data.localpos.z;
     //Yaw Interpolation:
     double goal_yaw_diff = (desired_yaw - data.rpydata.z);
-    if(std::abs(goal_yaw_diff) > waypoint_yawvel*0.02)
-      goal_yaw_diff = std::copysign(waypoint_yawvel*0.02,goal_yaw_diff);
-    double current_desired_yaw = data.rpydata.z + goal_yaw_diff;
+    if(goal_yaw_diff > waypoint_yawvel)
+      goal_yaw_diff = waypoint_yawvel;
+    else if(goal_yaw_diff < -waypoint_yawvel)
+      goal_yaw_diff = -waypoint_yawvel;
 
-    parserinstance->cmdwaypoint(current_goal, current_desired_yaw);
+*/
+    /*if(std::abs(goal_yaw_diff) > waypoint_yawvel*0.02)
+      goal_yaw_diff = std::copysign(waypoint_yawvel*0.02,goal_yaw_diff);
+      */
+ //   double current_desired_yaw = data.rpydata.z + goal_yaw_diff;
+    goal_position.z = goal_altitude;
+    parserinstance->cmdwaypoint(goal_position, desired_yaw);
   }
 }
