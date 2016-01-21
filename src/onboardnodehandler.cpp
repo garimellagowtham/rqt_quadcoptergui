@@ -404,6 +404,7 @@ inline void OnboardNodeHandler::stateTransitionVelControl(bool state)
     else
     {
       desired_vel.x = desired_vel.y = desired_vel.z = 0;
+      desired_yaw = data.rpydata.z;
       reconfig_update = true;
       //Start Timer to send vel to quadcopter
       velcmdtimer.start();
@@ -504,7 +505,8 @@ inline void OnboardNodeHandler::stateTransitionRpytControl(bool state)
     rpytimer.stop();
     enable_rpytcontrol = false;
     //Set current vel to 0:
-    desired_vel.x = desired_vel.y = desired_vel.z = desired_yaw = 0;
+    desired_vel.x = desired_vel.y = desired_vel.z = 0;
+    desired_yaw = data.rpydata.z;
     parserinstance->cmdvelguided(desired_vel, desired_yaw);
   }
     //Publish Change of State:
