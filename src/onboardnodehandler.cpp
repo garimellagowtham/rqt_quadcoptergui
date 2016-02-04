@@ -7,8 +7,9 @@ OnboardNodeHandler::OnboardNodeHandler(ros::NodeHandle &nh_):nh(nh_)
                                                             , logdir_created(false), enable_logging(false)
                                                             , publish_rpy(false)
                                                             , enable_tracking(false), enable_velcontrol(false), enable_rpytcontrol(false), enable_poscontrol(false)
+                                                            , enable_mpccontrol(false), enable_trajectory_tracking(false)
                                                             , reconfig_init(false), reconfig_update(false)
-                                                            , desired_yaw(0)
+                                                            , desired_yaw(0), kp_trajectory_tracking(1.0), timeout_trajectory_tracking(1.0), timeout_mpc_control(1.0)
                                                             , traj_visualizer_(nh_), model_control(), mpc_closed_loop_(false) 
                                                             //, waypoint_vel(0.1), waypoint_yawvel(0.01)
                                                             //, armcmdrate(4), armratecount(0), gripped_already(false), newcamdata(false)
@@ -41,8 +42,9 @@ OnboardNodeHandler::OnboardNodeHandler(ros::NodeHandle &nh_):nh(nh_)
 
   ROS_INFO("Subscribing to Callbacks");
   //Subscribe to GuiCommands
-  gui_command_subscriber_ = nh_.subscribe("/gui_commands", 10, &OnboardNodeHandler::receiveGuiCommands, this);
+  gui_command_subscriber_ = nh.subscribe("/gui_commands", 10, &OnboardNodeHandler::receiveGuiCommands, this);
   goal_pose_subscriber_ = nh.subscribe("goal",1,&OnboardNodeHandler::receiveGoalPose,this);
+  trajectory_subscriber_ = nh.subscribe("ctrltraj",1,&OnboardNodeHandler::gcoptrajectoryCallback,this);
   //Subscribe to Camera Estimator:
   //camdata_sub = nh_.subscribe("/Pose_Est/objpose",1,&OnboardNodeHandler::camcmdCallback,this);
 
@@ -88,6 +90,8 @@ OnboardNodeHandler::OnboardNodeHandler(ros::NodeHandle &nh_):nh(nh_)
   mpctimer.stop();
   rpytimer = nh_.createTimer(ros::Duration(0.02), &OnboardNodeHandler::rpytimerCallback,this);//50Hz is the update rate of Quadcopter cmd
   rpytimer.stop();
+  trajectorytimer = nh_.createTimer(ros::Duration(0.02), &OnboardNodeHandler::trajectorytimerCallback,this);//50Hz is the update rate of Quadcopter cmd
+  trajectorytimer.stop();
   //Timer for sending quadcopter state
   quadstatetimer = nh_.createTimer(ros::Duration(0.05), &OnboardNodeHandler::quadstatetimerCallback, this);//20Hz update GUI quad state
 }
@@ -269,7 +273,7 @@ inline void OnboardNodeHandler::setInitialStateMPC()
 {
   parserinstance->getquaddata(data);//Get Latest data
   model_control.setInitialState(data.localpos, data.linvel, data.linacc,
-                                data.rpydata, data.omega, rpytcmd);//TODO: Get Omega and linacc from parser
+                                data.rpydata, data.omega, rpytcmd);
 }
 
 ////////////////////////STATE TRANSITIONS/////////////////////////
@@ -394,6 +398,8 @@ inline void OnboardNodeHandler::stateTransitionVelControl(bool state)
     stateTransitionPosControl(false);
   if(enable_mpccontrol)
     stateTransitionMPCControl(false);
+  if(enable_trajectory_tracking)
+    stateTransitionTrajectoryTracking(false);
 
   enable_velcontrol = state;
   ROS_INFO("State: %d",enable_velcontrol);
@@ -451,6 +457,8 @@ inline void OnboardNodeHandler::stateTransitionPosControl(bool state)
     stateTransitionVelControl(false);
   if(enable_mpccontrol)
     stateTransitionMPCControl(false);
+  if(enable_trajectory_tracking)
+    stateTransitionTrajectoryTracking(false);
 
   enable_poscontrol = state;
   ROS_INFO("State: %d",enable_poscontrol);
@@ -503,6 +511,8 @@ inline void OnboardNodeHandler::stateTransitionMPCControl(bool state)
     stateTransitionVelControl(false);
   if(enable_poscontrol)
     stateTransitionPosControl(false);
+  if(enable_trajectory_tracking)
+    stateTransitionTrajectoryTracking(false);
 
   enable_mpccontrol = state;
   ROS_INFO("State: %d",enable_mpccontrol);
@@ -523,7 +533,9 @@ inline void OnboardNodeHandler::stateTransitionMPCControl(bool state)
       bool result = parserinstance->flowControl(true);//get control
       if(result)
       {
+        parserinstance->setmode("rpyt_angle");
         ROS_INFO("Starting Timer");
+        mpc_request_time = ros::Time::now();
         mpctimer.start();
       }
       else
@@ -538,6 +550,53 @@ PUBLISH_MPC_CONTROL_STATE:
   rqt_quadcoptergui::GuiStateMessage state_message;
   state_message.status = enable_mpccontrol;
   state_message.commponent_id = state_message.mpc_control_status;
+  gui_state_publisher_.publish(state_message);
+}
+
+inline void OnboardNodeHandler::stateTransitionTrajectoryTracking(bool state)
+{
+  if(!parserinstance)
+  {
+    ROS_WARN("Parser Instance not defined. Cannot create rpyt control");
+    goto PUBLISH_TRAJECTORY_TRACKING_STATE;
+  }
+  if(enable_tracking)
+    stateTransitionTracking(false);
+  if(enable_velcontrol)
+    stateTransitionVelControl(false);
+  if(enable_poscontrol)
+    stateTransitionPosControl(false);
+  if(enable_mpccontrol)
+    stateTransitionMPCControl(false);
+  if(enable_trajectory_tracking)
+    stateTransitionTrajectoryTracking(false);
+
+  if(state)
+  {
+    bool result = parserinstance->flowControl(true);//get control
+
+    if(!result)
+    {
+      ROS_INFO("Cannot open sdk");
+      goto PUBLISH_TRAJECTORY_TRACKING_STATE;
+    }
+    enable_trajectory_tracking = true;
+  }
+  else
+  {
+    enable_trajectory_tracking = false;
+    //Stop Trajectory tracking timer:
+    trajectorytimer.stop();
+    //Set current vel to 0:
+    desired_vel.x = desired_vel.y = desired_vel.z = 0;
+    desired_yaw = data.rpydata.z;
+    parserinstance->cmdvelguided(desired_vel, desired_yaw);
+  }
+  //Publish Change of State:
+PUBLISH_TRAJECTORY_TRACKING_STATE:
+  rqt_quadcoptergui::GuiStateMessage state_message;
+  state_message.status = enable_trajectory_tracking;
+  state_message.commponent_id = state_message.trajectory_tracking_status;
   gui_state_publisher_.publish(state_message);
 }
 
@@ -558,6 +617,8 @@ inline void OnboardNodeHandler::stateTransitionRpytControl(bool state)
       stateTransitionPosControl(false);
   if(enable_mpccontrol)
     stateTransitionMPCControl(false);
+  if(enable_trajectory_tracking)
+    stateTransitionTrajectoryTracking(false);
 
   if(state)
   {
@@ -569,6 +630,7 @@ inline void OnboardNodeHandler::stateTransitionRpytControl(bool state)
       goto PUBLISH_RPYT_CONTROL_STATE;
     }
     //Enable rpyttimer:
+    parserinstance->setmode("rpyt_rate");//Using Yaw rate instead of angle
     ROS_INFO("Starting rpy timer");
     rpytimer.start();
     enable_rpytcontrol = true;
@@ -672,6 +734,9 @@ void OnboardNodeHandler::receiveGuiCommands(const rqt_quadcoptergui::GuiCommandM
   case command_msg.enable_mpc_control:
     stateTransitionMPCControl(command_msg.command);
     break;
+  case command_msg.enable_trajectory_tracking:
+    stateTransitionTrajectoryTracking(command_msg.command);
+    break;
   case command_msg.arm_quad ://6
     ROS_INFO("Arming Quad");
     armQuad();
@@ -708,6 +773,27 @@ void OnboardNodeHandler::receiveGoalPose(const geometry_msgs::PoseStamped &goal_
     model_control.setGoal(goal_pose_);
   }
   //TODO: Add a marker to rviz at the goal position
+}
+
+void OnboardNodeHandler::gcoptrajectoryCallback(const gcop_comm::CtrlTraj &traj_msg)
+{
+    if(!enable_trajectory_tracking)//If follow trajectory has not been enabled do not receive a trajectory
+      return;
+    //[DEBUG]
+    ROS_INFO("Received Gcop Trajectory");
+    gcop_trajectory = traj_msg;//Default Copy constructor (Instead if needed can write our own copy constructor)
+    //Set the last state's velocity and angular velocity to 0
+    gcop_comm::State &goalstate = gcop_trajectory.statemsg[gcop_trajectory.N];
+    goalstate.basetwist.linear.x = 0;
+    goalstate.basetwist.linear.y = 0;
+    goalstate.basetwist.linear.z = 0;
+    goalstate.basetwist.angular.x = 0;
+    goalstate.basetwist.angular.y = 0;
+    goalstate.basetwist.angular.z = 0;
+    
+    nearest_index_gcop_trajectory = 0;//Every time we get a new trajectory we reset the time index for searching nearest current time to zero
+    gcop_trajectory_request_time = ros::Time::now();//Record when we received request
+    //start timer for tracking trajectory
 }
 
 void OnboardNodeHandler::paramreqCallback(rqt_quadcoptergui::QuadcopterInterfaceConfig &config, uint32_t level)
@@ -764,6 +850,7 @@ void OnboardNodeHandler::paramreqCallback(rqt_quadcoptergui::QuadcopterInterface
   goal_altitude = config.goal_altitude;
   Nit = config.Nit;
   mpc_closed_loop_ = config.mpc_closed_loop;
+  kp_trajectory_tracking = config.kp_trajectory_tracking;
 }
 
 
@@ -884,6 +971,44 @@ void OnboardNodeHandler::poscmdtimerCallback(const ros::TimerEvent& event)
   }
 }
 
+void OnboardNodeHandler::trajectorytimerCallback(const ros::TimerEvent& event)
+{
+    if(!enable_trajectory_tracking)
+      return;
+
+    //Follow the trajectory i.e set goal for quadcopter, set goals for arm based on current time and when the trajectory was req
+    ros::Duration time_offset = ros::Time::now() - gcop_trajectory_request_time;
+    cout<<"Time Offset: "<<time_offset<<endl;//[DEBUG]
+    //Find matching nearest time in the trajectory:
+    for(int count_timesearch = nearest_index_gcop_trajectory; count_timesearch <= gcop_trajectory.N ; count_timesearch++)
+    {
+      double tdiff = (gcop_trajectory.time[count_timesearch] - time_offset.toSec());
+      if( tdiff > 0)
+      {
+        assert(count_timesearch != 0);//Since timeoffset is greater than zero and initial time in gcop ts is zero, this should not ideally happen
+        nearest_index_gcop_trajectory = count_timesearch;//[NOT USING NEAREST TIME BUT GIVING FUTURE CLOSEST TIME]
+        break;
+      }
+    }
+    gcop_comm::State &goalstate = gcop_trajectory.statemsg[nearest_index_gcop_trajectory];
+    parserinstance->getquaddata(data);//Get Latest data
+    //Create a velocity command based on goal state:
+    geometry_msgs::Vector3 desired_velocity_traj_tracking;
+    desired_velocity_traj_tracking.x = goalstate.basetwist.linear.x + kp_trajectory_tracking*(goalstate.basepose.translation.x - data.localpos.x);
+    desired_velocity_traj_tracking.y = goalstate.basetwist.linear.y + kp_trajectory_tracking*(goalstate.basepose.translation.y - data.localpos.y);
+    desired_velocity_traj_tracking.z = goalstate.basetwist.linear.z + kp_trajectory_tracking*(goalstate.basepose.translation.z - data.localpos.z);
+    double desired_yaw_traj_tracking = tf::getYaw(goalstate.basepose.rotation);
+    
+    //Send command
+    parserinstance->cmdvelguided(desired_velocity_traj_tracking, desired_yaw_traj_tracking);
+
+    if(time_offset.toSec() > gcop_trajectory.time[gcop_trajectory.N]+timeout_trajectory_tracking)
+    {
+        trajectorytimer.stop();
+        stateTransitionTrajectoryTracking(false);
+    }
+}
+
 void OnboardNodeHandler::mpctimerCallback(const ros::TimerEvent& event)
 {
   if(enable_mpccontrol)//SAFETY
@@ -914,8 +1039,9 @@ void OnboardNodeHandler::mpctimerCallback(const ros::TimerEvent& event)
       setInitialStateMPC();//Set Initial State
       //Check if initial state is close to goal position and quit:
       Eigen::Vector3d error_pos = (model_control.xf.p - model_control.xs[0].p);
-      ROS_INFO("ERROR Norm: %f", error_pos.norm()); //DEBUG
-      if(error_pos.norm() < goal_tolerance)
+      ros::Duration time_offset = (ros::Time::now() - mpc_request_time);
+      ROS_INFO("ERROR Norm: %f, time_offset: %f", error_pos.norm(), time_offset.toSec()); //DEBUG
+      if(error_pos.norm() < goal_tolerance || time_offset.toSec() > model_control.tf+ timeout_mpc_control)
       {
         mpctimer.stop();
         stateTransitionMPCControl(false);

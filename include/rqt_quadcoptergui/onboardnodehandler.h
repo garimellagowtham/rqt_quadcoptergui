@@ -67,6 +67,8 @@ protected:
 
     //ros::Subscriber joydata_sub;
 
+    ros::Subscriber trajectory_subscriber_;///< Trajectory to be tracked
+
     ros::Subscriber gui_command_subscriber_;
 
     ros::Subscriber goal_pose_subscriber_;///< Subscribe to waypoint command from rviz
@@ -93,6 +95,7 @@ protected:
     ros::Timer poscmdtimer;//REFACTOR #TODO
     ros::Timer mpctimer;//REFACTOR #TODO
     ros::Timer rpytimer;//REFACTOR #TODO
+    ros::Timer trajectorytimer;//REFACTOR #TODO
     ros::Timer quadstatetimer;// Send quad state to GUI
 
     /////Reconfigure Server
@@ -124,7 +127,13 @@ protected:
     int Nit;///< Number of iterations to run for MPC
     int mpc_trajectory_count;///< Count on mpc trajectory 
     bool mpc_closed_loop_;///< Internal state to switch between openloop and closed loop modes of MPC
-    //bool mpc_initialized_;///< MPC initialized or not
+    gcop_comm::CtrlTraj gcop_trajectory;///< Trajectory received for tracking
+    int nearest_index_gcop_trajectory;///< Nearest index for gcop trajectory
+    ros::Time gcop_trajectory_request_time;///< Time when gcop trajectory is requested
+    ros::Time mpc_request_time;///< Time when mpc is enabled
+    double kp_trajectory_tracking;///< Trajectory tracking gain on velocity
+    double timeout_trajectory_tracking;///< Timeout on when to stop trajectory tracking in sec
+    double timeout_mpc_control;///< Timeout on mpc closed loop control
     
     //double waypoint_vel;///< Velocity with which to move to goal 
     //double waypoint_yawvel;///< Velocity with which to move in yaw towards goal 
@@ -137,6 +146,7 @@ protected:
     bool enable_velcontrol;///< If we enable quadcopter control
     bool enable_poscontrol;///< If we enable quadcopter position control
     bool enable_mpccontrol;///< If we enable quadcopter MPC Control
+    bool enable_trajectory_tracking;///< If we are tracking a trajectory
 
 
     //// ROS Messages
@@ -200,6 +210,7 @@ protected:
     inline void stateTransitionVelControl(bool);
     inline void stateTransitionPosControl(bool);
     inline void stateTransitionMPCControl(bool);
+    inline void stateTransitionTrajectoryTracking(bool);
     inline void stateTransitionRpytControl(bool);
     //inline void stateTransitionJoyControl(bool);
     //inline void stateTransitionIntegrator(bool);
@@ -223,7 +234,7 @@ protected:
 
     //void joyCallback(const sensor_msgs::Joy::ConstPtr &joymsg);
 
-    //void gcoptrajectoryCallback(const gcop_comm::CtrlTraj &traj_msg);
+    void gcoptrajectoryCallback(const gcop_comm::CtrlTraj &traj_msg);
 
     void paramreqCallback(rqt_quadcoptergui::QuadcopterInterfaceConfig &config , uint32_t level);
 
@@ -238,6 +249,8 @@ protected:
     void quadstatetimerCallback(const ros::TimerEvent&);
 
     void rpytimerCallback(const ros::TimerEvent&);
+
+    void trajectorytimerCallback(const ros::TimerEvent&);
 
     //void closeAfterGrabbing(const ros::TimerEvent &); //Timer Callback for Closing after grabbing an object
 

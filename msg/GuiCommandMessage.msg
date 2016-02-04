@@ -12,3 +12,4 @@ uint8 arm_quad = 6        # Arm the Quadcopter
 uint8 land_quad = 7       # Land the quadcopter
 uint8 disarm_quad = 8     # Disarm Quadcopter
 uint8 initialize_mpc = 9  # Initialize MPC Trajectory
+uint8 enable_trajectory_tracking = 10  # Enable trajectory tracking

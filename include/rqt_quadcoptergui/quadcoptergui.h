@@ -111,7 +111,7 @@ protected:
 
   ////Helper Variables
   QMutex qgui_mutex_;//Mutex for refreshing states
-  bool update_component_id[10];// Only update gui and do not execute signal functions
+  bool update_component_id[15];// Only update gui and do not execute signal functions
   std::string trajectory_file_name;//Prespecified file name
   GuiStateMessage state_msg;//Dummy state message to get tags for enable_log etc
 

@@ -8,3 +8,4 @@ uint8 vel_control_status = 2             # Enable Vel Control of quad
 uint8 rpyt_control_status = 3             # Enable Rpyt Control of quad
 uint8 pos_control_status = 4             # Enable Pos Control of quad 
 uint8 mpc_control_status = 5             # Enable MPC Control of quad 
+uint8 trajectory_tracking_status = 6     # Enable MPC Control of quad 
