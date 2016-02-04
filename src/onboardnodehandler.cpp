@@ -630,7 +630,8 @@ inline void OnboardNodeHandler::stateTransitionRpytControl(bool state)
       goto PUBLISH_RPYT_CONTROL_STATE;
     }
     //Enable rpyttimer:
-    parserinstance->setmode("rpyt_rate");//Using Yaw rate instead of angle
+    //parserinstance->setmode("rpyt_rate");//Using Yaw rate instead of angle
+    parserinstance->setmode("rpyt_angle");//Using Yaw angle with feedforward
     ROS_INFO("Starting rpy timer");
     rpytimer.start();
     enable_rpytcontrol = true;
@@ -919,6 +920,14 @@ void OnboardNodeHandler::rpytimerCallback(const ros::TimerEvent& event)
     rpytcmd.y = parsernode::common::map(data.servo_in[1],-10000, 10000, -M_PI/6, M_PI/6);
     rpytcmd.w = parsernode::common::map(data.servo_in[2],-10000, 10000, 10, 100);
     rpytcmd.z = parsernode::common::map(data.servo_in[3],-10000, 10000, -M_PI, M_PI);
+
+    double yaw_rate = parsernode::common::map(data.servo_in[3],-10000, 10000, -M_PI, M_PI);
+    rpytcmd.z = rpytcmd.z + yaw_rate*0.02;//50Hz
+    if(rpytcmd.z > M_PI)
+      rpytcmd.z = rpytcmd.z - 2*M_PI;
+    else if(rpytcmd.z < -M_PI)
+      rpytcmd.z = rpytcmd.z + 2*M_PI;
+
     //ROS_INFO("Timer Running");
     parserinstance->cmdrpythrust(rpytcmd, true);
   }
