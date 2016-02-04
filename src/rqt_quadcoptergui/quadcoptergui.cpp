@@ -94,11 +94,13 @@ void QuadcopterGui::initPlugin(qt_gui_cpp::PluginContext& context)
   connect(ui_.Takeoffbutton, SIGNAL(clicked()), this, SLOT(wrappertakeoff()));
   connect(ui_.Landbutton, SIGNAL(clicked()), this, SLOT(wrapperLand()));
   connect(ui_.Disarmbutton, SIGNAL(clicked()), this, SLOT(wrapperDisarm()));
+  connect(ui_.InitiializeMPCButton, SIGNAL(clicked()), this, SLOT(wrapperInitializeMPC()));
   connect(ui_.tracking_checkbox, SIGNAL(stateChanged(int)),SLOT(stateChangeTracking(int)));
   connect(ui_.log_checkbox, SIGNAL(stateChanged(int)),SLOT(stateChangeLogging(int)));
   connect(ui_.velcontrol_checkbox, SIGNAL(stateChanged(int)),SLOT(stateChangeVelControl(int)));
   connect(ui_.rpycontrol_checkbox, SIGNAL(stateChanged(int)),SLOT(stateChangeRpyControl(int)));
   connect(ui_.poscontrol_checkbox, SIGNAL(stateChanged(int)),SLOT(stateChangePosControl(int)));
+  connect(ui_.mpc_state_checkbox, SIGNAL(stateChanged(int)),SLOT(stateChangeMPCControl(int)));
 }
 
 bool QuadcopterGui::eventFilter(QObject* watched, QEvent* event)
@@ -132,6 +134,13 @@ void QuadcopterGui::wrapperDisarm()
 {
   GuiCommandMessage msg;
   msg.commponent_name = msg.disarm_quad;
+  gui_command_publisher_.publish(msg);
+}
+
+void QuadcopterGui::wrapperInitializeMPC()
+{
+  GuiCommandMessage msg;
+  msg.commponent_name = msg.initialize_mpc;
   gui_command_publisher_.publish(msg);
 }
 
@@ -192,6 +201,19 @@ void QuadcopterGui::stateChangePosControl(int state)
   else
     msg.command = false;
   msg.commponent_name = msg.enable_pos_control;
+  gui_command_publisher_.publish(msg);
+}
+
+void QuadcopterGui::stateChangeMPCControl(int state)
+{
+  if(checkUpdateState(state_msg.mpc_control_status))//Check if input is from onboard node
+    return;
+  GuiCommandMessage msg;
+  if(state == Qt::Checked)
+    msg.command = true;
+  else
+    msg.command = false;
+  msg.commponent_name = msg.enable_mpc_control;
   gui_command_publisher_.publish(msg);
 }
 
@@ -268,7 +290,15 @@ void QuadcopterGui::guistateCallback(const GuiStateMessage & statemsg)
       ui_.poscontrol_checkbox->setCheckState(CHECKSTATE(statemsg.status));
     }
     break;
-
+  case statemsg.mpc_control_status:
+    if(statemsg.status != ui_.mpc_state_checkbox->isChecked())
+    {
+      qgui_mutex_.lock();
+      update_component_id[statemsg.commponent_id] = true;
+      qgui_mutex_.unlock();
+      ui_.poscontrol_checkbox->setCheckState(CHECKSTATE(statemsg.status));
+    }
+    break;
   }
 }
 
