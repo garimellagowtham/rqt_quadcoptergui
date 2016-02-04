@@ -20,6 +20,7 @@ find_package(catkin REQUIRED COMPONENTS
   tf
   visualization_msgs
 	gcop_comm
+  gcop_ctrl
   message_generation
 )
 

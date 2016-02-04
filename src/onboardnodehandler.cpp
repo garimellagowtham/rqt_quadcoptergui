@@ -9,6 +9,7 @@ OnboardNodeHandler::OnboardNodeHandler(ros::NodeHandle &nh_):nh(nh_)
                                                             , enable_tracking(false), enable_velcontrol(false), enable_rpytcontrol(false), enable_poscontrol(false)
                                                             , reconfig_init(false), reconfig_update(false)
                                                             , desired_yaw(0)
+                                                            , traj_visualizer_(nh_), model_control(), mpc_closed_loop_(false) 
                                                             //, waypoint_vel(0.1), waypoint_yawvel(0.01)
                                                             //, armcmdrate(4), armratecount(0), gripped_already(false), newcamdata(false)
                                                             //, enable_control(false), enable_integrator(false), enable_camctrl(false), enable_manualtargetretrieval(false)
@@ -83,6 +84,8 @@ OnboardNodeHandler::OnboardNodeHandler(ros::NodeHandle &nh_):nh(nh_)
   velcmdtimer.stop();
   poscmdtimer = nh_.createTimer(ros::Duration(0.02), &OnboardNodeHandler::poscmdtimerCallback,this);//50Hz is the update rate of Quadcopter cmd
   poscmdtimer.stop();
+  mpctimer = nh_.createTimer(ros::Duration(0.02), &OnboardNodeHandler::mpctimerCallback,this);//50Hz is the update rate of Quadcopter cmd
+  mpctimer.stop();
   rpytimer = nh_.createTimer(ros::Duration(0.02), &OnboardNodeHandler::rpytimerCallback,this);//50Hz is the update rate of Quadcopter cmd
   rpytimer.stop();
   //Timer for sending quadcopter state
@@ -123,6 +126,7 @@ OnboardNodeHandler::~OnboardNodeHandler()
   //goaltimer.stop();
   velcmdtimer.stop();
   poscmdtimer.stop();
+  mpctimer.stop();
   quadstatetimer.stop();
 
   //vrpnfile.close();//Close the file
@@ -165,6 +169,7 @@ inline void OnboardNodeHandler::loadParameters()
   nh.param<std::string>("/gui/uav_name",uav_name,"dji");
   nh.param<std::string>("/gui/logdir",logdir,"/home/gowtham");
   nh.param<bool>("/gui/publishrpy",publish_rpy,false);
+  nh.param<double>("/mpc/goal_tolerance", goal_tolerance,0.2);//Stop when 0.2m away from goal
 
   ROS_INFO("UAV Name: %s",uav_name.c_str());
 
@@ -258,6 +263,13 @@ inline void OnboardNodeHandler::setupLogDir()
   roi_vel_ctrlr_->setlogdir(logdir_stamped);
 
   logdir_created = true;//Specify that log directory has been created
+}
+
+inline void OnboardNodeHandler::setInitialStateMPC()
+{
+  parserinstance->getquaddata(data);//Get Latest data
+  model_control.setInitialState(data.localpos, data.linvel, data.linacc,
+                                data.rpydata, data.omega, rpytcmd);//TODO: Get Omega and linacc from parser
 }
 
 ////////////////////////STATE TRANSITIONS/////////////////////////
@@ -380,6 +392,8 @@ inline void OnboardNodeHandler::stateTransitionVelControl(bool state)
     stateTransitionTracking(false);
   if(enable_poscontrol)
     stateTransitionPosControl(false);
+  if(enable_mpccontrol)
+    stateTransitionMPCControl(false);
 
   enable_velcontrol = state;
   ROS_INFO("State: %d",enable_velcontrol);
@@ -435,6 +449,8 @@ inline void OnboardNodeHandler::stateTransitionPosControl(bool state)
     stateTransitionTracking(false);
   if(enable_velcontrol)
     stateTransitionVelControl(false);
+  if(enable_mpccontrol)
+    stateTransitionMPCControl(false);
 
   enable_poscontrol = state;
   ROS_INFO("State: %d",enable_poscontrol);
@@ -452,6 +468,7 @@ inline void OnboardNodeHandler::stateTransitionPosControl(bool state)
         parserinstance->getquaddata(data);
         goal_position = data.localpos;
         goal_altitude = goal_position.z;
+        reconfig_update = true;
         desired_yaw = data.rpydata.z;
         poscmdtimer.start();
       }
@@ -466,6 +483,61 @@ PUBLISH_POS_CONTROL_STATE:
   rqt_quadcoptergui::GuiStateMessage state_message;
   state_message.status = enable_poscontrol;
   state_message.commponent_id = state_message.pos_control_status;
+  gui_state_publisher_.publish(state_message);
+}
+
+inline void OnboardNodeHandler::stateTransitionMPCControl(bool state)
+{
+  if(!parserinstance)
+  {
+    ROS_WARN("Parser Instance not defined. Cannot Control Quad");
+    goto PUBLISH_MPC_CONTROL_STATE;
+  }
+
+  // Check if other states are on:
+  if(enable_rpytcontrol)
+      stateTransitionRpytControl(false);
+  if(enable_tracking)
+    stateTransitionTracking(false);
+  if(enable_velcontrol)
+    stateTransitionVelControl(false);
+  if(enable_poscontrol)
+    stateTransitionPosControl(false);
+
+  enable_mpccontrol = state;
+  ROS_INFO("State: %d",enable_mpccontrol);
+
+  if(!enable_mpccontrol)
+  {
+      mpctimer.stop();
+      //Set current vel to 0:
+      desired_vel.x = desired_vel.y = desired_vel.z = 0;
+      desired_yaw = data.rpydata.z;
+      parserinstance->cmdvelguided(desired_vel, desired_yaw);
+      //Set current trajectory count to 0:
+      mpc_trajectory_count = 0;
+  }
+  else
+  {
+      ROS_INFO("Calling Enable MPC Control");
+      bool result = parserinstance->flowControl(true);//get control
+      if(result)
+      {
+        ROS_INFO("Starting Timer");
+        mpctimer.start();
+      }
+      else
+      {
+        enable_mpccontrol = false;
+        ROS_WARN("Failed to Obtain Control of Quadcopter");
+      }
+  }
+
+  //Publish Change of State:
+PUBLISH_MPC_CONTROL_STATE:
+  rqt_quadcoptergui::GuiStateMessage state_message;
+  state_message.status = enable_mpccontrol;
+  state_message.commponent_id = state_message.mpc_control_status;
   gui_state_publisher_.publish(state_message);
 }
 
@@ -484,6 +556,8 @@ inline void OnboardNodeHandler::stateTransitionRpytControl(bool state)
       stateTransitionVelControl(false);
   if(enable_poscontrol)
       stateTransitionPosControl(false);
+  if(enable_mpccontrol)
+    stateTransitionMPCControl(false);
 
   if(state)
   {
@@ -549,6 +623,14 @@ inline void OnboardNodeHandler::disarmQuad()
   stateTransitionLogging(false);
 }
 
+inline void OnboardNodeHandler::initializeMPC()
+{
+  if(enable_mpccontrol)
+    stateTransitionMPCControl(false);
+  setInitialStateMPC();
+  model_control.iterate(100);
+}
+
 inline void OnboardNodeHandler::landQuad()
 {
   if(!parserinstance)
@@ -587,6 +669,9 @@ void OnboardNodeHandler::receiveGuiCommands(const rqt_quadcoptergui::GuiCommandM
   case command_msg.enable_pos_control:
     stateTransitionPosControl(command_msg.command);
     break;
+  case command_msg.enable_mpc_control:
+    stateTransitionMPCControl(command_msg.command);
+    break;
   case command_msg.arm_quad ://6
     ROS_INFO("Arming Quad");
     armQuad();
@@ -599,6 +684,10 @@ void OnboardNodeHandler::receiveGuiCommands(const rqt_quadcoptergui::GuiCommandM
     ROS_INFO("Disarming Quad");
     disarmQuad();
     break;
+  case command_msg.initialize_mpc://9
+    ROS_INFO("Initializing MPC Trajectory");
+    initializeMPC();
+    break;
   }
 }
 
@@ -610,6 +699,15 @@ void OnboardNodeHandler::receiveGoalPose(const geometry_msgs::PoseStamped &goal_
     goal_position.y = goal_pose.pose.position.y;
     desired_yaw = tf::getYaw(goal_pose.pose.orientation);
   }
+  //Initialize when MPC loop is not started
+  if(!enable_mpccontrol)
+  {
+    //Set Goal for 
+    geometry_msgs::Pose goal_pose_ = goal_pose.pose;
+    goal_pose_.position.z = goal_altitude;//TODO convert goal altitude into a local offset
+    model_control.setGoal(goal_pose_);
+  }
+  //TODO: Add a marker to rviz at the goal position
 }
 
 void OnboardNodeHandler::paramreqCallback(rqt_quadcoptergui::QuadcopterInterfaceConfig &config, uint32_t level)
@@ -636,6 +734,7 @@ void OnboardNodeHandler::paramreqCallback(rqt_quadcoptergui::QuadcopterInterface
     config.vy = desired_vel.y;
     config.vz = desired_vel.z;
     config.yaw = desired_yaw;
+    config.goal_altitude = goal_altitude;
     config.update_vel = false;
     reconfig_update = false;
     return;
@@ -663,6 +762,8 @@ void OnboardNodeHandler::paramreqCallback(rqt_quadcoptergui::QuadcopterInterface
   }
   roi_vel_ctrlr_->setGains(config.radial_gain, config.tangential_gain, config.desired_object_distance);
   goal_altitude = config.goal_altitude;
+  Nit = config.Nit;
+  mpc_closed_loop_ = config.mpc_closed_loop;
 }
 
 
@@ -686,7 +787,7 @@ void OnboardNodeHandler::quadstatetimerCallback(const ros::TimerEvent &event)
     imu_rpy_pub_.publish(rpymsg);
   }
   //Convert data servo_in to rpytcmd:
-  if(!enable_rpytcontrol)
+  if(!enable_rpytcontrol && !enable_mpccontrol)
   {
     rpytcmd.x = parsernode::common::map(data.servo_in[0],-10000, 10000, -M_PI/6, M_PI/6);
     rpytcmd.y = parsernode::common::map(data.servo_in[1],-10000, 10000, -M_PI/6, M_PI/6);
@@ -731,7 +832,7 @@ void OnboardNodeHandler::rpytimerCallback(const ros::TimerEvent& event)
     rpytcmd.y = parsernode::common::map(data.servo_in[1],-10000, 10000, -M_PI/6, M_PI/6);
     rpytcmd.w = parsernode::common::map(data.servo_in[2],-10000, 10000, 10, 100);
     rpytcmd.z = parsernode::common::map(data.servo_in[3],-10000, 10000, -M_PI, M_PI);
-    ROS_INFO("Timer Running");
+    //ROS_INFO("Timer Running");
     parserinstance->cmdrpythrust(rpytcmd, true);
   }
 }
@@ -780,5 +881,57 @@ void OnboardNodeHandler::poscmdtimerCallback(const ros::TimerEvent& event)
  //   double current_desired_yaw = data.rpydata.z + goal_yaw_diff;
     goal_position.z = goal_altitude;
     parserinstance->cmdwaypoint(goal_position, desired_yaw);
+  }
+}
+
+void OnboardNodeHandler::mpctimerCallback(const ros::TimerEvent& event)
+{
+  if(enable_mpccontrol)//SAFETY
+  {
+    if(!mpc_closed_loop_)
+    {
+      //OPENLOOP VERSION:
+      if(mpc_trajectory_count < model_control.us.size())
+      {
+        Eigen::Vector4d &current_u = model_control.us[mpc_trajectory_count];
+        gcop::QRotorIDState &current_x = model_control.xs[mpc_trajectory_count+1];
+        rpytcmd.x = current_x.u[0];
+        rpytcmd.y = current_x.u[1];
+        rpytcmd.w = (current_u[0]>80)?80:(current_u[0]<20)?20:current_u[0];//Simple Bounds so we dont send crazy values
+        rpytcmd.z = current_x.u[2];//TODO: Add Provision to send yaw cmd instead of yaw rate
+        mpc_trajectory_count++;
+        parserinstance->cmdrpythrust(rpytcmd, true);
+      }
+      else
+      {
+        mpctimer.stop();
+        stateTransitionMPCControl(false);
+      }
+    }
+    else
+    {
+      //CLOSEDLOOP VERSION:
+      setInitialStateMPC();//Set Initial State
+      //Check if initial state is close to goal position and quit:
+      Eigen::Vector3d error_pos = (model_control.xf.p - model_control.xs[0].p);
+      ROS_INFO("ERROR Norm: %f", error_pos.norm()); //DEBUG
+      if(error_pos.norm() < goal_tolerance)
+      {
+        mpctimer.stop();
+        stateTransitionMPCControl(false);
+      }
+      else
+      {
+        model_control.iterate(Nit);//Iterate
+        Eigen::Vector4d &current_u = model_control.us[0];//Get Current Control
+        gcop::QRotorIDState &current_x = model_control.xs[1];
+        rpytcmd.x = current_x.u[0];
+        rpytcmd.y = current_x.u[1];
+        rpytcmd.w = (current_u[0]>80)?80:(current_u[0]<20)?20:current_u[0];//Simple Bounds so we dont send crazy values
+        rpytcmd.z = current_x.u[2];//TODO: Add Provision to send yaw cmd instead of yaw rate
+        //If Needed do this. Iterate on a separate thread and send the closest state etc
+        parserinstance->cmdrpythrust(rpytcmd, true);
+      }
+    }
   }
 }

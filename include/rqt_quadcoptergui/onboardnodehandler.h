@@ -38,6 +38,9 @@
 #include <geometry_msgs/Quaternion.h>
 #include <geometry_msgs/Vector3.h>
 
+//Gcop Quad Model MPC Controller and Trajectory visualizer
+#include <gcop_ctrl/qrotoridmodelcontrol.h>
+#include <gcop_comm/gcop_trajectory_visualizer.h>
 
 //TF#include <sys/types.h>
 #include <sys/stat.h>
@@ -88,6 +91,7 @@ protected:
     ////Timers
     ros::Timer velcmdtimer;//REFACTOR #TODO
     ros::Timer poscmdtimer;//REFACTOR #TODO
+    ros::Timer mpctimer;//REFACTOR #TODO
     ros::Timer rpytimer;//REFACTOR #TODO
     ros::Timer quadstatetimer;// Send quad state to GUI
 
@@ -105,6 +109,9 @@ protected:
     boost::shared_ptr<pluginlib::ClassLoader<parsernode::Parser> > parser_loader;
     boost::shared_ptr<parsernode::Parser> parserinstance;
     boost::shared_ptr<RoiVelController> roi_vel_ctrlr_;
+    GcopTrajectoryVisualizer traj_visualizer_;///< Visualize MPC Trajectory in rviz
+    QRotorIDModelControl model_control;///< MPC Controller for Quadrotor model
+
     // boost::shared_ptr<SetptCtrl> ctrlrinst;
 
     ///// Helper Variables
@@ -114,6 +121,11 @@ protected:
     geometry_msgs::Vector3 goal_position;///< Goal position for waypoint control
     double desired_yaw;///< Commanded Yaw from feedforward
     double goal_altitude;///< For Position Control goal altitude
+    int Nit;///< Number of iterations to run for MPC
+    int mpc_trajectory_count;///< Count on mpc trajectory 
+    bool mpc_closed_loop_;///< Internal state to switch between openloop and closed loop modes of MPC
+    //bool mpc_initialized_;///< MPC initialized or not
+    
     //double waypoint_vel;///< Velocity with which to move to goal 
     //double waypoint_yawvel;///< Velocity with which to move in yaw towards goal 
 
@@ -124,6 +136,7 @@ protected:
     bool enable_tracking;///< If we are tracking an object or not
     bool enable_velcontrol;///< If we enable quadcopter control
     bool enable_poscontrol;///< If we enable quadcopter position control
+    bool enable_mpccontrol;///< If we enable quadcopter MPC Control
 
 
     //// ROS Messages
@@ -157,6 +170,7 @@ protected:
     tf::StampedTransform CAM_QUAD_transform;///<transform from camera to Quadcopter
     bool reconfig_init;///< Initialize reconfig with params
     bool reconfig_update;///< Update reconfig with vel
+    double goal_tolerance;///< Tolerance on when to stop closed loop MPC
 
 protected:
     // Helper Functions
@@ -174,6 +188,8 @@ protected:
 
     inline void setupLogDir();
 
+    inline void setInitialStateMPC();
+
     //Gui State Transition Functions:
     //inline void stateTransitionController(bool);
     //inline void stateTransitionManualTargetRetrieval(bool);
@@ -183,6 +199,7 @@ protected:
     inline void stateTransitionTracking(bool);
     inline void stateTransitionVelControl(bool);
     inline void stateTransitionPosControl(bool);
+    inline void stateTransitionMPCControl(bool);
     inline void stateTransitionRpytControl(bool);
     //inline void stateTransitionJoyControl(bool);
     //inline void stateTransitionIntegrator(bool);
@@ -191,6 +208,7 @@ protected:
     inline void armQuad();
     inline void landQuad();
     inline void disarmQuad();
+    inline void initializeMPC();
 
     //ROS Callbacks
     //void vrpnCallback(const geometry_msgs::TransformStamped::ConstPtr &currframe);
@@ -214,6 +232,8 @@ protected:
     void velcmdtimerCallback(const ros::TimerEvent&);
 
     void poscmdtimerCallback(const ros::TimerEvent&);
+
+    void mpctimerCallback(const ros::TimerEvent&);
 
     void quadstatetimerCallback(const ros::TimerEvent&);
 
