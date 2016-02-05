@@ -155,6 +155,7 @@ protected slots:
   virtual void stateChangeRpyControl(int);
   virtual void stateChangePosControl(int);
   virtual void stateChangeMPCControl(int);
+  virtual void stateChangeTrajectoryTracking(int);
 };
 
 }
