@@ -889,7 +889,8 @@ void OnboardNodeHandler::quadstatetimerCallback(const ros::TimerEvent &event)
     rpytcmd.x = parsernode::common::map(data.servo_in[0],-10000, 10000, -M_PI/6, M_PI/6);
     rpytcmd.y = parsernode::common::map(data.servo_in[1],-10000, 10000, -M_PI/6, M_PI/6);
     rpytcmd.w = parsernode::common::map(data.servo_in[2],-10000, 10000, 10, 100);
-    rpytcmd.z = parsernode::common::map(data.servo_in[3],-10000, 10000, -M_PI, M_PI);
+    rpytcmd.z = data.rpydata.z;//Current yaw
+    //rpytcmd.z = parsernode::common::map(data.servo_in[3],-10000, 10000, -M_PI, M_PI);
   }
   double object_distance = roi_vel_ctrlr_->getObjectDistance();
   // Create a Text message based on the data from the Parser class
@@ -929,7 +930,6 @@ void OnboardNodeHandler::rpytimerCallback(const ros::TimerEvent& event)
     rpytcmd.x = parsernode::common::map(data.servo_in[0],-10000, 10000, -M_PI/6, M_PI/6);
     rpytcmd.y = parsernode::common::map(data.servo_in[1],-10000, 10000, -M_PI/6, M_PI/6);
     rpytcmd.w = parsernode::common::map(data.servo_in[2],-10000, 10000, 10, 100);
-    rpytcmd.z = parsernode::common::map(data.servo_in[3],-10000, 10000, -M_PI, M_PI);
 
     double yaw_rate = parsernode::common::map(data.servo_in[3],-10000, 10000, -M_PI, M_PI);
     rpytcmd.z = rpytcmd.z + yaw_rate*0.02;//50Hz

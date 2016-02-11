@@ -20,5 +20,5 @@
   <node pkg="tf2_ros" type="static_transform_publisher" name="dji_to_cam" args="0.13 0 0 -1.5707 0 -1.5707 dji camera"/>
   <param name="/duo3d_camera/disparity/min_disparity" type="int" value="-50"/>
   <param name="/duo_node/exposure" type="int" value="30"/>
-  <include file="$(find opencv3_tracking)/launch/duo_object_tracker.launch"/>
+  <!--<include file="$(find opencv3_tracking)/launch/duo_object_tracker.launch"/>-->
 </launch>
