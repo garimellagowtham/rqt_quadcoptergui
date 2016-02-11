@@ -311,7 +311,7 @@ void QuadcopterGui::guistateCallback(const GuiStateMessage & statemsg)
       qgui_mutex_.lock();
       update_component_id[statemsg.commponent_id] = true;
       qgui_mutex_.unlock();
-      ui_.poscontrol_checkbox->setCheckState(CHECKSTATE(statemsg.status));
+      ui_.mpc_state_checkbox->setCheckState(CHECKSTATE(statemsg.status));
     }
     break;  
   case statemsg.trajectory_tracking_status:

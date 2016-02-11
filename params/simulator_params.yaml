@@ -1,0 +1,9 @@
+# Specify the Quadcopter parser plugin to use:
+gui/parser_plugin: "quad_simulator_parser/QuadSimParser"
+# this is used for calling the set function from SetptCtrlr
+gui/uav_name: "simquad"
+gui/publishrpy: true
+
+### Specify Tracking Params
+tracking/vel_mag: 0.1
+tracking/yaw_gain: 0.01

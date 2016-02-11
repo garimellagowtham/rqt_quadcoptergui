@@ -1,0 +1,11 @@
+<?xml version="1.0"?>
+<launch>
+  <rosparam command="load" file="$(find rqt_quadcoptergui)/params/simulator_params.yaml"/>
+  <!--<param name="/gui/logdir" type="string" value="$(find rqt_quadcoptergui)/djilogfiles"/>-->
+  <!--<node pkg="rqt_quadcoptergui" name="onboard_node" type="onboard_node" output="screen" launch-prefix="gdb--><!--args">-->
+  <node pkg="rqt_quadcoptergui" name="onboard_node" type="onboard_node" output="screen">
+    <remap from="/onboard_node/joy" to="/joy"/>
+    <remap from="/onboard_node/goal" to="/move_base_simple/goal"/>
+  </node>
+  <node pkg="tf2_ros" type="static_transform_publisher" name="simquad_to_cam" args="0.13 0 0 -1.5707 0 -1.5707 simquad camera"/>
+</launch>

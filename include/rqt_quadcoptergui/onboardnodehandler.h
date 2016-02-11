@@ -134,6 +134,7 @@ protected:
     double kp_trajectory_tracking;///< Trajectory tracking gain on velocity
     double timeout_trajectory_tracking;///< Timeout on when to stop trajectory tracking in sec
     double timeout_mpc_control;///< Timeout on mpc closed loop control
+    geometry_msgs::Pose mpc_goalpose;///< Goal Pose for MPC
     
     //double waypoint_vel;///< Velocity with which to move to goal 
     //double waypoint_yawvel;///< Velocity with which to move in yaw towards goal 

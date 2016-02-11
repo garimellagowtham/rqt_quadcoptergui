@@ -10,7 +10,7 @@ OnboardNodeHandler::OnboardNodeHandler(ros::NodeHandle &nh_):nh(nh_)
                                                             , enable_mpccontrol(false), enable_trajectory_tracking(false)
                                                             , reconfig_init(false), reconfig_update(false)
                                                             , desired_yaw(0), kp_trajectory_tracking(1.0), timeout_trajectory_tracking(1.0), timeout_mpc_control(1.0)
-                                                            , traj_visualizer_(nh_), model_control(), mpc_closed_loop_(false) 
+                                                            , traj_visualizer_(nh_,"world",false), model_control(), mpc_closed_loop_(false), mpc_trajectory_count(0)
                                                             //, waypoint_vel(0.1), waypoint_yawvel(0.01)
                                                             //, armcmdrate(4), armratecount(0), gripped_already(false), newcamdata(false)
                                                             //, enable_control(false), enable_integrator(false), enable_camctrl(false), enable_manualtargetretrieval(false)
@@ -154,6 +154,8 @@ void OnboardNodeHandler::setupMemberVariables()
   //Initial command:
   rpytcmd.x = rpytcmd.y = rpytcmd.z = 0;
   rpytcmd.w = 10;
+  mpc_goalpose.position.x = 0; mpc_goalpose.position.y = 0; mpc_goalpose.position.z = 0;
+  mpc_goalpose.orientation.x = 0; mpc_goalpose.orientation.y = 0; mpc_goalpose.orientation.z = 0; mpc_goalpose.orientation.w = 1;
 }
 
 inline void OnboardNodeHandler::loadParameters()
@@ -620,31 +622,38 @@ inline void OnboardNodeHandler::stateTransitionRpytControl(bool state)
   if(enable_trajectory_tracking)
     stateTransitionTrajectoryTracking(false);
 
-  if(state)
+  if(data.armed)
   {
-    bool result = parserinstance->flowControl(true);//get control
-
-    if(!result)
+    if(state)
     {
-      ROS_INFO("Cannot open sdk");
-      goto PUBLISH_RPYT_CONTROL_STATE;
+      bool result = parserinstance->flowControl(true);//get control
+
+      if(!result)
+      {
+        ROS_INFO("Cannot open sdk");
+        goto PUBLISH_RPYT_CONTROL_STATE;
+      }
+      //Enable rpyttimer:
+      //parserinstance->setmode("rpyt_rate");//Using Yaw rate instead of angle
+      parserinstance->setmode("rpyt_angle");//Using Yaw angle with feedforward
+      ROS_INFO("Starting rpy timer");
+      rpytimer.start();
+      enable_rpytcontrol = true;
     }
-    //Enable rpyttimer:
-    //parserinstance->setmode("rpyt_rate");//Using Yaw rate instead of angle
-    parserinstance->setmode("rpyt_angle");//Using Yaw angle with feedforward
-    ROS_INFO("Starting rpy timer");
-    rpytimer.start();
-    enable_rpytcontrol = true;
+    else
+    {
+      ROS_INFO("Stopping rpy timer");
+      rpytimer.stop();
+      enable_rpytcontrol = false;
+      //Set current vel to 0:
+      desired_vel.x = desired_vel.y = desired_vel.z = 0;
+      desired_yaw = data.rpydata.z;
+      parserinstance->cmdvelguided(desired_vel, desired_yaw);
+    }
   }
   else
   {
-    ROS_INFO("Stopping rpy timer");
-    rpytimer.stop();
-    enable_rpytcontrol = false;
-    //Set current vel to 0:
-    desired_vel.x = desired_vel.y = desired_vel.z = 0;
-    desired_yaw = data.rpydata.z;
-    parserinstance->cmdvelguided(desired_vel, desired_yaw);
+    enable_rpytcontrol = false;//Quad is not armed so no rpytcontrol should be allowed
   }
     //Publish Change of State:
 PUBLISH_RPYT_CONTROL_STATE:
@@ -690,6 +699,9 @@ inline void OnboardNodeHandler::initializeMPC()
 {
   if(enable_mpccontrol)
     stateTransitionMPCControl(false);
+  //Set Goal for  MPC
+  mpc_goalpose.position.z = goal_altitude;//TODO convert goal altitude into a local offset
+  model_control.setGoal(mpc_goalpose);
   setInitialStateMPC();
   model_control.iterate(100);
   model_control.getCtrlTrajectory(gcop_trajectory);
@@ -766,15 +778,8 @@ void OnboardNodeHandler::receiveGoalPose(const geometry_msgs::PoseStamped &goal_
     goal_position.x = goal_pose.pose.position.x;
     goal_position.y = goal_pose.pose.position.y;
     desired_yaw = tf::getYaw(goal_pose.pose.orientation);
-  }
-  //Initialize when MPC loop is not started
-  if(!enable_mpccontrol)
-  {
-    //Set Goal for 
-    geometry_msgs::Pose goal_pose_ = goal_pose.pose;
-    goal_pose_.position.z = goal_altitude;//TODO convert goal altitude into a local offset
-    model_control.setGoal(goal_pose_);
-  }
+  } 
+  mpc_goalpose = goal_pose.pose;///< Only recording the pose here. It is set when u initialize MPC !!
   //TODO: Add a marker to rviz at the goal position
 }
 
@@ -911,7 +916,8 @@ void OnboardNodeHandler::quadstatetimerCallback(const ros::TimerEvent &event)
   string_msg.data = std::string(buffer);
   quad_state_publisher_.publish(string_msg); 
   //Publish TF of the quadcopter position:
-  tf::Transform quad_transform(tf::createQuaternionFromYaw(data.rpydata.z), tf::Vector3(data.localpos.x, data.localpos.y, data.localpos.z));
+  //tf::Transform quad_transform(tf::createQuaternionFromYaw(data.rpydata.z), tf::Vector3(data.localpos.x, data.localpos.y, data.localpos.z));
+  tf::Transform quad_transform(tf::createQuaternionFromRPY(data.rpydata.x, data.rpydata.y, data.rpydata.z), tf::Vector3(data.localpos.x, data.localpos.y, data.localpos.z));
   broadcaster->sendTransform(tf::StampedTransform(quad_transform, ros::Time::now(), "world", uav_name));
 }
 
@@ -1028,17 +1034,23 @@ void OnboardNodeHandler::mpctimerCallback(const ros::TimerEvent& event)
   {
     if(!mpc_closed_loop_)
     {
+      //ROS_INFO("Number of controls: %d, %d",model_control.us.size(), mpc_trajectory_count);
       //OPENLOOP VERSION:
       if(mpc_trajectory_count < model_control.us.size())
       {
-        Eigen::Vector4d &current_u = model_control.us[mpc_trajectory_count];
-        gcop::QRotorIDState &current_x = model_control.xs[mpc_trajectory_count+1];
+        Eigen::Vector4d &current_u = model_control.us.at(mpc_trajectory_count);
+        gcop::QRotorIDState &current_x = model_control.xs.at(mpc_trajectory_count+1);
         rpytcmd.x = current_x.u[0];
         rpytcmd.y = current_x.u[1];
         rpytcmd.w = (current_u[0]>80)?80:(current_u[0]<20)?20:current_u[0];//Simple Bounds so we dont send crazy values
-        rpytcmd.z = current_x.u[2];//TODO: Add Provision to send yaw cmd instead of yaw rate
+        rpytcmd.z = current_x.u[2];
         mpc_trajectory_count++;
         parserinstance->cmdrpythrust(rpytcmd, true);
+        static ros::Time prev_time = ros::Time::now();
+        //ROS_INFO("Current Control: %d, %f,%f,%f,%f,%f",mpc_trajectory_count, rpytcmd.x, rpytcmd.y, rpytcmd.z, rpytcmd.w, (ros::Time::now() - prev_time).toSec());
+        //ROS_INFO("state.u[2]: %f,%f,%f",model_control.xs[0].u[2], model_control.xs[1].u[2], model_control.us[0][3]);
+        //ROS_INFO("Current rate: %f,%f,%f",current_u[1], current_u[2], current_u[3]);
+        prev_time = ros::Time::now();
       }
       else
       {
