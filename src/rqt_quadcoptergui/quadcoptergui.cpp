@@ -101,6 +101,7 @@ void QuadcopterGui::initPlugin(qt_gui_cpp::PluginContext& context)
   connect(ui_.rpycontrol_checkbox, SIGNAL(stateChanged(int)),SLOT(stateChangeRpyControl(int)));
   connect(ui_.poscontrol_checkbox, SIGNAL(stateChanged(int)),SLOT(stateChangePosControl(int)));
   connect(ui_.mpc_state_checkbox, SIGNAL(stateChanged(int)),SLOT(stateChangeMPCControl(int)));
+  connect(ui_.trajectory_tracking_checkbox, SIGNAL(stateChanged(int)),SLOT(stateChangeTrajectoryTracking(int)));
 }
 
 bool QuadcopterGui::eventFilter(QObject* watched, QEvent* event)
@@ -217,6 +218,20 @@ void QuadcopterGui::stateChangeMPCControl(int state)
   gui_command_publisher_.publish(msg);
 }
 
+void QuadcopterGui::stateChangeTrajectoryTracking(int state)
+{
+  if(checkUpdateState(state_msg.trajectory_tracking_status))//Check if input is from onboard node
+    return;
+  GuiCommandMessage msg;
+  if(state == Qt::Checked)
+    msg.command = true;
+  else
+    msg.command = false;
+  msg.commponent_name = msg.enable_trajectory_tracking;
+  gui_command_publisher_.publish(msg);
+}
+
+
 void QuadcopterGui::stateChangeTracking(int state)
 {
   if(checkUpdateState(state_msg.tracking_status))//Check if input is from onboard Node
@@ -297,6 +312,15 @@ void QuadcopterGui::guistateCallback(const GuiStateMessage & statemsg)
       update_component_id[statemsg.commponent_id] = true;
       qgui_mutex_.unlock();
       ui_.poscontrol_checkbox->setCheckState(CHECKSTATE(statemsg.status));
+    }
+    break;  
+  case statemsg.trajectory_tracking_status:
+    if(statemsg.status != ui_.trajectory_tracking_checkbox->isChecked())
+    {
+      qgui_mutex_.lock();
+      update_component_id[statemsg.commponent_id] = true;
+      qgui_mutex_.unlock();
+      ui_.trajectory_tracking_checkbox->setCheckState(CHECKSTATE(statemsg.status));
     }
     break;
   }

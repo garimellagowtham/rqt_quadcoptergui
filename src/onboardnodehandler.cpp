@@ -692,6 +692,8 @@ inline void OnboardNodeHandler::initializeMPC()
     stateTransitionMPCControl(false);
   setInitialStateMPC();
   model_control.iterate(100);
+  model_control.getCtrlTrajectory(gcop_trajectory);
+  traj_visualizer_.publishTrajectory(gcop_trajectory);
 }
 
 inline void OnboardNodeHandler::landQuad()
@@ -794,7 +796,9 @@ void OnboardNodeHandler::gcoptrajectoryCallback(const gcop_comm::CtrlTraj &traj_
     
     nearest_index_gcop_trajectory = 0;//Every time we get a new trajectory we reset the time index for searching nearest current time to zero
     gcop_trajectory_request_time = ros::Time::now();//Record when we received request
+    traj_visualizer_.publishTrajectory(gcop_trajectory);
     //start timer for tracking trajectory
+    trajectorytimer.start();
 }
 
 void OnboardNodeHandler::paramreqCallback(rqt_quadcoptergui::QuadcopterInterfaceConfig &config, uint32_t level)
