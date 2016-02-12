@@ -932,7 +932,7 @@ void OnboardNodeHandler::rpytimerCallback(const ros::TimerEvent& event)
     rpytcmd.w = parsernode::common::map(data.servo_in[2],-10000, 10000, 10, 100);
 
     double yaw_rate = parsernode::common::map(data.servo_in[3],-10000, 10000, -M_PI, M_PI);
-    rpytcmd.z = rpytcmd.z + yaw_rate*0.02;//50Hz
+    rpytcmd.z = rpytcmd.z - yaw_rate*0.02;//50Hz
     if(rpytcmd.z > M_PI)
       rpytcmd.z = rpytcmd.z - 2*M_PI;
     else if(rpytcmd.z < -M_PI)
