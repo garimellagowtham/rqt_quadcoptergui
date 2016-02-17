@@ -42,6 +42,9 @@
 #include <gcop_ctrl/qrotoridmodelcontrol.h>
 #include <gcop_comm/gcop_trajectory_visualizer.h>
 
+//Gcop Quad Model Identifier:
+#include <gcop/qrotorsystemid.h>
+
 //TF#include <sys/types.h>
 #include <sys/stat.h>
 #include <tf/transform_listener.h>
@@ -95,6 +98,7 @@ protected:
     ros::Timer poscmdtimer;//REFACTOR #TODO
     ros::Timer mpctimer;//REFACTOR #TODO
     ros::Timer rpytimer;//REFACTOR #TODO
+    ros::Timer rpy_stop_timer;//REFACTOR #TODO
     ros::Timer trajectorytimer;//REFACTOR #TODO
     ros::Timer quadstatetimer;// Send quad state to GUI
 
@@ -114,6 +118,7 @@ protected:
     boost::shared_ptr<RoiVelController> roi_vel_ctrlr_;
     GcopTrajectoryVisualizer traj_visualizer_;///< Visualize MPC Trajectory in rviz
     QRotorIDModelControl model_control;///< MPC Controller for Quadrotor model
+    QRotorSystemID systemid;///< System Identification class from GCOP
 
     // boost::shared_ptr<SetptCtrl> ctrlrinst;
 
@@ -136,6 +141,11 @@ protected:
     double timeout_mpc_control;///< Timeout on mpc closed loop control
     geometry_msgs::Pose mpc_goalpose;///< Goal Pose for MPC
     ros::Time rpytimer_start_time;///< When rpytimer started
+    //////////////SYSTEM ID HELPER VARIABLES////////////////////
+    vector<QRotorSystemIDMeasurement> systemid_measurements;///< System ID Measurements
+    QRotorIDState systemid_init_state;///< Initial State for System Identification
+    double prev_rp_cmd[2];///< Previous roll and pitch commands for finding control rate
+    double prev_ctrl_time;///< Previous control time for roll and pitch commands in System ID
     
     //double waypoint_vel;///< Velocity with which to move to goal 
     //double waypoint_yawvel;///< Velocity with which to move in yaw towards goal 
@@ -183,6 +193,9 @@ protected:
     bool reconfig_init;///< Initialize reconfig with params
     bool reconfig_update;///< Update reconfig with vel
     double goal_tolerance;///< Tolerance on when to stop closed loop MPC
+    bool optimize_online_;///< Optimize the quadcopter parameters online
+    double system_id_offsets_timeperiod;///< Time period for constant offsets for systemid
+    bool test_vel;///< Test velocity by sending velocity in the beginning of rpytimer Code
 
 protected:
     // Helper Functions
@@ -251,6 +264,8 @@ protected:
     void quadstatetimerCallback(const ros::TimerEvent&);
 
     void rpytimerCallback(const ros::TimerEvent&);
+
+    void onlineOptimizeCallback(const ros::TimerEvent&);
 
     void trajectorytimerCallback(const ros::TimerEvent&);
 

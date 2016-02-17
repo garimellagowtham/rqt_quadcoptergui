@@ -30,8 +30,9 @@ find_package(Qt4 COMPONENTS QtCore QtGui REQUIRED)
 include(${QT_USE_FILE})
 find_package(GCOP REQUIRED est systems)
 find_package(Eigen3 REQUIRED)
-find_package(OpenCV REQUIRED core highgui imgproc calib3d)
+#find_package(OpenCV REQUIRED core highgui imgproc calib3d)
 find_package(TinyXML REQUIRED)
+find_package(Ceres 1.10 REQUIRED)
 
 ## Uncomment this if the package has a setup.py. This macro ensures
 ## modules and global scripts declared therein get installed
@@ -140,7 +141,7 @@ catkin_package(
 ## Your package locations should be listed before other locations
 # include_directories(include)
 include_directories(
-  ${rqt_quadcoptergui_INCLUDE_DIRECTORIES} ${catkin_INCLUDE_DIRS} ${EIGEN3_INCLUDE_DIR} ${OpenCV_INCLUDE_DIRS} ${TINYXML_INCLUDE_DIR}
+  ${rqt_quadcoptergui_INCLUDE_DIRECTORIES} ${catkin_INCLUDE_DIRS} ${EIGEN3_INCLUDE_DIR} ${TINYXML_INCLUDE_DIR} ${CERES_INCLUDE_DIRS}
 )
 
 #Plugin for QT
@@ -160,8 +161,9 @@ find_package(class_loader)
 class_loader_hide_library_symbols(${PROJECT_NAME})
 
 #message("GCOP LIBS: ${GCOP_LIBRARIES}")
-target_link_libraries(${PROJECT_NAME} ${catkin_LIBRARIES}  ${GCOP_LIBRARIES} ${OpenCV_LIBS} ${TINYXML_LIBRARIES})
-target_link_libraries(onboardnodehandler ${catkin_LIBRARIES}  ${GCOP_LIBRARIES} ${OpenCV_LIBS} ${TINYXML_LIBRARIES})
+target_link_libraries(${PROJECT_NAME} ${catkin_LIBRARIES})
+target_link_libraries(onboardnodehandler ${GCOP_LIBRARIES} ${catkin_LIBRARIES} ${TINYXML_LIBRARIES} ${CERES_LIBRARY} ${CERES_LIBRARIES})
+message("Catkin LIBS: ${catkin_LIBRARIES}")
 
 ## Declare a cpp executable
 # add_executable(rqt_quadcoptergui_node src/rqt_quadcoptergui_node.cpp)

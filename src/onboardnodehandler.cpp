@@ -90,6 +90,8 @@ OnboardNodeHandler::OnboardNodeHandler(ros::NodeHandle &nh_):nh(nh_)
   mpctimer.stop();
   rpytimer = nh_.createTimer(ros::Duration(0.02), &OnboardNodeHandler::rpytimerCallback,this);//50Hz is the update rate of Quadcopter cmd
   rpytimer.stop();
+  rpy_stop_timer = nh_.createTimer(ros::Duration(10.0), &OnboardNodeHandler::onlineOptimizeCallback,this, true);//One shot timer to stop rpy Callback after 10 seconds
+  rpy_stop_timer.stop();
   trajectorytimer = nh_.createTimer(ros::Duration(0.02), &OnboardNodeHandler::trajectorytimerCallback,this);//50Hz is the update rate of Quadcopter cmd
   trajectorytimer.stop();
   //Timer for sending quadcopter state
@@ -176,6 +178,9 @@ inline void OnboardNodeHandler::loadParameters()
   nh.param<std::string>("/gui/logdir",logdir,"/home/gowtham");
   nh.param<bool>("/gui/publishrpy",publish_rpy,false);
   nh.param<double>("/mpc/goal_tolerance", goal_tolerance,0.2);//Stop when 0.2m away from goal
+  nh.param<bool>("/control/optimize_online", optimize_online_,false);
+  nh.param<bool>("/control/test_vel", test_vel,false);
+  nh.param<double>("/control/offsets_timeperiod", system_id_offsets_timeperiod,0.5);
 
   ROS_INFO("UAV Name: %s",uav_name.c_str());
 
@@ -274,7 +279,7 @@ inline void OnboardNodeHandler::setupLogDir()
 inline void OnboardNodeHandler::setInitialStateMPC()
 {
   parserinstance->getquaddata(data);//Get Latest data
-  model_control.setInitialState(data.localpos, data.linvel, data.linacc,
+  model_control.setInitialState(data.localpos, data.linvel,
                                 data.rpydata, data.omega, rpytcmd);
 }
 
@@ -638,7 +643,18 @@ inline void OnboardNodeHandler::stateTransitionRpytControl(bool state)
       parserinstance->setmode("rpyt_angle");//Using Yaw angle with feedforward
       ROS_INFO("Starting rpy timer");
       rpytimer_start_time = ros::Time::now();
+      //Online Optimization Settings
+      prev_ctrl_time = rpytimer_start_time.toSec();// Record when previous control was sent
+      prev_rp_cmd[0] = prev_rp_cmd[1] = 0;//Set initial commands to 0;
+      parserinstance->getquaddata(data);
+      model_control.setInitialState(data.localpos,data.linvel,data.rpydata,data.omega,rpytcmd,&systemid_init_state);//Set Initial State for SystemID
       rpytimer.start();
+
+      if(optimize_online_)
+      {
+          ROS_INFO("Starting Online Optimize Timer");
+          rpy_stop_timer.start();
+      }
       enable_rpytcontrol = true;
     }
     else
@@ -929,13 +945,16 @@ void OnboardNodeHandler::rpytimerCallback(const ros::TimerEvent& event)
   {
     parserinstance->getquaddata(data);
 
-    if((rpytimer_start_time - ros::Time::now()).toSec() < 2.0)
+    if(test_vel)
     {
-      geometry_msgs::Vector3 desired_vel;
-      desired_vel.x = 0.5; desired_vel.y = desired_vel.z = 0;
-      double desired_yaw = data.rpydata.z;//Current yaw
-      parserinstance->cmdvelguided(desired_vel, desired_yaw);
-      return;
+      if((ros::Time::now() - rpytimer_start_time).toSec() < 2.0)///Only for checking if we can switch between Velocity and RPY Modes [REMOVE LATER]
+      {
+        geometry_msgs::Vector3 desired_vel;
+        desired_vel.x = 0.5; desired_vel.y = desired_vel.z = 0;
+        double desired_yaw = data.rpydata.z;//Current yaw
+        parserinstance->cmdvelguided(desired_vel, desired_yaw);
+        return;
+      }
     }
 
     rpytcmd.x = parsernode::common::map(data.servo_in[0],-10000, 10000, -M_PI/6, M_PI/6);
@@ -951,7 +970,46 @@ void OnboardNodeHandler::rpytimerCallback(const ros::TimerEvent& event)
 
     //ROS_INFO("Timer Running");
     parserinstance->cmdrpythrust(rpytcmd, true);
+
+    if(optimize_online_)
+    {
+      //Record Data
+        QRotorSystemIDMeasurement measurement;
+        measurement.t = ros::Time::now().toSec();
+        double time_diff = measurement.t - prev_ctrl_time;
+        if(time_diff < 0.005)
+        {
+            ROS_WARN("Time diff too small Expected 0.02; Found: %f",time_diff);
+            time_diff = 0.005;//Hard reset;
+        }
+
+        measurement.position<<data.localpos.x, data.localpos.y, data.localpos.z;
+        measurement.rpy<<data.rpydata.x, data.rpydata.y, data.rpydata.z;
+        measurement.control[0] = rpytcmd.w;
+        measurement.control[1] = (rpytcmd.x - prev_rp_cmd[0])/time_diff;
+        measurement.control[2] = (rpytcmd.y - prev_rp_cmd[1])/time_diff;
+        measurement.control[3] = yaw_rate;
+        //Copy over previous values:
+        prev_rp_cmd[0] = rpytcmd.x;
+        prev_rp_cmd[1] = rpytcmd.y;
+        prev_ctrl_time = measurement.t;
+        //Record:
+        systemid_measurements.push_back(measurement);
+    }
   }
+}
+
+void OnboardNodeHandler::onlineOptimizeCallback(const ros::TimerEvent &event)
+{
+    //Stop rpytControl:
+    stateTransitionRpytControl(false);
+    //Print all measurements:
+    for(int i = 0; i < systemid_measurements.size(); i++)
+    {
+      QRotorSystemIDMeasurement &measurement = systemid_measurements[i];
+      cout<<measurement.t<<" "<<measurement.position.transpose()<<" "<<measurement.rpy.transpose()<<" "<<measurement.control.transpose()<<endl;
+    }
+    systemid.EstimateParameters(systemid_measurements,systemid_init_state);//Estimate Parameters
 }
 
 void OnboardNodeHandler::velcmdtimerCallback(const ros::TimerEvent& event)
