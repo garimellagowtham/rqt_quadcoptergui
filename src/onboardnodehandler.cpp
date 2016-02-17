@@ -10,7 +10,7 @@ OnboardNodeHandler::OnboardNodeHandler(ros::NodeHandle &nh_):nh(nh_)
                                                             , enable_mpccontrol(false), enable_trajectory_tracking(false)
                                                             , reconfig_init(false), reconfig_update(false)
                                                             , desired_yaw(0), kp_trajectory_tracking(1.0), timeout_trajectory_tracking(1.0), timeout_mpc_control(1.0)
-                                                            , traj_visualizer_(nh_,"world",false), model_control(), mpc_closed_loop_(false), mpc_trajectory_count(0)
+                                                            , traj_visualizer_(nh_,"world",false), model_control(nh_), mpc_closed_loop_(false), mpc_trajectory_count(0)
                                                             //, waypoint_vel(0.1), waypoint_yawvel(0.01)
                                                             //, armcmdrate(4), armratecount(0), gripped_already(false), newcamdata(false)
                                                             //, enable_control(false), enable_integrator(false), enable_camctrl(false), enable_manualtargetretrieval(false)
@@ -637,6 +637,7 @@ inline void OnboardNodeHandler::stateTransitionRpytControl(bool state)
       //parserinstance->setmode("rpyt_rate");//Using Yaw rate instead of angle
       parserinstance->setmode("rpyt_angle");//Using Yaw angle with feedforward
       ROS_INFO("Starting rpy timer");
+      rpytimer_start_time = ros::Time::now();
       rpytimer.start();
       enable_rpytcontrol = true;
     }
@@ -927,6 +928,16 @@ void OnboardNodeHandler::rpytimerCallback(const ros::TimerEvent& event)
   if(parserinstance)
   {
     parserinstance->getquaddata(data);
+
+    if((rpytimer_start_time - ros::Time::now()).toSec() < 2.0)
+    {
+      geometry_msgs::Vector3 desired_vel;
+      desired_vel.x = 0.5; desired_vel.y = desired_vel.z = 0;
+      double desired_yaw = data.rpydata.z;//Current yaw
+      parserinstance->cmdvelguided(desired_vel, desired_yaw);
+      return;
+    }
+
     rpytcmd.x = parsernode::common::map(data.servo_in[0],-10000, 10000, -M_PI/6, M_PI/6);
     rpytcmd.y = parsernode::common::map(data.servo_in[1],-10000, 10000, -M_PI/6, M_PI/6);
     rpytcmd.w = parsernode::common::map(data.servo_in[2],-10000, 10000, 10, 100);
