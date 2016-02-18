@@ -2,12 +2,15 @@
 gui/parser_plugin: "dji_parser/DjiParser"
 # this is used for calling the set function from SetptCtrlr
 gui/uav_name: "dji"
-gui/publishrpy: true
+gui/publishrpy: false
 
 ### Specify Tracking Params
 tracking/vel_mag: 0.1
 tracking/yaw_gain: 0.01
 
 ### Control Params:
-control/optimize_online: false
-control/test_vel: true
+control/optimize_online: true
+#control/set_offsets_mpc: true #Set Offsets from online optimization
+
+# Param for skipping segments while visualizing gcop trajectory
+display/skip_pub_segments: 5

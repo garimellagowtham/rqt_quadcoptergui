@@ -10,4 +10,7 @@ tracking/yaw_gain: 0.01
 
 ### Control Params:
 control/optimize_online: true
-control/test_vel: false
+control/set_offsets_mpc: true #Set Offsets from online optimization
+
+# Param for skipping segments while visualizing gcop trajectory
+display/skip_pub_segments: 5

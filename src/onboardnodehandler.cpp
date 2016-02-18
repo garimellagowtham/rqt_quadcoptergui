@@ -10,7 +10,7 @@ OnboardNodeHandler::OnboardNodeHandler(ros::NodeHandle &nh_):nh(nh_)
                                                             , enable_mpccontrol(false), enable_trajectory_tracking(false)
                                                             , reconfig_init(false), reconfig_update(false)
                                                             , desired_yaw(0), kp_trajectory_tracking(1.0), timeout_trajectory_tracking(1.0), timeout_mpc_control(1.0)
-                                                            , traj_visualizer_(nh_,"world",false), model_control(nh_), mpc_closed_loop_(false), mpc_trajectory_count(0)
+                                                            , model_control(nh_, "world"), mpc_closed_loop_(false), mpc_trajectory_count(0)
                                                             //, waypoint_vel(0.1), waypoint_yawvel(0.01)
                                                             //, armcmdrate(4), armratecount(0), gripped_already(false), newcamdata(false)
                                                             //, enable_control(false), enable_integrator(false), enable_camctrl(false), enable_manualtargetretrieval(false)
@@ -90,12 +90,12 @@ OnboardNodeHandler::OnboardNodeHandler(ros::NodeHandle &nh_):nh(nh_)
   mpctimer.stop();
   rpytimer = nh_.createTimer(ros::Duration(0.02), &OnboardNodeHandler::rpytimerCallback,this);//50Hz is the update rate of Quadcopter cmd
   rpytimer.stop();
-  rpy_stop_timer = nh_.createTimer(ros::Duration(10.0), &OnboardNodeHandler::onlineOptimizeCallback,this, true);//One shot timer to stop rpy Callback after 10 seconds
+  rpy_stop_timer = nh_.createTimer(ros::Duration(measurement_period), &OnboardNodeHandler::onlineOptimizeCallback,this, true);//One shot timer to stop rpy Callback after 10 seconds
   rpy_stop_timer.stop();
   trajectorytimer = nh_.createTimer(ros::Duration(0.02), &OnboardNodeHandler::trajectorytimerCallback,this);//50Hz is the update rate of Quadcopter cmd
   trajectorytimer.stop();
   //Timer for sending quadcopter state
-  quadstatetimer = nh_.createTimer(ros::Duration(0.05), &OnboardNodeHandler::quadstatetimerCallback, this);//20Hz update GUI quad state
+  quadstatetimer = nh_.createTimer(ros::Duration(0.05), &OnboardNodeHandler::quadstatetimerCallback, this);//10Hz update GUI quad state
 }
 
 OnboardNodeHandler::~OnboardNodeHandler()
@@ -156,8 +156,8 @@ void OnboardNodeHandler::setupMemberVariables()
   //Initial command:
   rpytcmd.x = rpytcmd.y = rpytcmd.z = 0;
   rpytcmd.w = 10;
-  mpc_goalpose.position.x = 0; mpc_goalpose.position.y = 0; mpc_goalpose.position.z = 0;
-  mpc_goalpose.orientation.x = 0; mpc_goalpose.orientation.y = 0; mpc_goalpose.orientation.z = 0; mpc_goalpose.orientation.w = 1;
+  //systemid_measurements.reserve(600);
+  //control_measurements.reserve(600);
 }
 
 inline void OnboardNodeHandler::loadParameters()
@@ -179,8 +179,10 @@ inline void OnboardNodeHandler::loadParameters()
   nh.param<bool>("/gui/publishrpy",publish_rpy,false);
   nh.param<double>("/mpc/goal_tolerance", goal_tolerance,0.2);//Stop when 0.2m away from goal
   nh.param<bool>("/control/optimize_online", optimize_online_,false);
-  nh.param<bool>("/control/test_vel", test_vel,false);
-  nh.param<double>("/control/offsets_timeperiod", system_id_offsets_timeperiod,0.5);
+  nh.param<bool>("/control/set_offsets_mpc", set_offsets_mpc_,false);
+  nh.param<double>("/control/measurement_period", measurement_period,10.0);
+  //nh.param<bool>("/control/test_vel", test_vel,false);
+  nh.param<double>("/control/offsets_timeperiod", systemid.offsets_timeperiod,0.5);
 
   ROS_INFO("UAV Name: %s",uav_name.c_str());
 
@@ -232,13 +234,33 @@ inline bool OnboardNodeHandler::createParserInstance()
   return parserinstance->initialized;
 }
 
+inline void OnboardNodeHandler::logMeasurements(bool mpc_flag)
+{
+  if(!logdir_created)
+    setupLogDir();
+  std::string filename = logdir_stamped_+"/measurements";
+  if(mpc_flag)
+      filename = filename + "mpc";
+  filename = parsernode::common::addtimestring(filename);
+  ofstream systemidfile(filename.c_str());
+  systemidfile.precision(10);
+  for(int i = 0; i < systemid_measurements.size(); i++)
+  {
+    QRotorSystemIDMeasurement &measurement = systemid_measurements[i];
+    systemidfile<<measurement.t<<" "<<measurement.position.transpose()<<" "<<measurement.rpy.transpose()<<" "<<measurement.control.transpose()<<" "<<control_measurements[i].transpose()<<endl;
+  }
+  systemid_measurements.clear();//Clear vector for new measurements
+  control_measurements.clear();
+}
+
+
 inline void OnboardNodeHandler::setupLogDir()
 {
   // Logger
   std::string logdir_append = logdir + "/session";
-  std::string logdir_stamped = parsernode::common::addtimestring(logdir_append);
-  ROS_INFO("Creating Log dir: %s",logdir_stamped.c_str());
-  int status = mkdir(logdir_stamped.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);//Create the directory see http://pubs.opengroup.org/onlinepubs/009695399/functions/mkdir.html
+  logdir_stamped_ = parsernode::common::addtimestring(logdir_append);
+  ROS_INFO("Creating Log dir: %s",logdir_stamped_.c_str());
+  int status = mkdir(logdir_stamped_.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);//Create the directory see http://pubs.opengroup.org/onlinepubs/009695399/functions/mkdir.html
   if(status != 0)
   {
       ROS_WARN("Cannot create directory");
@@ -268,20 +290,17 @@ inline void OnboardNodeHandler::setupLogDir()
   tipfile<<"#Time \t Pos.X \t Pos.Y \t Pos.Z\t DesPos.X\t DesPos.Y\t DesPos.Z\t Act_armangle0\t Act_armangle1\t Des_armangle0\t Des_armangle1"<<endl;
 
     */
-  if(parserinstance)
-    parserinstance->setlogdir(logdir_stamped);
-
-  roi_vel_ctrlr_->setlogdir(logdir_stamped);
 
   logdir_created = true;//Specify that log directory has been created
 }
 
-inline void OnboardNodeHandler::setInitialStateMPC()
+/*inline void OnboardNodeHandler::setInitialStateMPC()
 {
   parserinstance->getquaddata(data);//Get Latest data
   model_control.setInitialState(data.localpos, data.linvel,
                                 data.rpydata, data.omega, rpytcmd);
 }
+*/
 
 ////////////////////////STATE TRANSITIONS/////////////////////////
 inline void OnboardNodeHandler::stateTransitionLogging(bool state)
@@ -300,7 +319,10 @@ inline void OnboardNodeHandler::stateTransitionLogging(bool state)
         setupLogDir();//Create a log directory and files corresponding
       }
       enable_logging = true;
+      if(parserinstance)
+        parserinstance->setlogdir(logdir_stamped_);
       parserinstance->controllog(true);
+      roi_vel_ctrlr_->setlogdir(logdir_stamped_);
       roi_vel_ctrlr_->controllog(true);
     }
   }
@@ -542,7 +564,10 @@ inline void OnboardNodeHandler::stateTransitionMPCControl(bool state)
       {
         parserinstance->setmode("rpyt_angle");
         ROS_INFO("Starting Timer");
+        rpytcmd.x = rpytcmd.y = 0;//Set Commanded roll and pitch to 0
+        rpytcmd.z = data.rpydata.z;//Current Yaw
         mpc_request_time = ros::Time::now();
+        mpc_trajectory_count = 0;
         mpctimer.start();
       }
       else
@@ -644,15 +669,16 @@ inline void OnboardNodeHandler::stateTransitionRpytControl(bool state)
       ROS_INFO("Starting rpy timer");
       rpytimer_start_time = ros::Time::now();
       //Online Optimization Settings
-      prev_ctrl_time = rpytimer_start_time.toSec();// Record when previous control was sent
+      prev_ctrl_time = 0;// Record when previous control was sent
       prev_rp_cmd[0] = prev_rp_cmd[1] = 0;//Set initial commands to 0;
       parserinstance->getquaddata(data);
-      model_control.setInitialState(data.localpos,data.linvel,data.rpydata,data.omega,rpytcmd,&systemid_init_state);//Set Initial State for SystemID
+      model_control.setInitialState(data.localpos,data.linvel,data.rpydata,data.omega,rpytcmd,systemid_init_state);//Set Initial State for SystemID
       rpytimer.start();
 
       if(optimize_online_)
       {
           ROS_INFO("Starting Online Optimize Timer");
+          rpy_stop_timer.setPeriod(ros::Duration(measurement_period));
           rpy_stop_timer.start();
       }
       enable_rpytcontrol = true;
@@ -717,12 +743,11 @@ inline void OnboardNodeHandler::initializeMPC()
   if(enable_mpccontrol)
     stateTransitionMPCControl(false);
   //Set Goal for  MPC
-  mpc_goalpose.position.z = goal_altitude;//TODO convert goal altitude into a local offset
-  model_control.setGoal(mpc_goalpose);
-  setInitialStateMPC();
-  model_control.iterate(100);
-  model_control.getCtrlTrajectory(gcop_trajectory);
-  traj_visualizer_.publishTrajectory(gcop_trajectory);
+  //setInitialStateMPC();
+  if(!optimize_online_)
+    model_control.iterate();
+  //Publish position wrt to current data
+  model_control.publishTrajectory(data.localpos, data.rpydata);
 }
 
 inline void OnboardNodeHandler::landQuad()
@@ -796,8 +821,6 @@ void OnboardNodeHandler::receiveGoalPose(const geometry_msgs::PoseStamped &goal_
     goal_position.y = goal_pose.pose.position.y;
     desired_yaw = tf::getYaw(goal_pose.pose.orientation);
   } 
-  mpc_goalpose = goal_pose.pose;///< Only recording the pose here. It is set when u initialize MPC !!
-  //TODO: Add a marker to rviz at the goal position
 }
 
 void OnboardNodeHandler::gcoptrajectoryCallback(const gcop_comm::CtrlTraj &traj_msg)
@@ -818,7 +841,6 @@ void OnboardNodeHandler::gcoptrajectoryCallback(const gcop_comm::CtrlTraj &traj_
     
     nearest_index_gcop_trajectory = 0;//Every time we get a new trajectory we reset the time index for searching nearest current time to zero
     gcop_trajectory_request_time = ros::Time::now();//Record when we received request
-    traj_visualizer_.publishTrajectory(gcop_trajectory);
     //start timer for tracking trajectory
     trajectorytimer.start();
 }
@@ -891,7 +913,7 @@ void OnboardNodeHandler::quadstatetimerCallback(const ros::TimerEvent &event)
 
   parserinstance->getquaddata(data);
 
-//If we have to publish rpy data:
+  //If we have to publish rpy data:
   if(publish_rpy)
   {
     geometry_msgs::Vector3 rpymsg;
@@ -945,7 +967,7 @@ void OnboardNodeHandler::rpytimerCallback(const ros::TimerEvent& event)
   {
     parserinstance->getquaddata(data);
 
-    if(test_vel)
+    /*if(test_vel)
     {
       if((ros::Time::now() - rpytimer_start_time).toSec() < 2.0)///Only for checking if we can switch between Velocity and RPY Modes [REMOVE LATER]
       {
@@ -956,6 +978,7 @@ void OnboardNodeHandler::rpytimerCallback(const ros::TimerEvent& event)
         return;
       }
     }
+    */
 
     rpytcmd.x = parsernode::common::map(data.servo_in[0],-10000, 10000, -M_PI/6, M_PI/6);
     rpytcmd.y = parsernode::common::map(data.servo_in[1],-10000, 10000, -M_PI/6, M_PI/6);
@@ -975,7 +998,7 @@ void OnboardNodeHandler::rpytimerCallback(const ros::TimerEvent& event)
     {
       //Record Data
         QRotorSystemIDMeasurement measurement;
-        measurement.t = ros::Time::now().toSec();
+        measurement.t = (ros::Time::now() - rpytimer_start_time).toSec();
         double time_diff = measurement.t - prev_ctrl_time;
         if(time_diff < 0.005)
         {
@@ -988,13 +1011,14 @@ void OnboardNodeHandler::rpytimerCallback(const ros::TimerEvent& event)
         measurement.control[0] = rpytcmd.w;
         measurement.control[1] = (rpytcmd.x - prev_rp_cmd[0])/time_diff;
         measurement.control[2] = (rpytcmd.y - prev_rp_cmd[1])/time_diff;
-        measurement.control[3] = yaw_rate;
+        measurement.control[3] = -yaw_rate;
         //Copy over previous values:
         prev_rp_cmd[0] = rpytcmd.x;
         prev_rp_cmd[1] = rpytcmd.y;
         prev_ctrl_time = measurement.t;
         //Record:
         systemid_measurements.push_back(measurement);
+        control_measurements.push_back(Vector3d(rpytcmd.x, rpytcmd.y, rpytcmd.z));
     }
   }
 }
@@ -1003,13 +1027,21 @@ void OnboardNodeHandler::onlineOptimizeCallback(const ros::TimerEvent &event)
 {
     //Stop rpytControl:
     stateTransitionRpytControl(false);
+
+    Matrix7d stdev_gains;
+    Vector6d mean_offsets;
+    Matrix6d stdev_offsets;
+    systemid.EstimateParameters(systemid_measurements,systemid_init_state,&stdev_gains, &mean_offsets, &stdev_offsets);//Estimate Parameters
+    if(!set_offsets_mpc_)
+      model_control.setParametersAndStdev(systemid.qrotor_gains,stdev_gains);//Set Optimization to right gains
+    else
+      model_control.setParametersAndStdev(systemid.qrotor_gains,stdev_gains,&mean_offsets,&stdev_offsets);//Set Optimization to right gains
+    //Iterate through fixed MPC Problem
+    model_control.iterate();
     //Print all measurements:
-    for(int i = 0; i < systemid_measurements.size(); i++)
-    {
-      QRotorSystemIDMeasurement &measurement = systemid_measurements[i];
-      cout<<measurement.t<<" "<<measurement.position.transpose()<<" "<<measurement.rpy.transpose()<<" "<<measurement.control.transpose()<<endl;
-    }
-    systemid.EstimateParameters(systemid_measurements,systemid_init_state);//Estimate Parameters
+    logMeasurements(false);
+    //Log MPC Trajectory
+    model_control.logTrajectory(logdir_stamped_);
 }
 
 void OnboardNodeHandler::velcmdtimerCallback(const ros::TimerEvent& event)
@@ -1108,26 +1140,43 @@ void OnboardNodeHandler::mpctimerCallback(const ros::TimerEvent& event)
       if(mpc_trajectory_count < model_control.us.size())
       {
         Eigen::Vector4d &current_u = model_control.us.at(mpc_trajectory_count);
-        gcop::QRotorIDState &current_x = model_control.xs.at(mpc_trajectory_count+1);
-        rpytcmd.x = current_x.u[0];
-        rpytcmd.y = current_x.u[1];
-        rpytcmd.w = (current_u[0]>80)?80:(current_u[0]<20)?20:current_u[0];//Simple Bounds so we dont send crazy values
-        rpytcmd.z = current_x.u[2];
+        //gcop::QRotorIDState &current_x = model_control.xs.at(mpc_trajectory_count+1);
+        rpytcmd.x = rpytcmd.x + model_control.step_size_*current_u[1];
+        rpytcmd.y = rpytcmd.y + model_control.step_size_*current_u[2];
+        rpytcmd.w = (current_u[0]>85)?85:(current_u[0]<20)?20:current_u[0];//Simple Bounds so we dont send crazy values
+        rpytcmd.z = rpytcmd.z + model_control.step_size_*current_u[3];
+        rpytcmd.z = rpytcmd.z > M_PI?(rpytcmd.z - 2*M_PI):(rpytcmd.z < -M_PI)?(rpytcmd.z + 2*M_PI):rpytcmd.z;//Make sure yaw command is reasonable
         mpc_trajectory_count++;
         parserinstance->cmdrpythrust(rpytcmd, true);
-        static ros::Time prev_time = ros::Time::now();
+        //static ros::Time prev_time = ros::Time::now();
         //ROS_INFO("Current Control: %d, %f,%f,%f,%f,%f",mpc_trajectory_count, rpytcmd.x, rpytcmd.y, rpytcmd.z, rpytcmd.w, (ros::Time::now() - prev_time).toSec());
         //ROS_INFO("state.u[2]: %f,%f,%f",model_control.xs[0].u[2], model_control.xs[1].u[2], model_control.us[0][3]);
         //ROS_INFO("Current rate: %f,%f,%f",current_u[1], current_u[2], current_u[3]);
-        prev_time = ros::Time::now();
+        //prev_time = ros::Time::now();
+
+        {
+          //Record Data
+          QRotorSystemIDMeasurement measurement;
+          measurement.t = (ros::Time::now() - mpc_request_time).toSec();
+
+          measurement.position<<data.localpos.x, data.localpos.y, data.localpos.z;
+          measurement.rpy<<data.rpydata.x, data.rpydata.y, data.rpydata.z;
+          measurement.control<<rpytcmd.w, rpytcmd.x, rpytcmd.y, rpytcmd.z;
+          //Record:
+          systemid_measurements.push_back(measurement);
+          control_measurements.push_back(Vector3d(rpytcmd.x, rpytcmd.y, rpytcmd.z));
+        }
       }
       else
       {
         mpctimer.stop();
         stateTransitionMPCControl(false);
+        //Record Trajectory to a File
+        logMeasurements(true);
       }
     }
-    else
+    ///NOT IMPLEMENTED
+    /*else
     {
       //CLOSEDLOOP VERSION:
       setInitialStateMPC();//Set Initial State
@@ -1142,9 +1191,16 @@ void OnboardNodeHandler::mpctimerCallback(const ros::TimerEvent& event)
       }
       else
       {
-        model_control.iterate(Nit);//Iterate
+        model_control.iterate();//Iterate
         Eigen::Vector4d &current_u = model_control.us[0];//Get Current Control
         gcop::QRotorIDState &current_x = model_control.xs[1];
+
+        rpytcmd.x = rpytcmd.x + model_control.step_size_*current_u[1];
+        rpytcmd.y = rpytcmd.y + model_control.step_size_*current_u[2];
+        rpytcmd.w = (current_u[0]>80)?80:(current_u[0]<20)?20:current_u[0];//Simple Bounds so we dont send crazy values
+        rpytcmd.z = rpytcmd.z + model_control.step_size_*current_u[3];
+        rpytcmd.z = rpytcmd.z > M_PI?(rpytcmd.z - 2*M_PI):(rpytcmd.z < -M_PI)?(rpytcmd.z + 2*M_PI):rpytcmd.z;//Make sure yaw command is reasonable
+
         rpytcmd.x = current_x.u[0];
         rpytcmd.y = current_x.u[1];
         rpytcmd.w = (current_u[0]>80)?80:(current_u[0]<20)?20:current_u[0];//Simple Bounds so we dont send crazy values
@@ -1153,5 +1209,6 @@ void OnboardNodeHandler::mpctimerCallback(const ros::TimerEvent& event)
         parserinstance->cmdrpythrust(rpytcmd, true);
       }
     }
+    */
   }
 }

@@ -38,9 +38,8 @@
 #include <geometry_msgs/Quaternion.h>
 #include <geometry_msgs/Vector3.h>
 
-//Gcop Quad Model MPC Controller and Trajectory visualizer
+//Gcop Quad Model MPC Controller
 #include <gcop_ctrl/qrotoridmodelcontrol.h>
-#include <gcop_comm/gcop_trajectory_visualizer.h>
 
 //Gcop Quad Model Identifier:
 #include <gcop/qrotorsystemid.h>
@@ -116,7 +115,6 @@ protected:
     boost::shared_ptr<pluginlib::ClassLoader<parsernode::Parser> > parser_loader;
     boost::shared_ptr<parsernode::Parser> parserinstance;
     boost::shared_ptr<RoiVelController> roi_vel_ctrlr_;
-    GcopTrajectoryVisualizer traj_visualizer_;///< Visualize MPC Trajectory in rviz
     QRotorIDModelControl model_control;///< MPC Controller for Quadrotor model
     QRotorSystemID systemid;///< System Identification class from GCOP
 
@@ -139,10 +137,11 @@ protected:
     double kp_trajectory_tracking;///< Trajectory tracking gain on velocity
     double timeout_trajectory_tracking;///< Timeout on when to stop trajectory tracking in sec
     double timeout_mpc_control;///< Timeout on mpc closed loop control
-    geometry_msgs::Pose mpc_goalpose;///< Goal Pose for MPC
     ros::Time rpytimer_start_time;///< When rpytimer started
+    string logdir_stamped_;///< Name of Log Directory
     //////////////SYSTEM ID HELPER VARIABLES////////////////////
     vector<QRotorSystemIDMeasurement> systemid_measurements;///< System ID Measurements
+    vector<Vector3d> control_measurements;///< Control Measurements [ONLY FOR LOGGING]
     QRotorIDState systemid_init_state;///< Initial State for System Identification
     double prev_rp_cmd[2];///< Previous roll and pitch commands for finding control rate
     double prev_ctrl_time;///< Previous control time for roll and pitch commands in System ID
@@ -177,11 +176,9 @@ protected:
 
     //// Logger Variables:
     bool logdir_created;///< Indicates whether logdirectory has been created
-    //ofstream vrpnfile;
     //ofstream camfile;
     //ofstream tipfile;
-		//char vrpnfile_buffer[FILE_BUFFER_SIZE];
-		//char camfile_buffer[FILE_BUFFER_SIZE];
+    //char camfile_buffer[FILE_BUFFER_SIZE];
 		//char tipfile_buffer[FILE_BUFFER_SIZE];
 
     //// Parameters:
@@ -194,8 +191,9 @@ protected:
     bool reconfig_update;///< Update reconfig with vel
     double goal_tolerance;///< Tolerance on when to stop closed loop MPC
     bool optimize_online_;///< Optimize the quadcopter parameters online
-    double system_id_offsets_timeperiod;///< Time period for constant offsets for systemid
-    bool test_vel;///< Test velocity by sending velocity in the beginning of rpytimer Code
+    bool set_offsets_mpc_;///< Set Offsets from online optimization to MPC
+    double measurement_period;///< Measurement time for optimization
+    //bool test_vel;///< Test velocity by sending velocity in the beginning of rpytimer Code
 
 protected:
     // Helper Functions
@@ -213,7 +211,9 @@ protected:
 
     inline void setupLogDir();
 
-    inline void setInitialStateMPC();
+    inline void logMeasurements(bool mpc_flag);
+
+    //inline void setInitialStateMPC();
 
     //Gui State Transition Functions:
     //inline void stateTransitionController(bool);
