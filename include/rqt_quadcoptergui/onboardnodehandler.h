@@ -139,10 +139,11 @@ protected:
     double timeout_mpc_control;///< Timeout on mpc closed loop control
     ros::Time rpytimer_start_time;///< When rpytimer started
     string logdir_stamped_;///< Name of Log Directory
+    Vector3d initial_state_vel_;///< MPC Initial State Velocity
     //////////////SYSTEM ID HELPER VARIABLES////////////////////
     vector<QRotorSystemIDMeasurement> systemid_measurements;///< System ID Measurements
     vector<Vector3d> control_measurements;///< Control Measurements [ONLY FOR LOGGING]
-    QRotorIDState systemid_init_state;///< Initial State for System Identification
+    //QRotorIDState systemid_init_state;///< Initial State for System Identification
     double prev_rp_cmd[2];///< Previous roll and pitch commands for finding control rate
     double prev_ctrl_time;///< Previous control time for roll and pitch commands in System ID
     
@@ -193,6 +194,8 @@ protected:
     bool optimize_online_;///< Optimize the quadcopter parameters online
     bool set_offsets_mpc_;///< Set Offsets from online optimization to MPC
     double measurement_period;///< Measurement time for optimization
+    double vel_send_time_;///< Velocity Send Time
+    double rpy_dummy_send_time_;///< Send dummy rpy for this time
     //bool test_vel;///< Test velocity by sending velocity in the beginning of rpytimer Code
 
 protected:
