@@ -11,6 +11,6 @@
   </node>
   <node pkg="tf2_ros" type="static_transform_publisher" name="simquad_to_cam" args="0.13 0 0 -1.5707 0 -1.5707 simquad camera"/>
   <node pkg="joy" type="joy_node" name="joy">
-    <param name="dev" value="/dev/input/js0"/>
+    <param name="dev" value="/dev/input/js1"/>
   </node>
 </launch>

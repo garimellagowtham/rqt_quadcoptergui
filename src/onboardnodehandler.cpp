@@ -11,6 +11,7 @@ OnboardNodeHandler::OnboardNodeHandler(ros::NodeHandle &nh_):nh(nh_)
                                                             , reconfig_init(false), reconfig_update(false)
                                                             , desired_yaw(0), kp_trajectory_tracking(1.0), timeout_trajectory_tracking(1.0), timeout_mpc_control(1.0)
                                                             , model_control(nh_, "world"), mpc_closed_loop_(false), mpc_trajectory_count(0)
+                                                            , so3(SO3::Instance())
                                                             //, waypoint_vel(0.1), waypoint_yawvel(0.01)
                                                             //, armcmdrate(4), armratecount(0), gripped_already(false), newcamdata(false)
                                                             //, enable_control(false), enable_integrator(false), enable_camctrl(false), enable_manualtargetretrieval(false)
@@ -747,11 +748,17 @@ inline void OnboardNodeHandler::initializeMPC()
     stateTransitionMPCControl(false);
   //Set Goal for  MPC
   //setInitialStateMPC();
-  if(!optimize_online_)
-    model_control.iterate();
+  model_control.iterate();
+  //Log MPC Trajectory
+  if(logdir_created)
+  {
+
+    std::string filename = logdir_stamped_+"/mpctrajectory";
+    filename = parsernode::common::addtimestring(filename);
+    model_control.logTrajectory(filename);
+  }
 
   //Set Initial State Velocity Desired:
-  SO3 &so3 = SO3::Instance();
   const QRotorIDState &x0 = model_control.xs[0];
   Matrix3d yawM;
   Vector3d rpy(0,0,data.rpydata.z);
@@ -875,6 +882,11 @@ void OnboardNodeHandler::paramreqCallback(rqt_quadcoptergui::QuadcopterInterface
     nh.param<double>("/tracking/radial_gain",config.radial_gain);
     nh.param<double>("/tracking/tangential_gain",config.tangential_gain);
     nh.param<double>("/tracking/desired_object_distance",config.desired_object_distance);
+    config.mpc_goalx = model_control.xf.p[0];
+    config.mpc_goaly = model_control.xf.p[1];
+    config.mpc_goalz = model_control.xf.p[2];
+    config.mpc_goalyaw = so3.yaw(model_control.xf.R);
+    //cout<<"Goal Yaw: "<<config.mpc_goalyaw<<endl;
     reconfig_init = true;
     return;
   }
@@ -915,6 +927,17 @@ void OnboardNodeHandler::paramreqCallback(rqt_quadcoptergui::QuadcopterInterface
   Nit = config.Nit;
   mpc_closed_loop_ = config.mpc_closed_loop;
   kp_trajectory_tracking = config.kp_trajectory_tracking;
+  //Set Goal for MPC:
+  model_control.xf.p[0] = config.mpc_goalx;
+  model_control.xf.p[1] = config.mpc_goaly;
+  model_control.xf.p[2] = config.mpc_goalz;
+  Vector3d rpy(0,0,config.mpc_goalyaw);
+  so3.q2g(model_control.xf.R,rpy);
+  if(config.reset_controls)
+  {
+      model_control.resetControls();//Reset the controls to base value when reset is pressed
+      config.reset_controls = false;//Set back to false
+  }
 }
 
 
@@ -1057,7 +1080,6 @@ void OnboardNodeHandler::onlineOptimizeCallback(const ros::TimerEvent &event)
     QRotorIDState systemid_init_state;
     systemid_init_state.Clear();
     systemid_init_state.p = systemid_measurements[0].position;
-    SO3 &so3  = SO3::Instance();
     so3.q2g(systemid_init_state.R,systemid_measurements[0].rpy);
     systemid.EstimateParameters(systemid_measurements,systemid_init_state,&stdev_gains, &mean_offsets, &stdev_offsets);//Estimate Parameters
     if(!set_offsets_mpc_)
@@ -1065,11 +1087,9 @@ void OnboardNodeHandler::onlineOptimizeCallback(const ros::TimerEvent &event)
     else
       model_control.setParametersAndStdev(systemid.qrotor_gains,stdev_gains,&mean_offsets,&stdev_offsets);//Set Optimization to right gains
     //Iterate through fixed MPC Problem
-    model_control.iterate();
+    //model_control.iterate();
     //Print all measurements:
     logMeasurements(false);
-    //Log MPC Trajectory
-    model_control.logTrajectory(logdir_stamped_);
 }
 
 void OnboardNodeHandler::velcmdtimerCallback(const ros::TimerEvent& event)

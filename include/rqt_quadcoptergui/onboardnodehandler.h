@@ -117,6 +117,7 @@ protected:
     boost::shared_ptr<RoiVelController> roi_vel_ctrlr_;
     QRotorIDModelControl model_control;///< MPC Controller for Quadrotor model
     QRotorSystemID systemid;///< System Identification class from GCOP
+    SO3 &so3;
 
     // boost::shared_ptr<SetptCtrl> ctrlrinst;
 
