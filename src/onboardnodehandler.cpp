@@ -188,6 +188,8 @@ inline void OnboardNodeHandler::loadParameters()
   //nh.param<bool>("/control/test_vel", test_vel,false);
   nh.param<double>("/control/offsets_timeperiod", systemid.offsets_timeperiod,0.5);
 
+  ROS_INFO("Dummy Times: %f,%f",rpy_dummy_send_time, vel_send_time);
+
   ROS_INFO("UAV Name: %s",uav_name.c_str());
 
   //Find Camera pose in Quad frame
@@ -1186,7 +1188,7 @@ void OnboardNodeHandler::mpctimerCallback(const ros::TimerEvent& event)
     desired_vel.x = initial_state_vel_[0]; desired_vel.y = initial_state_vel_[1]; desired_vel.z = initial_state_vel_[2];
     double desired_yaw = data.rpydata.z;//Current yaw
     parserinstance->cmdvelguided(desired_vel, desired_yaw);
-    //ROS_INFO("Vel sent: %f,%f,%f",desired_vel.x, desired_vel.y, desired_vel.z);
+    ROS_INFO("Vel sent: %f,%f,%f",desired_vel.x, desired_vel.y, desired_vel.z);
     return;
   }
   else if((event.current_real - mpc_request_time).toSec() < vel_send_time_+rpy_dummy_send_time_)
@@ -1195,7 +1197,7 @@ void OnboardNodeHandler::mpctimerCallback(const ros::TimerEvent& event)
     rpytcmd.z = data.rpydata.z;//Set to current yaw
     rpytcmd.w = (9.81/systemid.qrotor_gains(0));//Set to Default Value
     parserinstance->cmdrpythrust(rpytcmd, true);
-    //ROS_INFO("Sending zero rpy");
+    ROS_INFO("Sending zero rpy");
     return;
   }
 
@@ -1223,7 +1225,7 @@ void OnboardNodeHandler::mpctimerCallback(const ros::TimerEvent& event)
       {
         //Record Data
         QRotorSystemIDMeasurement measurement;
-        measurement.t = (ros::Time::now() - mpc_request_time).toSec()-2.18;//For we are using up 0.16 seconds for sending virtual controls to wakeup quadrotor
+        measurement.t = (ros::Time::now() - mpc_request_time).toSec()-(rpy_dummy_send_time_+vel_send_time_-0.02);//For we are using up 0.16 seconds for sending virtual controls to wakeup quadrotor
 
         measurement.position<<data.localpos.x, data.localpos.y, data.localpos.z;
         measurement.rpy<<data.rpydata.x, data.rpydata.y, data.rpydata.z;
