@@ -1025,6 +1025,7 @@ void OnboardNodeHandler::rpytimerCallback(const ros::TimerEvent& event)
       rpytcmd.z = data.rpydata.z;//Set to current yaw
       rpytcmd.w = (9.81/systemid.qrotor_gains(0));//Set to Default Value
       parserinstance->cmdrpythrust(rpytcmd, true);
+      ROS_INFO("Sending zero rpy: %f,%f,%f, %f",rpytcmd.x, rpytcmd.y, rpytcmd.z, rpytcmd.w);
       return;
     }
 
@@ -1198,7 +1199,7 @@ void OnboardNodeHandler::mpctimerCallback(const ros::TimerEvent& event)
     rpytcmd.z = data.rpydata.z;//Set to current yaw
     rpytcmd.w = (9.81/systemid.qrotor_gains(0));//Set to Default Value
     parserinstance->cmdrpythrust(rpytcmd, true);
-    ROS_INFO("Sending zero rpy");
+    ROS_INFO("Sending zero rpy: %f,%f,%f, %f",rpytcmd.x, rpytcmd.y, rpytcmd.z, rpytcmd.w);
     return;
   }
 
