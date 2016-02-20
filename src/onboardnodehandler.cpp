@@ -188,7 +188,7 @@ inline void OnboardNodeHandler::loadParameters()
   //nh.param<bool>("/control/test_vel", test_vel,false);
   nh.param<double>("/control/offsets_timeperiod", systemid.offsets_timeperiod,0.5);
 
-  ROS_INFO("Dummy Times: %f,%f",rpy_dummy_send_time, vel_send_time);
+  ROS_INFO("Dummy Times: %f,%f",rpy_dummy_send_time_, vel_send_time_);
 
   ROS_INFO("UAV Name: %s",uav_name.c_str());
 
