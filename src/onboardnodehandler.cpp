@@ -158,6 +158,7 @@ void OnboardNodeHandler::setupMemberVariables()
   rpytcmd.x = rpytcmd.y = rpytcmd.z = 0;
   rpytcmd.w = 10;
   initial_state_vel_.setZero();
+  home_pose_.setZero();
   //systemid_measurements.reserve(600);
   //control_measurements.reserve(600);
 }
@@ -678,6 +679,7 @@ inline void OnboardNodeHandler::stateTransitionRpytControl(bool state)
       prev_ctrl_time = 0;// Record when previous control was sent
       prev_rp_cmd[0] = prev_rp_cmd[1] = 0;//Set initial commands to 0;
       parserinstance->getquaddata(data);
+      home_pose_<<data.localpos.x, data.localpos.y, data.localpos.z, data.rpydata.z;
       //model_control.setInitialState(data.localpos,data.linvel,data.rpydata,data.omega,rpytcmd,systemid_init_state);//Set Initial State for SystemID
       rpytimer.start();
 
@@ -888,6 +890,7 @@ void OnboardNodeHandler::paramreqCallback(rqt_quadcoptergui::QuadcopterInterface
     config.mpc_goaly = model_control.xf.p[1];
     config.mpc_goalz = model_control.xf.p[2];
     config.mpc_goalyaw = so3.yaw(model_control.xf.R);
+    config.rpy_time = rpy_dummy_send_time_;
     //cout<<"Goal Yaw: "<<config.mpc_goalyaw<<endl;
     reconfig_init = true;
     return;
@@ -940,6 +943,15 @@ void OnboardNodeHandler::paramreqCallback(rqt_quadcoptergui::QuadcopterInterface
       model_control.resetControls();//Reset the controls to base value when reset is pressed
       config.reset_controls = false;//Set back to false
   }
+  if(config.go_home)
+  {
+      goal_altitude = home_pose_[2];
+      goal_position.x = home_pose_[0];
+      goal_position.y = home_pose_[1];
+      desired_yaw = home_pose_[3];
+      config.goal_altitude = goal_altitude;
+  }
+  rpy_dummy_send_time_ = config.rpy_time;
 }
 
 

@@ -141,6 +141,7 @@ protected:
     ros::Time rpytimer_start_time;///< When rpytimer started
     string logdir_stamped_;///< Name of Log Directory
     Vector3d initial_state_vel_;///< MPC Initial State Velocity
+    Vector4d home_pose_;///< Home Position and Yaw before starting rpytimer OR Wherever it is recorded
     //////////////SYSTEM ID HELPER VARIABLES////////////////////
     vector<QRotorSystemIDMeasurement> systemid_measurements;///< System ID Measurements
     vector<Vector3d> control_measurements;///< Control Measurements [ONLY FOR LOGGING]
