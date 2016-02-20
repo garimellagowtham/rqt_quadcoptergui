@@ -754,7 +754,9 @@ inline void OnboardNodeHandler::initializeMPC()
   //setInitialStateMPC();
   model_control.iterate();
   //Log MPC Trajectory
-  if(logdir_created)
+
+  if(!logdir_created)
+    setupLogDir();
   {
 
     std::string filename = logdir_stamped_+"/mpctrajectory";
@@ -1212,6 +1214,19 @@ void OnboardNodeHandler::mpctimerCallback(const ros::TimerEvent& event)
     rpytcmd.w = (9.81/systemid.qrotor_gains(0));//Set to Default Value
     parserinstance->cmdrpythrust(rpytcmd, true);
     ROS_INFO("Sending zero rpy: %f,%f,%f, %f",rpytcmd.x, rpytcmd.y, rpytcmd.z, rpytcmd.w);
+    {
+      //Record Data
+      QRotorSystemIDMeasurement measurement;
+      measurement.t = (ros::Time::now() - mpc_request_time).toSec()-(rpy_dummy_send_time_+vel_send_time_-0.02);//For we are using up 0.16 seconds for sending virtual controls to wakeup quadrotor
+
+      measurement.position<<data.localpos.x, data.localpos.y, data.localpos.z;
+      measurement.rpy<<data.rpydata.x, data.rpydata.y, data.rpydata.z;
+      measurement.control.setZero();
+      //measurement.control<<rpytcmd.w, current_u[1], current_u[2], current_u[3];
+      //Record:
+      systemid_measurements.push_back(measurement);
+      control_measurements.push_back(Vector3d(rpytcmd.x, rpytcmd.y, rpytcmd.z));
+    }
     return;
   }
 
