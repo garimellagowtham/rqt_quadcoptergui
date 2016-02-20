@@ -87,6 +87,8 @@ OnboardNodeHandler::OnboardNodeHandler(ros::NodeHandle &nh_):nh(nh_)
   velcmdtimer.stop();
   poscmdtimer = nh_.createTimer(ros::Duration(0.02), &OnboardNodeHandler::poscmdtimerCallback,this);//50Hz is the update rate of Quadcopter cmd
   poscmdtimer.stop();
+  hometimer = nh_.createTimer(ros::Duration(0.02), &OnboardNodeHandler::poscmdtimerCallback,this);//50Hz is the update rate of Quadcopter cmd
+  hometimer.stop();
   mpctimer = nh_.createTimer(ros::Duration(0.02), &OnboardNodeHandler::mpctimerCallback,this);//50Hz is the update rate of Quadcopter cmd
   mpctimer.stop();
   rpytimer = nh_.createTimer(ros::Duration(0.02), &OnboardNodeHandler::rpytimerCallback,this);//50Hz is the update rate of Quadcopter cmd
@@ -158,7 +160,6 @@ void OnboardNodeHandler::setupMemberVariables()
   rpytcmd.x = rpytcmd.y = rpytcmd.z = 0;
   rpytcmd.w = 10;
   initial_state_vel_.setZero();
-  home_pose_.setZero();
   meas_filled_ = 0;
   //systemid_measurements.reserve(600);
   //control_measurements.reserve(600);
@@ -680,7 +681,6 @@ inline void OnboardNodeHandler::stateTransitionRpytControl(bool state)
       prev_ctrl_time = 0;// Record when previous control was sent
       prev_rp_cmd[0] = prev_rp_cmd[1] = 0;//Set initial commands to 0;
       parserinstance->getquaddata(data);
-      home_pose_<<data.localpos.x, data.localpos.y, data.localpos.z, data.rpydata.z;
       //model_control.setInitialState(data.localpos,data.linvel,data.rpydata,data.omega,rpytcmd,systemid_init_state);//Set Initial State for SystemID
       meas_filled_ = 0;
       rpytimer.start();
@@ -949,11 +949,16 @@ void OnboardNodeHandler::paramreqCallback(rqt_quadcoptergui::QuadcopterInterface
   }
   if(config.go_home)
   {
-      goal_altitude = home_pose_[2];
-      goal_position.x = home_pose_[0];
-      goal_position.y = home_pose_[1];
-      desired_yaw = home_pose_[3];
-      config.goal_altitude = goal_altitude;
+      home_start_time = ros::Time::now();
+      hometimer.start();
+  }
+  if(config.record_home)
+  {
+    goal_position.x = data.localpos.x;
+    goal_position.y = data.localpos.y;
+    goal_position.z = data.localpos.z;
+    desired_yaw = data.rpydata.z;
+    ROS_INFO("Recorded Pos: %f,%f,%f; Yaw: %f", goal_position.x, goal_position.y, goal_position.z, desired_yaw);
   }
   delay_send_time_ = config.delay_send_time;
 }
@@ -1171,6 +1176,12 @@ void OnboardNodeHandler::poscmdtimerCallback(const ros::TimerEvent& event)
  //   double current_desired_yaw = data.rpydata.z + goal_yaw_diff;
     goal_position.z = goal_altitude;
     parserinstance->cmdwaypoint(goal_position, desired_yaw);
+  }
+  else//Home Timer
+  {
+    parserinstance->cmdwaypoint(goal_position, desired_yaw);
+    if((event.current_real - home_start_time).toSec()> 10)
+        hometimer.stop();
   }
 }
 

@@ -100,6 +100,7 @@ protected:
     ros::Timer rpy_stop_timer;//REFACTOR #TODO
     ros::Timer trajectorytimer;//REFACTOR #TODO
     ros::Timer quadstatetimer;// Send quad state to GUI
+    ros::Timer hometimer;///< Go to Home
 
     /////Reconfigure Server
     boost::shared_ptr<dynamic_reconfigure::Server<rqt_quadcoptergui::QuadcopterInterfaceConfig> >reconfigserver;
@@ -141,7 +142,7 @@ protected:
     ros::Time rpytimer_start_time;///< When rpytimer started
     string logdir_stamped_;///< Name of Log Directory
     Vector3d initial_state_vel_;///< MPC Initial State Velocity
-    Vector4d home_pose_;///< Home Position and Yaw before starting rpytimer OR Wherever it is recorded
+    ros::Time home_start_time;//When go home command is pressed
     //////////////SYSTEM ID HELPER VARIABLES////////////////////
     vector<QRotorSystemIDMeasurement> systemid_measurements;///< System ID Measurements
     vector<Vector3d> control_measurements;///< Control Measurements [ONLY FOR LOGGING]
