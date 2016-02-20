@@ -866,6 +866,18 @@ void OnboardNodeHandler::gcoptrajectoryCallback(const gcop_comm::CtrlTraj &traj_
     goalstate.basetwist.angular.x = 0;
     goalstate.basetwist.angular.y = 0;
     goalstate.basetwist.angular.z = 0;
+
+    if(enable_logging)
+    {
+        std::string trajfilename = 
+          parsernode::common::addtimestring(logdir_stamped_+"/traj_tracking_data") + ".dat";
+        trajfile.open(trajfilename.c_str());
+        if(!trajfile.is_open())
+        {
+            ROS_WARN("Could not open %s for trajectory logging", 
+              trajfilename.c_str()); 
+        }
+    }
     
     nearest_index_gcop_trajectory = 0;//Every time we get a new trajectory we reset the time index for searching nearest current time to zero
     gcop_trajectory_request_time = ros::Time::now();//Record when we received request
@@ -1184,12 +1196,34 @@ void OnboardNodeHandler::trajectorytimerCallback(const ros::TimerEvent& event)
     desired_velocity_traj_tracking.y = goalstate.basetwist.linear.y + kp_trajectory_tracking*(goalstate.basepose.translation.y - data.localpos.y);
     desired_velocity_traj_tracking.z = goalstate.basetwist.linear.z + kp_trajectory_tracking*(goalstate.basepose.translation.z - data.localpos.z);
     double desired_yaw_traj_tracking = tf::getYaw(goalstate.basepose.rotation);
+
+    if(enable_logging && trajfile.is_open())
+    {
+        trajfile << time_offset << " " 
+          << goalstate.basepose.translation.x << " "
+          << goalstate.basepose.translation.y << " "
+          << goalstate.basepose.translation.z << " "
+          << tf::getYaw(goalstate.basepose.rotation) << " "
+          << goalstate.basetwist.linear.x << " "
+          << goalstate.basetwist.linear.y << " "
+          << goalstate.basetwist.linear.z << " "
+          << data.localpos.x << " "
+          << data.localpos.y << " "
+          << data.localpos.z << " "
+          << desired_velocity_traj_tracking.x << " "
+          << desired_velocity_traj_tracking.y << " "
+          << desired_velocity_traj_tracking.z << " "
+          << std::endl;
+    }
+
     
     //Send command
     parserinstance->cmdvelguided(desired_velocity_traj_tracking, desired_yaw_traj_tracking);
 
     if(time_offset.toSec() > gcop_trajectory.time[gcop_trajectory.N]+timeout_trajectory_tracking)
     {
+        if(trajfile.is_open())
+          trajfile.close();
         trajectorytimer.stop();
         stateTransitionTrajectoryTracking(false);
     }

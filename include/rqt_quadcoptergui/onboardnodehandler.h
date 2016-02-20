@@ -179,6 +179,7 @@ protected:
 
     //// Logger Variables:
     bool logdir_created;///< Indicates whether logdirectory has been created
+    ofstream trajfile;
     //ofstream camfile;
     //ofstream tipfile;
     //char camfile_buffer[FILE_BUFFER_SIZE];
