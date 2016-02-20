@@ -148,6 +148,7 @@ protected:
     //QRotorIDState systemid_init_state;///< Initial State for System Identification
     double prev_rp_cmd[2];///< Previous roll and pitch commands for finding control rate
     double prev_ctrl_time;///< Previous control time for roll and pitch commands in System ID
+    int meas_filled_;///< Number of measurements filled
     
     //double waypoint_vel;///< Velocity with which to move to goal 
     //double waypoint_yawvel;///< Velocity with which to move in yaw towards goal 
@@ -197,7 +198,7 @@ protected:
     bool set_offsets_mpc_;///< Set Offsets from online optimization to MPC
     double measurement_period;///< Measurement time for optimization
     double vel_send_time_;///< Velocity Send Time
-    double rpy_dummy_send_time_;///< Send dummy rpy for this time
+    double delay_send_time_;///< Send dummy rpy for this time
     //bool test_vel;///< Test velocity by sending velocity in the beginning of rpytimer Code
 
 protected:
