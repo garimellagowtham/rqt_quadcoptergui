@@ -963,6 +963,7 @@ void OnboardNodeHandler::paramreqCallback(rqt_quadcoptergui::QuadcopterInterface
   {
       home_start_time = ros::Time::now();
       hometimer.start();
+      config.go_home = false;
   }
   if(config.record_home)
   {
@@ -971,6 +972,7 @@ void OnboardNodeHandler::paramreqCallback(rqt_quadcoptergui::QuadcopterInterface
     goal_position.z = data.localpos.z;
     desired_yaw = data.rpydata.z;
     ROS_INFO("Recorded Pos: %f,%f,%f; Yaw: %f", goal_position.x, goal_position.y, goal_position.z, desired_yaw);
+    config.record_home = false;
   }
   delay_send_time_ = config.delay_send_time;
 }
@@ -1193,7 +1195,10 @@ void OnboardNodeHandler::poscmdtimerCallback(const ros::TimerEvent& event)
   {
     parserinstance->cmdwaypoint(goal_position, desired_yaw);
     if((event.current_real - home_start_time).toSec()> 10)
+    {
+        ROS_INFO("Stopping Pos Timer");
         hometimer.stop();
+    }
   }
 }
 
@@ -1308,7 +1313,6 @@ void OnboardNodeHandler::mpctimerCallback(const ros::TimerEvent& event)
       rpytcmd.z = rpytcmd.z > M_PI?(rpytcmd.z - 2*M_PI):(rpytcmd.z < -M_PI)?(rpytcmd.z + 2*M_PI):rpytcmd.z;//Make sure yaw command is reasonable
       mpc_trajectory_count++;
       parserinstance->cmdrpythrust(rpytcmd, true);
-      ROS_INFO("Sending constant rpy: %f,%f,%f, %f",rpytcmd.x, rpytcmd.y, rpytcmd.z, rpytcmd.w);
       //static ros::Time prev_time = ros::Time::now();
       //ROS_INFO("Current Control: %d, %f,%f,%f,%f,%f",mpc_trajectory_count, rpytcmd.x, rpytcmd.y, rpytcmd.z, rpytcmd.w, (ros::Time::now() - prev_time).toSec());
       //ROS_INFO("state.u[2]: %f,%f,%f",model_control.xs[0].u[2], model_control.xs[1].u[2], model_control.us[0][3]);
@@ -1330,6 +1334,7 @@ void OnboardNodeHandler::mpctimerCallback(const ros::TimerEvent& event)
     }
     else if((event.current_real - mpc_request_time).toSec() < model_control.tf + delay_send_time_ + vel_send_time_)
     {
+      ROS_INFO("Sending constant rpy: %f,%f,%f, %f",rpytcmd.x, rpytcmd.y, rpytcmd.z, rpytcmd.w);
       parserinstance->cmdrpythrust(rpytcmd, true);//Send Last Command
       //Recording after trajectory is done but until delay_send_time
       {
