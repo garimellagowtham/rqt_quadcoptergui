@@ -598,6 +598,8 @@ inline void OnboardNodeHandler::stateTransitionTrajectoryTracking(bool state)
     ROS_WARN("Parser Instance not defined. Cannot create rpyt control");
     goto PUBLISH_TRAJECTORY_TRACKING_STATE;
   }
+  if(enable_rpytcontrol)
+    stateTransitionRpytControl(false);
   if(enable_tracking)
     stateTransitionTracking(false);
   if(enable_velcontrol)
@@ -606,8 +608,6 @@ inline void OnboardNodeHandler::stateTransitionTrajectoryTracking(bool state)
     stateTransitionPosControl(false);
   if(enable_mpccontrol)
     stateTransitionMPCControl(false);
-  if(enable_trajectory_tracking)
-    stateTransitionTrajectoryTracking(false);
 
   if(state)
   {
