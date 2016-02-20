@@ -1083,6 +1083,7 @@ void OnboardNodeHandler::onlineOptimizeCallback(const ros::TimerEvent &event)
     systemid_init_state.Clear();
     systemid_init_state.p = systemid_measurements[0].position;
     so3.q2g(systemid_init_state.R,systemid_measurements[0].rpy);
+    systemid_init_state.u<<0,0,systemid_measurements[0].rpy(2);
     systemid.EstimateParameters(systemid_measurements,systemid_init_state,&stdev_gains, &mean_offsets, &stdev_offsets);//Estimate Parameters
     if(!set_offsets_mpc_)
       model_control.setParametersAndStdev(systemid.qrotor_gains,stdev_gains);//Set Optimization to right gains
