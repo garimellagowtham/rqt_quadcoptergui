@@ -961,8 +961,13 @@ void OnboardNodeHandler::paramreqCallback(rqt_quadcoptergui::QuadcopterInterface
   }
   if(config.go_home)
   {
-      home_start_time = ros::Time::now();
-      hometimer.start();
+      bool result = parserinstance->flowControl(true);//get control
+      if(result)
+      {
+        ROS_INFO("Home Timer Starting");
+        home_start_time = ros::Time::now();
+        hometimer.start();
+      }
       config.go_home = false;
   }
   if(config.record_home)
@@ -1193,6 +1198,7 @@ void OnboardNodeHandler::poscmdtimerCallback(const ros::TimerEvent& event)
   }
   else//Home Timer
   {
+    ROS_INFO("Goal Posn: %f,%f,%f, %f", goal_position.x, goal_position.y, goal_position.z, desired_yaw);
     parserinstance->cmdwaypoint(goal_position, desired_yaw);
     if((event.current_real - home_start_time).toSec()> 10)
     {
