@@ -903,10 +903,12 @@ void OnboardNodeHandler::paramreqCallback(rqt_quadcoptergui::QuadcopterInterface
     nh.param<double>("/tracking/radial_gain",config.radial_gain);
     nh.param<double>("/tracking/tangential_gain",config.tangential_gain);
     nh.param<double>("/tracking/desired_object_distance",config.desired_object_distance);
-    config.mpc_goalx = model_control.xf.p[0];
+    config.mpc_vel = model_control.xf.v[0];//For now use only x vel
+    /*config.mpc_goalx = model_control.xf.p[0];
     config.mpc_goaly = model_control.xf.p[1];
     config.mpc_goalz = model_control.xf.p[2];
     config.mpc_goalyaw = so3.yaw(model_control.xf.R);
+    */
     config.delay_send_time = delay_send_time_;
     //cout<<"Goal Yaw: "<<config.mpc_goalyaw<<endl;
     reconfig_init = true;
@@ -950,11 +952,14 @@ void OnboardNodeHandler::paramreqCallback(rqt_quadcoptergui::QuadcopterInterface
   mpc_closed_loop_ = config.mpc_closed_loop;
   kp_trajectory_tracking = config.kp_trajectory_tracking;
   //Set Goal for MPC:
-  model_control.xf.p[0] = config.mpc_goalx;
+  model_control.xf.v[0] = config.mpc_vel;
+  model_control.xs[0].v[0] = config.mpc_vel;
+  /*model_control.xf.p[0] = config.mpc_goalx;
   model_control.xf.p[1] = config.mpc_goaly;
   model_control.xf.p[2] = config.mpc_goalz;
   Vector3d rpy(0,0,config.mpc_goalyaw);
   so3.q2g(model_control.xf.R,rpy);
+  */
   if(config.reset_controls)
   {
       model_control.resetControls();//Reset the controls to base value when reset is pressed
