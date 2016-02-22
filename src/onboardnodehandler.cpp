@@ -575,6 +575,7 @@ inline void OnboardNodeHandler::stateTransitionMPCControl(bool state)
         ROS_INFO("Starting Timer");
         rpytcmd.x = rpytcmd.y = 0;//Set Commanded roll and pitch to 0
         rpytcmd.z = data.rpydata.z;//Current Yaw
+        desired_yaw = data.rpydata.z;
         mpc_request_time = ros::Time::now();
         mpc_trajectory_count = 0;
         mpctimer.start();
@@ -1275,7 +1276,7 @@ void OnboardNodeHandler::mpctimerCallback(const ros::TimerEvent& event)
   {
     geometry_msgs::Vector3 desired_vel;
     desired_vel.x = initial_state_vel_[0]; desired_vel.y = initial_state_vel_[1]; desired_vel.z = initial_state_vel_[2];
-    double desired_yaw = data.rpydata.z;//Current yaw
+    //double desired_yaw = data.rpydata.z;//Current yaw
     parserinstance->cmdvelguided(desired_vel, desired_yaw);
     ROS_INFO("Vel sent: %f,%f,%f",desired_vel.x, desired_vel.y, desired_vel.z);
     return;
