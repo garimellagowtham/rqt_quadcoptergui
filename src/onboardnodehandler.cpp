@@ -774,9 +774,9 @@ inline void OnboardNodeHandler::initializeMPC()
   so3.q2g(yawM, rpy);
   initial_state_vel_ = yawM*x0.v;
   geometry_msgs::Vector3 localpos = data.localpos;
-  localpos.x = localpos.x + initial_state_vel_[0]*(vel_send_time_);
-  localpos.y = localpos.y + initial_state_vel_[1]*(vel_send_time_);
-  localpos.z = localpos.z + initial_state_vel_[2]*(vel_send_time_);
+  localpos.x = localpos.x + initial_state_vel_[0]*(vel_send_time_+delay_send_time_);
+  localpos.y = localpos.y + initial_state_vel_[1]*(vel_send_time_+delay_send_time_);
+  localpos.z = localpos.z + initial_state_vel_[2]*(vel_send_time_+delay_send_time_);
   //Publish position wrt to current data
   model_control.publishTrajectory(localpos, data.rpydata);
 }
@@ -1286,10 +1286,11 @@ void OnboardNodeHandler::mpctimerCallback(const ros::TimerEvent& event)
     ROS_INFO("Vel sent: %f,%f,%f",desired_vel.x, desired_vel.y, desired_vel.z);
     return;
   }
-  /*else if((event.current_real - mpc_request_time).toSec() < vel_send_time_+delay_send_time_)
+  else if((event.current_real - mpc_request_time).toSec() < vel_send_time_+delay_send_time_)
   {
     rpytcmd.x = rpytcmd.y = 0;
-    rpytcmd.z = data.rpydata.z;//Set to current yaw
+    rpytcmd.z = desired_yaw;
+    //rpytcmd.z = data.rpydata.z;//Set to current yaw
     rpytcmd.w = (9.81/systemid.qrotor_gains(0));//Set to Default Value
     parserinstance->cmdrpythrust(rpytcmd, true);
     ROS_INFO("Sending zero rpy: %f,%f,%f, %f",rpytcmd.x, rpytcmd.y, rpytcmd.z, rpytcmd.w);
@@ -1308,7 +1309,6 @@ void OnboardNodeHandler::mpctimerCallback(const ros::TimerEvent& event)
     }
     return;
   }
-  */
 
   if(!mpc_closed_loop_)
   {
@@ -1334,7 +1334,7 @@ void OnboardNodeHandler::mpctimerCallback(const ros::TimerEvent& event)
       {
         //Record Data
         QRotorSystemIDMeasurement measurement;
-        measurement.t = (ros::Time::now() - mpc_request_time).toSec()-(delay_send_time_+vel_send_time_-0.02);//For we are using up 0.16 seconds for sending virtual controls to wakeup quadrotor
+        measurement.t = (ros::Time::now() - mpc_request_time).toSec()-(2*delay_send_time_+vel_send_time_-0.02);//For we are using up 0.16 seconds for sending virtual controls to wakeup quadrotor
 
         measurement.position<<data.localpos.x, data.localpos.y, data.localpos.z;
         measurement.rpy<<data.rpydata.x, data.rpydata.y, data.rpydata.z;
@@ -1344,7 +1344,7 @@ void OnboardNodeHandler::mpctimerCallback(const ros::TimerEvent& event)
         control_measurements.push_back(Vector3d(rpytcmd.x, rpytcmd.y, rpytcmd.z));
       }
     }
-    else if((event.current_real - mpc_request_time).toSec() < model_control.tf + delay_send_time_ + vel_send_time_)
+    else if((event.current_real - mpc_request_time).toSec() < model_control.tf + 2*delay_send_time_ + vel_send_time_)
     {
       ROS_INFO("Sending constant rpy: %f,%f,%f, %f",rpytcmd.x, rpytcmd.y, rpytcmd.z, rpytcmd.w);
       parserinstance->cmdrpythrust(rpytcmd, true);//Send Last Command
@@ -1352,7 +1352,7 @@ void OnboardNodeHandler::mpctimerCallback(const ros::TimerEvent& event)
       {
         //Record Data
         QRotorSystemIDMeasurement measurement;
-        measurement.t = (ros::Time::now() - mpc_request_time).toSec()-(delay_send_time_+vel_send_time_-0.02);
+        measurement.t = (ros::Time::now() - mpc_request_time).toSec()-(2*delay_send_time_+vel_send_time_-0.02);
 
         measurement.position<<data.localpos.x, data.localpos.y, data.localpos.z;
         measurement.rpy<<data.rpydata.x, data.rpydata.y, data.rpydata.z;
