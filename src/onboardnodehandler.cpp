@@ -248,6 +248,7 @@ inline void OnboardNodeHandler::logMeasurements(bool mpc_flag)
   if(!logdir_created)
     setupLogDir();
   std::string filename = logdir_stamped_+"/measurements";
+
   if(mpc_flag)
       filename = filename + "mpc";
   filename = parsernode::common::addtimestring(filename);
@@ -755,7 +756,7 @@ inline void OnboardNodeHandler::initializeMPC()
     stateTransitionMPCControl(false);
   //Set Goal for  MPC
   //setInitialStateMPC();
-  model_control.iterate();
+  /*model_control.iterate();
   //Log MPC Trajectory
 
   if(!logdir_created)
@@ -766,6 +767,7 @@ inline void OnboardNodeHandler::initializeMPC()
     filename = parsernode::common::addtimestring(filename);
     model_control.logTrajectory(filename);
   }
+  */
 
   //Set Initial State Velocity Desired:
   const QRotorIDState &x0 = model_control.xs[0];
@@ -1153,8 +1155,29 @@ void OnboardNodeHandler::onlineOptimizeCallback(const ros::TimerEvent &event)
       model_control.setParametersAndStdev(systemid.qrotor_gains,stdev_gains,&mean_offsets,&stdev_offsets);//Set Optimization to right gains
     //Iterate through fixed MPC Problem
     //model_control.iterate();
+
+    model_control.iterate();
+    //Log MPC Trajectory
+
+    if(!logdir_created)
+      setupLogDir();
+    {
+
+      std::string filename = logdir_stamped_+"/mpctrajectory";
+      filename = parsernode::common::addtimestring(filename);
+      model_control.logTrajectory(filename);
+    }
+
     //Print all measurements:
     logMeasurements(false);
+    {
+      //Log the optimal estimation parameters:
+      std::string filename = logdir_stamped_+"/estimationparams";
+      filename = parsernode::common::addtimestring(filename);
+      ofstream systemidparamfile(filename.c_str());
+      systemidparamfile.precision(10);
+      systemidparamfile<<"Gains: "<<systemid.qrotor_gains.transpose()<<endl<<"Stdev Gains: "<<endl<< stdev_gains<< endl<<" Mean Offsets: "<<mean_offsets.transpose()<<endl<<"Stdev Offsets: "<<endl<<stdev_offsets<<endl;
+    }
 }
 
 void OnboardNodeHandler::velcmdtimerCallback(const ros::TimerEvent& event)
@@ -1297,7 +1320,7 @@ void OnboardNodeHandler::mpctimerCallback(const ros::TimerEvent& event)
     {
       //Record Data
       QRotorSystemIDMeasurement measurement;
-      measurement.t = (ros::Time::now() - mpc_request_time).toSec()-(delay_send_time_+vel_send_time_-0.02);//For we are using up 0.16 seconds for sending virtual controls to wakeup quadrotor
+      measurement.t = (ros::Time::now() - mpc_request_time).toSec()-(2*delay_send_time_+vel_send_time_-0.02);//For we are using up 0.16 seconds for sending virtual controls to wakeup quadrotor
 
       measurement.position<<data.localpos.x, data.localpos.y, data.localpos.z;
       measurement.rpy<<data.rpydata.x, data.rpydata.y, data.rpydata.z;
@@ -1320,7 +1343,8 @@ void OnboardNodeHandler::mpctimerCallback(const ros::TimerEvent& event)
       //gcop::QRotorIDState &current_x = model_control.xs.at(mpc_trajectory_count+1);
       rpytcmd.x = rpytcmd.x + model_control.step_size_*current_u[1];
       rpytcmd.y = rpytcmd.y + model_control.step_size_*current_u[2];
-      rpytcmd.w = (current_u[0]>85)?85:(current_u[0]<20)?20:current_u[0];//Simple Bounds so we dont send crazy values
+      //rpytcmd.w = (current_u[0]>85)?85:(current_u[0]<20)?20:current_u[0];//Simple Bounds so we dont send crazy values
+      rpytcmd.w = (current_u[0]>100)?100:(current_u[0]<10)?10:current_u[0];//Simple Bounds so we dont send crazy values
       rpytcmd.z = rpytcmd.z + model_control.step_size_*current_u[3];
       rpytcmd.z = rpytcmd.z > M_PI?(rpytcmd.z - 2*M_PI):(rpytcmd.z < -M_PI)?(rpytcmd.z + 2*M_PI):rpytcmd.z;//Make sure yaw command is reasonable
       mpc_trajectory_count++;
