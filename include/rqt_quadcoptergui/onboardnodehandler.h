@@ -85,6 +85,7 @@ protected:
     //ros::Publisher armtarget_pub;
 
     ros::Publisher imu_rpy_pub_;
+    ros::Publisher global_vel_pub_;
 
     ros::Publisher marker_pub_;
 
@@ -189,6 +190,7 @@ protected:
 
     //// Parameters:
     bool publish_rpy;///< Publish roll pitch yaw on a topic or not
+    bool publish_vel;///< Publish velocity on a topic or not
     std::string uav_name;///< Name of UAV used in setting ID for tf
     string logdir;///< Log Directory Used by Logger
     string parserplugin_name;///< Name of the quadcopter Parser
