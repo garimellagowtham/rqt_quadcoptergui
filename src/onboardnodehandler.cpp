@@ -6,6 +6,7 @@ OnboardNodeHandler::OnboardNodeHandler(ros::NodeHandle &nh_):nh(nh_)
                                                             , broadcaster(new tf::TransformBroadcaster())
                                                             , logdir_created(false), enable_logging(false)
                                                             , publish_rpy(false)
+                                                            , publish_vel(false)
                                                             , enable_tracking(false), enable_velcontrol(false), enable_rpytcontrol(false), enable_poscontrol(false)
                                                             , enable_mpccontrol(false), enable_trajectory_tracking(false)
                                                             , reconfig_init(false), reconfig_update(false)
@@ -63,6 +64,10 @@ OnboardNodeHandler::OnboardNodeHandler(ros::NodeHandle &nh_):nh(nh_)
   {
     //advertise rpy topics:
     imu_rpy_pub_ = nh_.advertise<geometry_msgs::Vector3>("imu_rpy",10);
+  }
+  if(publish_vel)
+  {
+    global_vel_pub_ = nh_.advertise<geometry_msgs::Vector3>("global_vel",10);
   }
 
   //Connect to dynamic reconfigure server:
@@ -182,6 +187,7 @@ inline void OnboardNodeHandler::loadParameters()
   nh.param<std::string>("/gui/uav_name",uav_name,"dji");
   nh.param<std::string>("/gui/logdir",logdir,"/home/gowtham");
   nh.param<bool>("/gui/publishrpy",publish_rpy,false);
+  nh.param<bool>("/gui/publishvel",publish_vel,false);
   nh.param<double>("/mpc/goal_tolerance", goal_tolerance,0.2);//Stop when 0.2m away from goal
   nh.param<bool>("/control/optimize_online", optimize_online_,false);
   nh.param<bool>("/control/set_offsets_mpc", set_offsets_mpc_,false);
@@ -1009,6 +1015,14 @@ void OnboardNodeHandler::quadstatetimerCallback(const ros::TimerEvent &event)
     rpymsg.y = (data.rpydata.y)*(180/M_PI);
     rpymsg.z = (data.rpydata.z)*(180/M_PI);
     imu_rpy_pub_.publish(rpymsg);
+  }
+  if(publish_vel)
+  {
+    geometry_msgs::Vector3 global_vel_msg;
+    global_vel_msg.x = data.linvel.x;
+    global_vel_msg.y = data.linvel.y;
+    global_vel_msg.z = data.linvel.z;
+    global_vel_pub_.publish(global_vel_msg);
   }
   //Convert data servo_in to rpytcmd:
   if(!enable_rpytcontrol && !enable_mpccontrol)
