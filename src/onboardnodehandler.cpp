@@ -196,6 +196,11 @@ inline void OnboardNodeHandler::loadParameters()
   nh.param<double>("/control/delay_send_time", delay_send_time_,0.2);
   //nh.param<bool>("/control/test_vel", test_vel,false);
   nh.param<double>("/control/offsets_timeperiod", systemid.offsets_timeperiod,0.5);
+  {
+    std::string systemid_filename;
+    nh.getParam("/control/systemid_params",systemid_filename);
+    gcop::loadParameters(systemid_filename,systemid);
+  }
 
   ROS_INFO("Dummy Times: %f,%f",delay_send_time_, vel_send_time_);
 
@@ -762,7 +767,7 @@ inline void OnboardNodeHandler::initializeMPC()
     stateTransitionMPCControl(false);
   //Set Goal for  MPC
   //setInitialStateMPC();
-  /*model_control.iterate();
+  model_control.iterate();
   //Log MPC Trajectory
 
   if(!logdir_created)
@@ -773,7 +778,6 @@ inline void OnboardNodeHandler::initializeMPC()
     filename = parsernode::common::addtimestring(filename);
     model_control.logTrajectory(filename);
   }
-  */
 
   //Set Initial State Velocity Desired:
   const QRotorIDState &x0 = model_control.xs[0];
@@ -1170,7 +1174,7 @@ void OnboardNodeHandler::onlineOptimizeCallback(const ros::TimerEvent &event)
     //Iterate through fixed MPC Problem
     //model_control.iterate();
 
-    model_control.iterate();
+    /*model_control.iterate();
     //Log MPC Trajectory
 
     if(!logdir_created)
@@ -1181,6 +1185,7 @@ void OnboardNodeHandler::onlineOptimizeCallback(const ros::TimerEvent &event)
       filename = parsernode::common::addtimestring(filename);
       model_control.logTrajectory(filename);
     }
+    */
 
     //Print all measurements:
     logMeasurements(false);

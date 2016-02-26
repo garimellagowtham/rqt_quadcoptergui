@@ -44,6 +44,9 @@
 //Gcop Quad Model Identifier:
 #include <gcop/qrotorsystemid.h>
 
+//Load systemid Parameters
+#include <rqt_quadcoptergui/load_systemid_parameters.h>
+
 //TF#include <sys/types.h>
 #include <sys/stat.h>
 #include <tf/transform_listener.h>

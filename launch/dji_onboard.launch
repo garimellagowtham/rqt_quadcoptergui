@@ -4,6 +4,7 @@
   <param name="/gui/logdir" type="string" value="$(find rqt_quadcoptergui)/djilogfiles"/>
   <param name="/gui/publishvel" type="bool" value="true"/>
   <param name="/qrotoridmodeltest/control_params" type="str" value="$(find gcop_ctrl)/params/qrotoridmodelv2.cfg"/>
+  <param name="/control/systemid_params" type="str" value="$(find rqt_quadcoptergui)/params/qrotorsystemid.cfg"/>
   <!--<node pkg="rqt_quadcoptergui" name="onboard_node" type="onboard_node" output="screen" launch-prefix="gdb--><!--args">-->
   <node pkg="rqt_quadcoptergui" name="onboard_node" type="onboard_node" output="screen">
     <remap from="onboard_node/camera_info" to="duo3d_camera/left/camera_info"/>
