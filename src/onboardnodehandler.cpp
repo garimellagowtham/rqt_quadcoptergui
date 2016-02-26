@@ -196,6 +196,11 @@ inline void OnboardNodeHandler::loadParameters()
   nh.param<double>("/control/delay_send_time", delay_send_time_,0.2);
   //nh.param<bool>("/control/test_vel", test_vel,false);
   nh.param<double>("/control/offsets_timeperiod", systemid.offsets_timeperiod,0.5);
+  {
+    std::string systemid_filename;
+    nh.getParam("/control/systemid_params",systemid_filename);
+    gcop::loadParameters(systemid_filename,systemid);
+  }
 
   ROS_INFO("Dummy Times: %f,%f",delay_send_time_, vel_send_time_);
 
