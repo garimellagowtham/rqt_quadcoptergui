@@ -762,7 +762,7 @@ inline void OnboardNodeHandler::initializeMPC()
     stateTransitionMPCControl(false);
   //Set Goal for  MPC
   //setInitialStateMPC();
-  /*model_control.iterate();
+  model_control.iterate();
   //Log MPC Trajectory
 
   if(!logdir_created)
@@ -773,7 +773,6 @@ inline void OnboardNodeHandler::initializeMPC()
     filename = parsernode::common::addtimestring(filename);
     model_control.logTrajectory(filename);
   }
-  */
 
   //Set Initial State Velocity Desired:
   const QRotorIDState &x0 = model_control.xs[0];
@@ -1170,7 +1169,7 @@ void OnboardNodeHandler::onlineOptimizeCallback(const ros::TimerEvent &event)
     //Iterate through fixed MPC Problem
     //model_control.iterate();
 
-    model_control.iterate();
+    /*model_control.iterate();
     //Log MPC Trajectory
 
     if(!logdir_created)
@@ -1181,6 +1180,7 @@ void OnboardNodeHandler::onlineOptimizeCallback(const ros::TimerEvent &event)
       filename = parsernode::common::addtimestring(filename);
       model_control.logTrajectory(filename);
     }
+    */
 
     //Print all measurements:
     logMeasurements(false);
