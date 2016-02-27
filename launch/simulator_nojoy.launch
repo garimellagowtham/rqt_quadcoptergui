@@ -8,6 +8,9 @@
   <node pkg="rqt_quadcoptergui" name="onboard_node" type="onboard_node" output="screen">
     <remap from="/onboard_node/joy" to="/joy"/>
     <remap from="/onboard_node/goal" to="/move_base_simple/goal"/>
+    <remap from="onboard_node/depth" to="camera_sim/depth_image"/>
+    <remap from="onboard_node/roi" to="roi_out"/>
+    <remap from="onboard_node/camera_info" to="camera_sim/camera_info"/>
   </node>
   <node pkg="tf2_ros" type="static_transform_publisher" name="simquad_to_cam" args="0.13 0 0 -1.5707 0 -1.5707 simquad camera"/>
 </launch>
