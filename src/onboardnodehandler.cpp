@@ -36,6 +36,7 @@ OnboardNodeHandler::OnboardNodeHandler(ros::NodeHandle &nh_):nh(nh_)
   //Create RoiVelController:
   roi_vel_ctrlr_.reset(new RoiVelController(nh,uav_name));
   roi_vel_ctrlr_->setCameraTransform(CAM_QUAD_transform);
+  nh.param<double>("/control/obj_dist_max", roi_vel_ctrlr_->obj_dist_max,2.0);
 
 /*#ifdef ARM_ENABLED
   ROS_INFO("Creating Arm Hardware Instance");
@@ -590,7 +591,6 @@ inline void OnboardNodeHandler::stateTransitionMPCControl(bool state)
         ROS_INFO("Starting Timer");
         rpytcmd.x = rpytcmd.y = 0;//Set Commanded roll and pitch to 0
         rpytcmd.z = data.rpydata.z;//Current Yaw
-        desired_yaw = data.rpydata.z;
         mpc_request_time = ros::Time::now();
         mpc_trajectory_count = 0;
         //Set Initial Object Velocity based on real or virtual obstacle
@@ -606,6 +606,8 @@ inline void OnboardNodeHandler::stateTransitionMPCControl(bool state)
           }
           else
           {
+            desired_yaw = atan2(des_obj_dir.y, des_obj_dir.x);
+            ROS_INFO("Desired Yaw: %f",desired_yaw);
             //Get Desired Obj direction and Publish the marker
             visualization_msgs::Marker dirxn_marker;
             dirxn_marker.id = 2;
@@ -633,6 +635,7 @@ inline void OnboardNodeHandler::stateTransitionMPCControl(bool state)
         }
         else
         {
+          desired_yaw = data.rpydata.z;
           //Set Initial State Velocity Desired:
           const QRotorIDState &x0 = model_control.xs[0];
           Matrix3d yawM;
@@ -1297,7 +1300,7 @@ void OnboardNodeHandler::poscmdtimerCallback(const ros::TimerEvent& event)
   }
   else//Home Timer
   {
-    ROS_INFO("Goal Posn: %f,%f,%f, %f", goal_position.x, goal_position.y, goal_position.z, desired_yaw);
+    //ROS_INFO("Goal Posn: %f,%f,%f, %f", goal_position.x, goal_position.y, goal_position.z, desired_yaw);
     parserinstance->cmdwaypoint(goal_position, desired_yaw);
     if((event.current_real - home_start_time).toSec()> 10)
     {
@@ -1388,11 +1391,11 @@ void OnboardNodeHandler::mpcveltimerCallback(const ros::TimerEvent & event)
   else
   {
       double object_dist = roi_vel_ctrlr_->getObjectDistance();
-      if(object_dist <= model_control.getDesiredObjectDistance(delay_send_time_))
+      if(object_dist <= model_control.getDesiredObjectDistance(delay_send_time_)+0.05)//0.05 is buffer
       {
         mpcveltimer.stop();
         mpc_request_time = event.current_real;
-        ROS_INFO("Starting mpc timer");
+        ROS_INFO("Starting mpc timer: %f", object_dist);
         mpctimer.start();
       }
   }
@@ -1408,6 +1411,8 @@ void OnboardNodeHandler::mpctimerCallback(const ros::TimerEvent& event)
     //rpytcmd.z = data.rpydata.z;//Set to current yaw
     rpytcmd.w = (9.81/systemid.qrotor_gains(0));//Set to Default Value
     parserinstance->cmdrpythrust(rpytcmd, true);
+    double object_dist = roi_vel_ctrlr_->getObjectDistance();
+    ROS_INFO("Obj dist: %f",object_dist);
     //ROS_INFO("Sending zero rpy: %f,%f,%f, %f",rpytcmd.x, rpytcmd.y, rpytcmd.z, rpytcmd.w);
     {
       //Record Data
