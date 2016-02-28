@@ -97,6 +97,7 @@ protected:
     boost::shared_ptr<tf::TransformBroadcaster> broadcaster;//Transform Broadcaster
 
     ////Timers
+    ros::Timer mpcveltimer;//REFACTOR #TODO
     ros::Timer velcmdtimer;//REFACTOR #TODO
     ros::Timer poscmdtimer;//REFACTOR #TODO
     ros::Timer mpctimer;//REFACTOR #TODO
@@ -206,7 +207,7 @@ protected:
     double measurement_period;///< Measurement time for optimization
     double vel_send_time_;///< Velocity Send Time
     double delay_send_time_;///< Send dummy rpy for this time
-    //bool test_vel;///< Test velocity by sending velocity in the beginning of rpytimer Code
+    bool  virtual_obstacle_;///< If using virtual obstacle or not
 
 protected:
     // Helper Functions
@@ -267,6 +268,8 @@ protected:
     void paramreqCallback(rqt_quadcoptergui::QuadcopterInterfaceConfig &config , uint32_t level);
 
     //void goaltimerCallback(const ros::TimerEvent&);
+
+    void mpcveltimerCallback(const ros::TimerEvent&);
 
     void velcmdtimerCallback(const ros::TimerEvent&);
 
