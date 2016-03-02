@@ -1363,6 +1363,9 @@ void OnboardNodeHandler::trajectorytimerCallback(const ros::TimerEvent& event)
           << desired_velocity_traj_tracking.x << " "
           << desired_velocity_traj_tracking.y << " "
           << desired_velocity_traj_tracking.z << " "
+          << data.rpydata.x << " "
+          << data.rpydata.y << " "
+          << data.rpydata.z << " "
           << std::endl;
     }
 
