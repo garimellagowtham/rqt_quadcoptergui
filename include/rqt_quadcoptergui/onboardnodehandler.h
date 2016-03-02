@@ -37,6 +37,7 @@
 #include <rqt_quadcoptergui/GuiStateMessage.h>
 #include <geometry_msgs/Quaternion.h>
 #include <geometry_msgs/Vector3.h>
+#include <sensor_msgs/LaserScan.h>
 
 //Gcop Quad Model MPC Controller
 #include <gcop_ctrl/qrotoridmodelcontrol.h>
@@ -77,6 +78,8 @@ protected:
     ros::Subscriber gui_command_subscriber_;
 
     ros::Subscriber goal_pose_subscriber_;///< Subscribe to waypoint command from rviz
+
+    ros::Subscriber guidance_obs_dist_;///< Get obstacle distance from Guidance
 
     /////Publishers
     ros::Publisher gui_state_publisher_;
@@ -260,6 +263,8 @@ protected:
     void receiveRoi(const sensor_msgs::RegionOfInterest &roi_rect);
 
     void receiveGoalPose(const geometry_msgs::PoseStamped &goal_pose);
+
+    void receiveObstacleDistance(const sensor_msgs::LaserScan &scan);
 
     //void joyCallback(const sensor_msgs::Joy::ConstPtr &joymsg);
 

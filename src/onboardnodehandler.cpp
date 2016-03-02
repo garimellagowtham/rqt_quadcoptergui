@@ -48,6 +48,7 @@ OnboardNodeHandler::OnboardNodeHandler(ros::NodeHandle &nh_):nh(nh_)
   gui_command_subscriber_ = nh.subscribe("/gui_commands", 10, &OnboardNodeHandler::receiveGuiCommands, this);
   goal_pose_subscriber_ = nh.subscribe("goal",1,&OnboardNodeHandler::receiveGoalPose,this);
   trajectory_subscriber_ = nh.subscribe("ctrltraj",1,&OnboardNodeHandler::gcoptrajectoryCallback,this);
+  guidance_obs_dist_ = nh.subscribe("/guidance/obstacle_distance",1,&OnboardNodeHandler::receiveObstacleDistance,this);
   //Subscribe to Camera Estimator:
   //camdata_sub = nh_.subscribe("/Pose_Est/objpose",1,&OnboardNodeHandler::camcmdCallback,this);
 
@@ -914,7 +915,15 @@ void OnboardNodeHandler::receiveGoalPose(const geometry_msgs::PoseStamped &goal_
     goal_position.x = goal_pose.pose.position.x;
     goal_position.y = goal_pose.pose.position.y;
     desired_yaw = tf::getYaw(goal_pose.pose.orientation);
-  } 
+  }
+}
+
+void OnboardNodeHandler::receiveObstacleDistance(const sensor_msgs::LaserScan &scan)
+{
+    double obs_dist = scan.ranges[1];
+    ROS_INFO("Received Obstacle dist: %f",obs_dist);//DEBUG
+    tf::Transform obs_transform(tf::createQuaternionFromRPY(0,0,0), tf::Vector3(obs_dist,0,0));
+    broadcaster->sendTransform(tf::StampedTransform(obs_transform, ros::Time::now(), uav_name, "obs"));
 }
 
 void OnboardNodeHandler::gcoptrajectoryCallback(const gcop_comm::CtrlTraj &traj_msg)
