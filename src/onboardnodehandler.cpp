@@ -1400,6 +1400,7 @@ void OnboardNodeHandler::iterateMPC()///Used by boost thread
     model_control.logTrajectory(filename);
   }
   mpc_thread_mutex.lock();
+  ROS_INFO("Iterating done");
   mpc_thread_iterating = false;
   mpc_thread_mutex.unlock();
 }
@@ -1446,6 +1447,10 @@ void OnboardNodeHandler::mpcveltimerCallback(const ros::TimerEvent & event)
         mpc_request_time = event.current_real;
         ROS_INFO("Starting mpc timer: %f", object_dist);
         mpctimer.start();
+        parserinstance->getquaddata(data);
+        model_control.setInitialVel(data.linvel, data.rpydata);
+        ROS_INFO("Starting MPC Thread");
+        iterate_mpc_thread = new boost::thread(boost::bind(&OnboardNodeHandler::iterateMPC,this));//Start Iterating only one run
       }
   }
 }
