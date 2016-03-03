@@ -1390,6 +1390,15 @@ void OnboardNodeHandler::iterateMPC()///Used by boost thread
   mpc_thread_iterating = true;
   mpc_thread_mutex.unlock();
   model_control.iterate(5);
+  //Log Trajectory
+  if(!logdir_created)
+    setupLogDir();
+  {
+
+    std::string filename = logdir_stamped_+"/mpctrajectory";
+    filename = parsernode::common::addtimestring(filename);
+    model_control.logTrajectory(filename);
+  }
   mpc_thread_mutex.lock();
   mpc_thread_iterating = false;
   mpc_thread_mutex.unlock();
