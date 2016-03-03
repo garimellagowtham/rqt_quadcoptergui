@@ -211,6 +211,10 @@ protected:
     double vel_send_time_;///< Velocity Send Time
     double delay_send_time_;///< Send dummy rpy for this time
     bool  virtual_obstacle_;///< If using virtual obstacle or not
+    /// Thread for Iterating:
+    boost::thread *iterate_mpc_thread;///< Iterate MPC
+    bool mpc_thread_iterating;///< Whether mpc is iterating
+    boost::mutex mpc_thread_mutex;
 
 protected:
     // Helper Functions
@@ -219,6 +223,8 @@ protected:
     inline void setupMemberVariables();
 
     inline void loadParameters();
+
+    void iterateMPC();
 
     //inline bool createArmInstance();
 

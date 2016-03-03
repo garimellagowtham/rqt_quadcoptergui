@@ -12,7 +12,7 @@ OnboardNodeHandler::OnboardNodeHandler(ros::NodeHandle &nh_):nh(nh_)
                                                             , reconfig_init(false), reconfig_update(false)
                                                             , desired_yaw(0), kp_trajectory_tracking(1.0), timeout_trajectory_tracking(1.0), timeout_mpc_control(1.0)
                                                             , model_control(nh_, "world"), mpc_closed_loop_(false), mpc_trajectory_count(0)
-                                                            , so3(SO3::Instance())
+                                                            , so3(SO3::Instance()), iterate_mpc_thread(NULL), mpc_thread_iterating(false)
                                                             //, waypoint_vel(0.1), waypoint_yawvel(0.01)
                                                             //, armcmdrate(4), armratecount(0), gripped_already(false), newcamdata(false)
                                                             //, enable_control(false), enable_integrator(false), enable_camctrl(false), enable_manualtargetretrieval(false)
@@ -651,6 +651,8 @@ inline void OnboardNodeHandler::stateTransitionMPCControl(bool state)
           //Publish position wrt to current data
           model_control.publishTrajectory(localpos, data.rpydata);
         }
+        //Clear iterate mpc thread:
+        iterate_mpc_thread = NULL;
 
         //Start MPC Vel Timer to achieve initial vel and start mpctimerCallback
         mpcveltimer.start();
@@ -829,7 +831,7 @@ inline void OnboardNodeHandler::initializeMPC()
   if(enable_mpccontrol)
     stateTransitionMPCControl(false);
   //Set Goal for  MPC
-  //setInitialStateMPC();
+  //model_control.setInitialState(data.linvel);
   model_control.iterate();
   //Log MPC Trajectory
 
@@ -1382,6 +1384,17 @@ void OnboardNodeHandler::trajectorytimerCallback(const ros::TimerEvent& event)
     }
 }
 
+void OnboardNodeHandler::iterateMPC()///Used by boost thread
+{
+  mpc_thread_mutex.lock();
+  mpc_thread_iterating = true;
+  mpc_thread_mutex.unlock();
+  model_control.iterate(5);
+  mpc_thread_mutex.lock();
+  mpc_thread_iterating = false;
+  mpc_thread_mutex.unlock();
+}
+
 void OnboardNodeHandler::mpcveltimerCallback(const ros::TimerEvent & event)
 {
   geometry_msgs::Vector3 desired_vel;
@@ -1392,12 +1405,27 @@ void OnboardNodeHandler::mpcveltimerCallback(const ros::TimerEvent & event)
 
   if(virtual_obstacle_)
   {
-    if((event.current_real - mpc_request_time).toSec() >= vel_send_time_)//First 3 seconds
+    double timediff = (event.current_real - mpc_request_time).toSec();
+    
+    /*if(timediff >= vel_send_time_-0.3 && !iterate_mpc_thread)//Time for Optimizing
+    {
+      //Start Iterating MPC:
+      parserinstance->getquaddata(data);
+      model_control.setInitialVel(data.linvel, data.rpydata);
+      ROS_INFO("Starting MPC Thread");
+      iterate_mpc_thread = new boost::thread(boost::bind(&OnboardNodeHandler::iterateMPC,this));//Start Iterating 0.3 seconds before rpyt mode is started
+    }
+    else */
+    if(timediff >= vel_send_time_)//First 3 seconds
     {
         mpcveltimer.stop();
         mpc_request_time = event.current_real;
         ROS_INFO("Starting mpc timer");
         mpctimer.start();
+        parserinstance->getquaddata(data);
+        model_control.setInitialVel(data.linvel, data.rpydata);
+        ROS_INFO("Starting MPC Thread");
+        iterate_mpc_thread = new boost::thread(boost::bind(&OnboardNodeHandler::iterateMPC,this));//Start Iterating only one run
     }
   }
   else
@@ -1440,6 +1468,28 @@ void OnboardNodeHandler::mpctimerCallback(const ros::TimerEvent& event)
       control_measurements.push_back(Vector3d(rpytcmd.x, rpytcmd.y, rpytcmd.z));
     }
     return;
+  }
+  //Check if thread can be joined [Done Optimizing]
+  if(iterate_mpc_thread)
+  {
+    bool mpc_thread_iterating_copy_;
+    mpc_thread_mutex.lock();
+    mpc_thread_iterating_copy_ = mpc_thread_iterating;
+    mpc_thread_mutex.unlock();
+    if(mpc_thread_iterating_copy_)
+    {
+      ROS_WARN("Optimization not completed on time");
+      mpctimer.stop();
+      stateTransitionMPCControl(false);
+      return;
+    }
+    else if(model_control.J > 40)//Cost is high did not converge
+    {
+      ROS_WARN("Optimization did not succeed: %f",model_control.J);
+      mpctimer.stop();
+      stateTransitionMPCControl(false);
+      return;
+    }
   }
 
   if(!mpc_closed_loop_)
