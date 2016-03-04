@@ -1389,7 +1389,7 @@ void OnboardNodeHandler::iterateMPC()///Used by boost thread
   mpc_thread_mutex.lock();
   mpc_thread_iterating = true;
   mpc_thread_mutex.unlock();
-  model_control.iterate(5);
+  model_control.iterate(true);//Fast Iterate
   //Log Trajectory
   if(!logdir_created)
     setupLogDir();
@@ -1441,7 +1441,7 @@ void OnboardNodeHandler::mpcveltimerCallback(const ros::TimerEvent & event)
   else
   {
       double object_dist = roi_vel_ctrlr_->getObjectDistance();
-      if(object_dist <= model_control.getDesiredObjectDistance(delay_send_time_)+0.05)//0.05 is buffer
+      if(object_dist <= model_control.getDesiredObjectDistance(2*delay_send_time_)+0.05)//0.05 is buffer
       {
         mpcveltimer.stop();
         mpc_request_time = event.current_real;
