@@ -1147,18 +1147,17 @@ void OnboardNodeHandler::rpytimerCallback(const ros::TimerEvent& event)
   {
     parserinstance->getquaddata(data);
 
-    /*if(test_vel)
-    {
+    //if(test_vel)
+    //{
       if((ros::Time::now() - rpytimer_start_time).toSec() < 2.0)///Only for checking if we can switch between Velocity and RPY Modes [REMOVE LATER]
       {
         geometry_msgs::Vector3 desired_vel;
-        desired_vel.x = 0.5; desired_vel.y = desired_vel.z = 0;
+        desired_vel.x = -5; desired_vel.y = desired_vel.z = 0;
         double desired_yaw = data.rpydata.z;//Current yaw
         parserinstance->cmdvelguided(desired_vel, desired_yaw);
         return;
       }
-    }
-    */
+    //}
     /*if((event.current_real - rpytimer_start_time).toSec() < 0.2)
     {
       rpytcmd.x = rpytcmd.y = 0;
@@ -1436,14 +1435,14 @@ void OnboardNodeHandler::mpcveltimerCallback(const ros::TimerEvent & event)
     {
         mpcveltimer.stop();
         mpc_request_time = event.current_real;
-        ROS_INFO("Starting mpc timer");
-        mpctimer.start();
         parserinstance->getquaddata(data);
         mpc_delay_rpy_data = data.rpydata;
         model_control.setInitialVel(data.linvel, data.rpydata);
         ROS_INFO("Initial Vel: %f,%f,%f",data.linvel.x, data.linvel.y, data.linvel.z);
         ROS_INFO("Starting MPC Thread");
         iterate_mpc_thread = new boost::thread(boost::bind(&OnboardNodeHandler::iterateMPC,this));//Start Iterating only one run
+        ROS_INFO("Starting mpc timer");
+        mpctimer.start();
     }
   }
   else
