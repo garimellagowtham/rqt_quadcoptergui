@@ -1450,7 +1450,7 @@ void OnboardNodeHandler::mpcveltimerCallback(const ros::TimerEvent & event)
     //Set Desired distance based on recomputed roi position
       geometry_msgs::Vector3 des_obj_dir;
       bool result = roi_vel_ctrlr_->setDesiredObjectDir(data.rpydata,des_obj_dir);
-      desired_yaw = atan2(des_obj_dir.y, des_obj_dir.x);
+      //desired_yaw = atan2(des_obj_dir.y, des_obj_dir.x);
       initial_state_vel_ = model_control.xs[0].v.norm()*Eigen::Vector3d(des_obj_dir.x, des_obj_dir.y, des_obj_dir.z);
 
       double object_dist = roi_vel_ctrlr_->getObjectDistance();
@@ -1463,6 +1463,7 @@ void OnboardNodeHandler::mpcveltimerCallback(const ros::TimerEvent & event)
         parserinstance->getquaddata(data);
         mpc_delay_rpy_data = data.rpydata;
         model_control.setInitialVel(data.linvel, data.rpydata);
+        ROS_INFO("Initial Vel: %f,%f,%f",data.linvel.x, data.linvel.y, data.linvel.z);
         ROS_INFO("Starting MPC Thread");
         iterate_mpc_thread = new boost::thread(boost::bind(&OnboardNodeHandler::iterateMPC,this));//Start Iterating only one run
       }
