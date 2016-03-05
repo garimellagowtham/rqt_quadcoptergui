@@ -932,7 +932,7 @@ void OnboardNodeHandler::receiveGoalPose(const geometry_msgs::PoseStamped &goal_
 void OnboardNodeHandler::receiveObstacleDistance(const sensor_msgs::LaserScan &scan)
 {
     double obs_dist = scan.ranges[1];
-    ROS_INFO("Received Obstacle dist: %f",obs_dist);//DEBUG
+    //ROS_INFO("Received Obstacle dist: %f",obs_dist);//DEBUG
     tf::Transform obs_transform(tf::createQuaternionFromRPY(0,0,0), tf::Vector3(obs_dist,0,0));
     broadcaster->sendTransform(tf::StampedTransform(obs_transform, ros::Time::now(), uav_name, "obs"));
 }
