@@ -9,6 +9,7 @@
 
 //Roi Vel Include:
 #include <controllers/roivelcontroller.h>
+#include <controllers/alvartrackcontroller.h>
 
 //Arm Controller
 #include <dynamixelsdk/arm_helper.h>
@@ -123,7 +124,7 @@ protected:
     //boost::shared_ptr<dynamixelsdk::DynamixelArm> arm_hardwareinst;
     boost::shared_ptr<pluginlib::ClassLoader<parsernode::Parser> > parser_loader;
     boost::shared_ptr<parsernode::Parser> parserinstance;
-    boost::shared_ptr<RoiVelController> roi_vel_ctrlr_;
+    boost::shared_ptr<VelController> roi_vel_ctrlr_;
     QRotorIDModelControl model_control;///< MPC Controller for Quadrotor model
     QRotorSystemID systemid;///< System Identification class from GCOP
     SO3 &so3;
@@ -158,6 +159,12 @@ protected:
     double prev_rp_cmd[2];///< Previous roll and pitch commands for finding control rate
     double prev_ctrl_time;///< Previous control time for roll and pitch commands in System ID
     int meas_filled_;///< Number of measurements filled
+    geometry_msgs::Vector3 mpc_delay_rpy_data;///< RPY Commands sent during start of 
+
+    /// Thread for Iterating:
+    boost::thread *iterate_mpc_thread;///< Iterate MPC
+    bool mpc_thread_iterating;///< Whether mpc is iterating
+    boost::mutex mpc_thread_mutex;
     
     //double waypoint_vel;///< Velocity with which to move to goal 
     //double waypoint_yawvel;///< Velocity with which to move in yaw towards goal 
@@ -211,10 +218,7 @@ protected:
     double vel_send_time_;///< Velocity Send Time
     double delay_send_time_;///< Send dummy rpy for this time
     bool  virtual_obstacle_;///< If using virtual obstacle or not
-    /// Thread for Iterating:
-    boost::thread *iterate_mpc_thread;///< Iterate MPC
-    bool mpc_thread_iterating;///< Whether mpc is iterating
-    boost::mutex mpc_thread_mutex;
+    bool use_alvar_;///< Use alvar tracking instead of roi
 
 protected:
     // Helper Functions

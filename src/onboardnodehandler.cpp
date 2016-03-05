@@ -34,7 +34,14 @@ OnboardNodeHandler::OnboardNodeHandler(ros::NodeHandle &nh_):nh(nh_)
   }
 
   //Create RoiVelController:
-  roi_vel_ctrlr_.reset(new RoiVelController(nh,uav_name));
+  if(!use_alvar_)
+  {
+    roi_vel_ctrlr_.reset(new RoiVelController(nh,uav_name));
+  }
+  else
+  {
+    roi_vel_ctrlr_.reset(new AlvarTrackController(nh,uav_name));
+  }
   roi_vel_ctrlr_->setCameraTransform(CAM_QUAD_transform);
   nh.param<double>("/control/obj_dist_max", roi_vel_ctrlr_->obj_dist_max,2.0);
 
@@ -170,6 +177,7 @@ void OnboardNodeHandler::setupMemberVariables()
   rpytcmd.w = 10;
   initial_state_vel_.setZero();
   meas_filled_ = 0;
+  mpc_delay_rpy_data.x = mpc_delay_rpy_data.y = mpc_delay_rpy_data.z =0;
   //systemid_measurements.reserve(600);
   //control_measurements.reserve(600);
 }
@@ -200,6 +208,7 @@ inline void OnboardNodeHandler::loadParameters()
   nh.param<double>("/control/delay_send_time", delay_send_time_,0.2);
   nh.param<bool>("/control/virtual_obstacle", virtual_obstacle_,true);
   nh.param<double>("/control/offsets_timeperiod", systemid.offsets_timeperiod,0.5);
+  nh.param<bool>("/control/use_alvar", use_alvar_,false);
   {
     std::string systemid_filename;
     nh.getParam("/control/systemid_params",systemid_filename);
@@ -1433,6 +1442,7 @@ void OnboardNodeHandler::mpcveltimerCallback(const ros::TimerEvent & event)
         ROS_INFO("Starting mpc timer");
         mpctimer.start();
         parserinstance->getquaddata(data);
+        mpc_delay_rpy_data = data.rpydata;
         model_control.setInitialVel(data.linvel, data.rpydata);
         ROS_INFO("Starting MPC Thread");
         iterate_mpc_thread = new boost::thread(boost::bind(&OnboardNodeHandler::iterateMPC,this));//Start Iterating only one run
@@ -1448,6 +1458,7 @@ void OnboardNodeHandler::mpcveltimerCallback(const ros::TimerEvent & event)
         ROS_INFO("Starting mpc timer: %f", object_dist);
         mpctimer.start();
         parserinstance->getquaddata(data);
+        mpc_delay_rpy_data = data.rpydata;
         model_control.setInitialVel(data.linvel, data.rpydata);
         ROS_INFO("Starting MPC Thread");
         iterate_mpc_thread = new boost::thread(boost::bind(&OnboardNodeHandler::iterateMPC,this));//Start Iterating only one run
@@ -1460,8 +1471,9 @@ void OnboardNodeHandler::mpctimerCallback(const ros::TimerEvent& event)
   //For first 0.2 seconds send zero controls The quadcopter is responding only after that:
   if((event.current_real - mpc_request_time).toSec() < delay_send_time_)
   {
-    rpytcmd.x = rpytcmd.y = 0;
-    rpytcmd.z = desired_yaw;
+    rpytcmd.x = mpc_delay_rpy_data.x;
+    rpytcmd.y = mpc_delay_rpy_data.y;
+    rpytcmd.z = mpc_delay_rpy_data.z;
     //rpytcmd.z = data.rpydata.z;//Set to current yaw
     rpytcmd.w = (9.81/systemid.qrotor_gains(0));//Set to Default Value
     parserinstance->cmdrpythrust(rpytcmd, true);
