@@ -1,5 +1,6 @@
 <?xml version="1.0"?>
 <launch>
+  <param name="/control/use_alvar" type="bool" value="true"/>
   <include file="$(find rqt_quadcoptergui)/launch/dji_onboard.launch"/>
   <include file="$(find controllers)/launch/duo_mod.launch"/>
   <include file="$(find ar_track_alvar)/launch/duo_indiv_no_kinect.launch">
