@@ -1,0 +1,8 @@
+<?xml version="1.0"?>
+<launch>
+  <include file="$(find rqt_quadcoptergui)/launch/dji_onboard.launch"/>
+  <include file="$(find controllers)/launch/duo_mod.launch"/>
+  <include file="$(find ar_track_alvar)/launch/duo_indiv_no_kinect.launch">
+    <arg name="output_frame" value="camera"/>
+  </include>
+</launch>
