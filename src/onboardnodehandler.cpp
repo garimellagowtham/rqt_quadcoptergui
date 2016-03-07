@@ -1079,6 +1079,7 @@ void OnboardNodeHandler::paramreqCallback(rqt_quadcoptergui::QuadcopterInterface
     config.mpc_goalyaw = so3.yaw(model_control.xf.R);
     */
     config.delay_send_time = delay_send_time_;
+    vel_ctrlr_->kp_ = config.kp_velctrl;
     //cout<<"Goal Yaw: "<<config.mpc_goalyaw<<endl;
     reconfig_init = true;
     return;
@@ -1171,6 +1172,7 @@ void OnboardNodeHandler::paramreqCallback(rqt_quadcoptergui::QuadcopterInterface
       if(arm_hardware_controller_)
           arm_hardware_controller_->foldArm();
   }
+  vel_ctrlr_->kp_ = config.kp_velctrl;
 }
 
 void OnboardNodeHandler::quadstatetimerCallback(const ros::TimerEvent &event)
