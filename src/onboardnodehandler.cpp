@@ -1448,10 +1448,10 @@ void OnboardNodeHandler::mpcveltimerCallback(const ros::TimerEvent & event)
   else
   {
     //Set Desired distance based on recomputed roi position
-      geometry_msgs::Vector3 des_obj_dir;
-      bool result = roi_vel_ctrlr_->setDesiredObjectDir(data.rpydata,des_obj_dir);
-      desired_yaw = atan2(des_obj_dir.y, des_obj_dir.x);
-      initial_state_vel_ = model_control.xs[0].v.norm()*Eigen::Vector3d(des_obj_dir.x, des_obj_dir.y, des_obj_dir.z);
+      //geometry_msgs::Vector3 des_obj_dir;
+      //bool result = roi_vel_ctrlr_->setDesiredObjectDir(data.rpydata,des_obj_dir);
+      //desired_yaw = atan2(des_obj_dir.y, des_obj_dir.x);
+      //initial_state_vel_ = model_control.xs[0].v.norm()*Eigen::Vector3d(des_obj_dir.x, des_obj_dir.y, des_obj_dir.z);
 
       double object_dist = roi_vel_ctrlr_->getObjectDistance();
       if(object_dist <= model_control.getDesiredObjectDistance(2*delay_send_time_)+0.05)//0.05 is buffer
