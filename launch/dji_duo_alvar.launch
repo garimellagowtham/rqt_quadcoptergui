@@ -2,8 +2,8 @@
 <launch>
   <param name="/control/use_alvar" type="bool" value="true"/>
   <include file="$(find rqt_quadcoptergui)/launch/dji_onboard.launch"/>
-  <include file="$(find controllers)/launch/duo_mod.launch"/>
-  <include file="$(find ar_track_alvar)/launch/duo_indiv_no_kinect.launch">
+  <include file="$(find pointgrey_camera_driver)/launch/camera.launch"/>
+  <include file="$(find ar_track_alvar)/launch/pgr_indiv_no_kinect.launch">
     <arg name="output_frame" value="camera"/>
   </include>
 </launch>

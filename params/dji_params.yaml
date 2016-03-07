@@ -13,8 +13,9 @@ control/optimize_online: true
 control/vel_send_time: 3.0
 control/delay_send_time: 0.18
 control/set_offsets_mpc: true #Set Offsets from online optimization
-#control/virtual_obstacle: false #If We are using real or virtual obstacle; Default is virtual
+control/virtual_obstacle: false #If We are using real or virtual obstacle; Default is virtual
 control/obj_dist_max: 3.0 #Max Object distance (Clipping)
+#control/use_alvar: true #Use alvar for tracking object
 
 # Param for skipping segments while visualizing gcop trajectory
 display/skip_pub_segments: 5
