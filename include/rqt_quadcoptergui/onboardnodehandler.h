@@ -12,8 +12,10 @@
 #include <controllers/alvartrackcontroller.h>
 
 //Arm Controller
-//#include <dynamixelsdk/arm_helper.h>
-//#include <controllers/SetptCtrl.h>
+#include <dynamixelsdk/arm_helper.h>
+#include <controllers/SetptCtrl.h>
+#include <controllers/quadvelcontroller.h>
+
 #include <controllers/arm.h>
 #include <controllers/arm_hardware_controller.h>
 
@@ -128,6 +130,7 @@ protected:
     boost::shared_ptr<pluginlib::ClassLoader<parsernode::Parser> > parser_loader;
     boost::shared_ptr<parsernode::Parser> parserinstance;
     boost::shared_ptr<VelController> roi_vel_ctrlr_;
+    boost::shared_ptr<QuadVelController> vel_ctrlr_;///< Controls velocity of quadrotor using rpyt
     QRotorIDModelControl model_control;///< MPC Controller for Quadrotor model
     QRotorSystemID systemid;///< System Identification class from GCOP
     SO3 &so3;
@@ -158,7 +161,7 @@ protected:
     //////////////SYSTEM ID HELPER VARIABLES////////////////////
     vector<QRotorSystemIDMeasurement> systemid_measurements;///< System ID Measurements
     vector<Vector3d> control_measurements;///< Control Measurements [ONLY FOR LOGGING]
-    //QRotorIDState systemid_init_state;///< Initial State for System Identification
+    QRotorIDState vel_ctrlr_state;///< State for velocity controller
     double prev_rp_cmd[2];///< Previous roll and pitch commands for finding control rate
     double prev_ctrl_time;///< Previous control time for roll and pitch commands in System ID
     int meas_filled_;///< Number of measurements filled
