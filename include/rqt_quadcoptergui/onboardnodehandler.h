@@ -233,6 +233,7 @@ protected:
 
 protected:
     // Helper Functions
+    void getCurrentState(QRotorIDState &state);
     void publishGuiState(const rqt_quadcoptergui::GuiStateMessage &state_msg);
 
     inline void setupMemberVariables();

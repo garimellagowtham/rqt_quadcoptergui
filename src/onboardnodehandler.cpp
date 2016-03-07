@@ -207,6 +207,8 @@ void OnboardNodeHandler::setupMemberVariables()
   arm_cam_tf_eig_ = arm_quad_tf_eig.inverse()*cam_quad_tf_eig;
   tolerance_tip_pos_ = 0.05;//5 cm
 
+  goal_position.x = goal_position.y = goal_position.z = 0;
+
   //systemid_measurements.reserve(600);
   //control_measurements.reserve(600);
 }
@@ -1376,16 +1378,20 @@ void OnboardNodeHandler::onlineOptimizeCallback(const ros::TimerEvent &event)
     }
 }
 
-void OnboardNodeHandler::velcmdtimerCallback(const ros::TimerEvent& event)
+void OnboardNodeHandler::getCurrentState(QRotorIDState &state)
 {
-  //Get Latest data:
-  parserinstance->getquaddata(data);
   //Fill current state:
-  vel_ctrlr_state.p<<data.localpos.x, data.localpos.y, data.localpos.z;
-  vel_ctrlr_state.v<<data.linvel.x, data.linvel.y, data.linvel.z;
+  state.p<<data.localpos.x, data.localpos.y, data.localpos.z;
+  state.v<<data.linvel.x, data.linvel.y, data.linvel.z;
   Vector3d rpy(data.rpydata.x, data.rpydata.y, data.rpydata.z);
   so3.q2g(vel_ctrlr_state.R, rpy);
-  vel_ctrlr_state.w<<data.omega.x, data.omega.y, data.omega.z;
+  state.w<<data.omega.x, data.omega.y, data.omega.z;
+}
+
+void OnboardNodeHandler::velcmdtimerCallback(const ros::TimerEvent& event)
+{
+  parserinstance->getquaddata(data);
+  getCurrentState(vel_ctrlr_state);
   //vel_ctrlr_state.u<<rpytcmd.x, rpytcmd.y, rpytcmd.z;
   //Check if roi has not been updated for more than 0.5 sec; Then disable tracking automatically:
   if(enable_tracking)
@@ -1590,6 +1596,7 @@ void OnboardNodeHandler::mpcveltimerCallback(const ros::TimerEvent & event)
 {
   //cout<<"Obstacle Dist: "<<model_control.getDesiredObjectDistance(delay_send_time_);//DEBUG
   //ROS_INFO("Vel sent: %f,%f,%f",desired_vel.x, desired_vel.y, desired_vel.z);
+  parserinstance->getquaddata(data);
 
   if(virtual_obstacle_)
   {
@@ -1598,7 +1605,6 @@ void OnboardNodeHandler::mpcveltimerCallback(const ros::TimerEvent & event)
     if(timediff >= vel_send_time_-delay_send_time_ && !iterate_mpc_thread)//Time for Optimizing
     {
       //Start Iterating MPC:
-      parserinstance->getquaddata(data);
       ROS_INFO("Initial Vel: %f,%f,%f",data.linvel.x, data.linvel.y, data.linvel.z);
       model_control.setInitialVel(data.linvel, data.rpydata);
       ROS_INFO("Starting MPC Thread");
@@ -1609,6 +1615,7 @@ void OnboardNodeHandler::mpcveltimerCallback(const ros::TimerEvent & event)
     {
         mpcveltimer.stop();
         mpc_request_time = event.current_real;
+        mpc_delay_rpy_data = data.rpydata;
         ROS_INFO("Starting mpc timer");
         mpctimer.start();
         /*parserinstance->getquaddata(data);
@@ -1647,7 +1654,7 @@ void OnboardNodeHandler::mpcveltimerCallback(const ros::TimerEvent & event)
       {
         mpcveltimer.stop();
         mpc_request_time = event.current_real;
-        parserinstance->getquaddata(data);
+        //parserinstance->getquaddata(data);
         mpc_delay_rpy_data = data.rpydata;
         ROS_INFO("Starting mpc timer: %f", object_dist);
         mpctimer.start();
@@ -1656,6 +1663,8 @@ void OnboardNodeHandler::mpcveltimerCallback(const ros::TimerEvent & event)
 
   //Set desired vel:
   vel_ctrlr_->setGoal(initial_state_vel_[0], initial_state_vel_[1], initial_state_vel_[2], desired_yaw);
+  //Get current state
+  getCurrentState(vel_ctrlr_state);
   //Find command rpy for desired velocity:
   Vector4d command;
   vel_ctrlr_->set(vel_ctrlr_state, command);
@@ -1672,10 +1681,10 @@ void OnboardNodeHandler::mpctimerCallback(const ros::TimerEvent& event)
   //For first 0.2 seconds send zero controls The quadcopter is responding only after that:
   /*if((event.current_real - mpc_request_time).toSec() < delay_send_time_)
   {
-    /*rpytcmd.x = mpc_delay_rpy_data.x;
+    rpytcmd.x = mpc_delay_rpy_data.x;
     rpytcmd.y = mpc_delay_rpy_data.y;
     rpytcmd.z = mpc_delay_rpy_data.z;
-    */
+
     rpytcmd.x = rpytcmd.y = 0;//Level
     rpytcmd.z = data.rpydata.z;//Set to current yaw
     rpytcmd.w = (9.81/systemid.qrotor_gains(0));//Set to Default Value
