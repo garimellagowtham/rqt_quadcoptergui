@@ -1149,7 +1149,7 @@ void OnboardNodeHandler::rpytimerCallback(const ros::TimerEvent& event)
 
     //if(test_vel)
     //{
-      if((ros::Time::now() - rpytimer_start_time).toSec() < 2.0)///Only for checking if we can switch between Velocity and RPY Modes [REMOVE LATER]
+      /*if((ros::Time::now() - rpytimer_start_time).toSec() < 2.0)///Only for checking if we can switch between Velocity and RPY Modes [REMOVE LATER]
       {
         geometry_msgs::Vector3 desired_vel;
         desired_vel.x = -5; desired_vel.y = desired_vel.z = 0;
@@ -1157,6 +1157,7 @@ void OnboardNodeHandler::rpytimerCallback(const ros::TimerEvent& event)
         parserinstance->cmdvelguided(desired_vel, desired_yaw);
         return;
       }
+      */
     //}
     /*if((event.current_real - rpytimer_start_time).toSec() < 0.2)
     {
