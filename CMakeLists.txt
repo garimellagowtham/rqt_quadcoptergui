@@ -22,6 +22,7 @@ find_package(catkin REQUIRED COMPONENTS
 	gcop_comm
   gcop_ctrl
   message_generation
+  tf_conversions
 )
 
 ## System dependencies are found with CMake's conventions
