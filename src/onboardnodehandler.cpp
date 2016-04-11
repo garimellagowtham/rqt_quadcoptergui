@@ -40,6 +40,7 @@ OnboardNodeHandler::OnboardNodeHandler(ros::NodeHandle &nh_):nh(nh_)
   }
   else
   {
+    ROS_INFO("Using Alvar Tracking");
     roi_vel_ctrlr_.reset(new AlvarTrackController(nh,uav_name));
   }
   roi_vel_ctrlr_->setCameraTransform(CAM_QUAD_transform);
@@ -1149,7 +1150,7 @@ void OnboardNodeHandler::rpytimerCallback(const ros::TimerEvent& event)
 
     //if(test_vel)
     //{
-      if((ros::Time::now() - rpytimer_start_time).toSec() < 2.0)///Only for checking if we can switch between Velocity and RPY Modes [REMOVE LATER]
+      /*if((ros::Time::now() - rpytimer_start_time).toSec() < 2.0)///Only for checking if we can switch between Velocity and RPY Modes [REMOVE LATER]
       {
         geometry_msgs::Vector3 desired_vel;
         desired_vel.x = -5; desired_vel.y = desired_vel.z = 0;
@@ -1157,6 +1158,7 @@ void OnboardNodeHandler::rpytimerCallback(const ros::TimerEvent& event)
         parserinstance->cmdvelguided(desired_vel, desired_yaw);
         return;
       }
+      */
     //}
     /*if((event.current_real - rpytimer_start_time).toSec() < 0.2)
     {
@@ -1240,6 +1242,7 @@ void OnboardNodeHandler::onlineOptimizeCallback(const ros::TimerEvent &event)
     so3.q2g(systemid_init_state.R,systemid_measurements[0].rpy);
     systemid_init_state.u<<0,0,systemid_measurements[0].rpy(2);
     systemid.EstimateParameters(systemid_measurements,systemid_init_state,&stdev_gains, &mean_offsets, &stdev_offsets);//Estimate Parameters
+    systemid.qrotor_gains[0] -= 0.004;
     if(!set_offsets_mpc_)
       model_control.setParametersAndStdev(systemid.qrotor_gains,stdev_gains);//Set Optimization to right gains
     else
@@ -1435,14 +1438,15 @@ void OnboardNodeHandler::mpcveltimerCallback(const ros::TimerEvent & event)
     {
         mpcveltimer.stop();
         mpc_request_time = event.current_real;
-        parserinstance->getquaddata(data);
+        ROS_INFO("Starting mpc timer");
+        mpctimer.start();
+        /*parserinstance->getquaddata(data);
         mpc_delay_rpy_data = data.rpydata;
         model_control.setInitialVel(data.linvel, data.rpydata);
         ROS_INFO("Initial Vel: %f,%f,%f",data.linvel.x, data.linvel.y, data.linvel.z);
         ROS_INFO("Starting MPC Thread");
         iterate_mpc_thread = new boost::thread(boost::bind(&OnboardNodeHandler::iterateMPC,this));//Start Iterating only one run
-        ROS_INFO("Starting mpc timer");
-        mpctimer.start();
+        */
     }
   }
   else
@@ -1460,12 +1464,13 @@ void OnboardNodeHandler::mpcveltimerCallback(const ros::TimerEvent & event)
         mpc_request_time = event.current_real;
         ROS_INFO("Starting mpc timer: %f", object_dist);
         mpctimer.start();
-        parserinstance->getquaddata(data);
+        /*parserinstance->getquaddata(data);
         mpc_delay_rpy_data = data.rpydata;
         model_control.setInitialVel(data.linvel, data.rpydata);
         ROS_INFO("Initial Vel: %f,%f,%f",data.linvel.x, data.linvel.y, data.linvel.z);
         ROS_INFO("Starting MPC Thread");
         iterate_mpc_thread = new boost::thread(boost::bind(&OnboardNodeHandler::iterateMPC,this));//Start Iterating only one run
+        */
       }
   }
 
@@ -1479,10 +1484,12 @@ void OnboardNodeHandler::mpctimerCallback(const ros::TimerEvent& event)
   //For first 0.2 seconds send zero controls The quadcopter is responding only after that:
   if((event.current_real - mpc_request_time).toSec() < delay_send_time_)
   {
-    rpytcmd.x = mpc_delay_rpy_data.x;
+    /*rpytcmd.x = mpc_delay_rpy_data.x;
     rpytcmd.y = mpc_delay_rpy_data.y;
     rpytcmd.z = mpc_delay_rpy_data.z;
-    //rpytcmd.z = data.rpydata.z;//Set to current yaw
+    */
+    rpytcmd.x = rpytcmd.y = 0;//Level
+    rpytcmd.z = data.rpydata.z;//Set to current yaw
     rpytcmd.w = (9.81/systemid.qrotor_gains(0));//Set to Default Value
     parserinstance->cmdrpythrust(rpytcmd, true);
     double object_dist = roi_vel_ctrlr_->getObjectDistance();
@@ -1504,7 +1511,7 @@ void OnboardNodeHandler::mpctimerCallback(const ros::TimerEvent& event)
     return;
   }
   //Check if thread can be joined [Done Optimizing]
-  if(iterate_mpc_thread)
+  /*if(iterate_mpc_thread)
   {
     bool mpc_thread_iterating_copy_;
     mpc_thread_mutex.lock();
@@ -1525,6 +1532,7 @@ void OnboardNodeHandler::mpctimerCallback(const ros::TimerEvent& event)
       return;
     }
   }
+  */
 
   if(!mpc_closed_loop_)
   {
