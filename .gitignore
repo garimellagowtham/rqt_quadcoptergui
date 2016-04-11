@@ -13,3 +13,4 @@ include/rqt_quadcoptergui/quadcoptergui.bak.h_separation
 logfiles.tar.gz
 src/rqt_quadcoptergui/quadcoptergui.cpp.bak_separation
 *.user
+*.swp

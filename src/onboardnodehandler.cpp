@@ -1,4 +1,5 @@
 #include <rqt_quadcoptergui/onboardnodehandler.h>
+#include <tf_conversions/tf_eigen.h>
 #define ARM_ENABLED
 //#define ARM_MOCK_TEST_DEBUG
 
@@ -31,6 +32,16 @@ OnboardNodeHandler::OnboardNodeHandler(ros::NodeHandle &nh_):nh(nh_)
   {
     ROS_ERROR("Failed to create Quadcopter Parser");
     return;
+  }
+
+  ROS_INFO("Creating arm instance");
+  if(!createArmInstance())
+  {
+    ROS_ERROR("Failed to create arm instance");
+  }
+  else
+  {
+    arm_cmd_pub_ = nh_.advertise<geometry_msgs::Vector3>("arm_cmd", 10);
   }
 
   //Create RoiVelController:
@@ -128,7 +139,7 @@ OnboardNodeHandler::~OnboardNodeHandler()
   parserinstance.reset();
   parser_loader.reset();
   //ctrlrinst.reset();
-  //arminst.reset();
+  arm_model.reset();
 /*#ifdef ARM_ENABLED
   arm_hardwareinst.reset();
 #endif
@@ -161,6 +172,12 @@ OnboardNodeHandler::~OnboardNodeHandler()
 }
 
 //////////////////////HELPER Functions///////////////////
+
+inline bool OnboardNodeHandler::createArmInstance()
+{
+  arm_model.reset(new gcop::Arm()); 
+}
+
 void OnboardNodeHandler::publishGuiState(const rqt_quadcoptergui::GuiStateMessage &state_msg)
 {
     gui_state_publisher_.publish(state_msg);
@@ -229,6 +246,18 @@ inline void OnboardNodeHandler::loadParameters()
                              ros::Time(0), CAM_QUAD_transform);
     if(!result)
       cout<<"Cannot find QUAD to CAM Transform"<<endl;
+  }
+  catch (tf::TransformException ex){
+    ROS_ERROR("%s",ex.what());
+    ros::Duration(1.0).sleep();
+  }
+  try{
+    bool result = listener.waitForTransform(uav_name, "arm",
+                                            ros::Time(0), ros::Duration(1.0));
+    listener.lookupTransform(uav_name, "arm",
+                             ros::Time(0), ARM_QUAD_transform);
+    if(!result)
+      cout<<"Cannot find QUAD to ARM Transform"<<endl;
   }
   catch (tf::TransformException ex){
     ROS_ERROR("%s",ex.what());
@@ -1292,6 +1321,47 @@ void OnboardNodeHandler::velcmdtimerCallback(const ros::TimerEvent& event)
   if(parserinstance)
     parserinstance->cmdvelguided(desired_vel, desired_yaw);
 }
+
+void OnboardNodeHandler::armcmdTimerCallback(const ros::TimerEvent& event)
+{
+  if(enable_arm && enable_tracking)
+  {  
+    geometry_msgs::Vector3 object_position_cam_geo;
+    if(!roi_vel_ctrlr_->getObjectPosition(object_position_cam_geo))
+    {
+      ROS_WARN("Unable to get object position!");
+      return;
+    }
+    // transform object position from camera to arm frame
+    Eigen::Vector3d object_position_cam(object_position_cam_geo.x, object_position_cam_geo.y, object_position_cam_geo.z);
+    Eigen::Affine3d cam_quad_tf_eig, arm_quad_tf_eig;
+    tf::transformTFToEigen(CAM_QUAD_transform, cam_quad_tf_eig);
+    tf::transformTFToEigen(ARM_QUAD_transform, arm_quad_tf_eig);
+    Eigen::Vector3d object_position_arm = arm_quad_tf_eig.inverse()*cam_quad_tf_eig*object_position_cam;
+    if(arm_model)
+    {
+      double a[2][3];
+      double p[3] = {object_position_arm(0), 0, object_position_arm(2)};
+      
+      arm_model->Ik(a, p);
+      // Do Fk on arm current joint angles to get tip pos
+      // If arm tip not close enough to obj
+      geometry_msgs::Vector3 arm_cmd;
+      arm_cmd.x=a[0][1];
+      arm_cmd.y=a[0][2];
+      arm_cmd.z=1700; //TODO: make sure this makes gripper open
+      // else
+      //   TODO:  close gripper, retract arm
+
+      arm_cmd_pub_.publish(arm_cmd);
+    }
+    else
+    {
+      ROS_WARN("No arm instance!");
+    }
+  }
+}
+
 
 void OnboardNodeHandler::poscmdtimerCallback(const ros::TimerEvent& event)
 {

@@ -95,6 +95,8 @@ protected:
     ros::Publisher global_vel_pub_;
 
     ros::Publisher marker_pub_;
+   
+    ros::Publisher arm_cmd_pub_;
 
 
     //// TF:
@@ -120,7 +122,7 @@ protected:
     ros::NodeHandle &nh;
 
     ///SubClasses of OnboardNodeHandler:
-    //boost::shared_ptr<gcop::Arm> arminst;
+    boost::shared_ptr<gcop::Arm> arm_model;
     //boost::shared_ptr<dynamixelsdk::DynamixelArm> arm_hardwareinst;
     boost::shared_ptr<pluginlib::ClassLoader<parsernode::Parser> > parser_loader;
     boost::shared_ptr<parsernode::Parser> parserinstance;
@@ -178,18 +180,19 @@ protected:
     bool enable_poscontrol;///< If we enable quadcopter position control
     bool enable_mpccontrol;///< If we enable quadcopter MPC Control
     bool enable_trajectory_tracking;///< If we are tracking a trajectory
+    bool enable_arm;///< If arm should be active
 
 
     //// ROS Messages
     ////sensor_msgs::JointState jointstate_msg;///< For publishing arm state
 
     /////Arm Variables:
-    /*double as[2][3];//Arm inverse kinematics output
+    double as[2][3];//Arm inverse kinematics output
     double armlocaltarget[3];//Arm goal (Where the object is to grab)
     double actual_armstate[2*NOFJOINTS];//The angles obtained from dynamixelsdk
     double cmd_armstate[2*NOFJOINTS];//The angles of the arm in radians in gcop convention and angular velocities
     double tip_position[3];//Tip Position
-    */
+    
 
     //// Parser Variables
     parsernode::common::quaddata data;///< Quadcopter data from parser
@@ -209,6 +212,7 @@ protected:
     string logdir;///< Log Directory Used by Logger
     string parserplugin_name;///< Name of the quadcopter Parser
     tf::StampedTransform CAM_QUAD_transform;///<transform from camera to Quadcopter
+    tf::StampedTransform ARM_QUAD_transform;///<transform from arm to Quadcopter
     bool reconfig_init;///< Initialize reconfig with params
     bool reconfig_update;///< Update reconfig with vel
     double goal_tolerance;///< Tolerance on when to stop closed loop MPC
@@ -230,7 +234,7 @@ protected:
 
     void iterateMPC();
 
-    //inline bool createArmInstance();
+    inline bool createArmInstance();
 
     inline bool createParserInstance();
 
@@ -299,6 +303,8 @@ protected:
     void onlineOptimizeCallback(const ros::TimerEvent&);
 
     void trajectorytimerCallback(const ros::TimerEvent&);
+  
+    void armcmdTimerCallback(const ros::TimerEvent& event);
 
     //void closeAfterGrabbing(const ros::TimerEvent &); //Timer Callback for Closing after grabbing an object
 
