@@ -182,6 +182,19 @@
     <string>track_trajectory</string>
    </property>
   </widget>
+  <widget class="QCheckBox" name="enable_arm_checkbox">
+   <property name="geometry">
+    <rect>
+     <x>120</x>
+     <y>100</y>
+     <width>111</width>
+     <height>21</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>enable_arm</string>
+   </property>
+  </widget>
  </widget>
  <resources/>
  <connections/>
