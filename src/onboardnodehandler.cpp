@@ -107,6 +107,8 @@ OnboardNodeHandler::OnboardNodeHandler(ros::NodeHandle &nh_):nh(nh_)
   //Timer for relaxing gripper
   //timer_relaxgrip = nh_.createTimer(ros::Duration(4), &OnboardNodeHandler::oneshotGrab, this, true);//One shot timer
   //timer_relaxgrip.stop();
+  armcmdtimer = nh_.createTimer(ros::Duration(0.02), &OnboardNodeHandler::armcmdTimerCallback,this);
+  armcmdtimer.stop();
   //Timer for commanding quadcopter
   velcmdtimer = nh_.createTimer(ros::Duration(0.02), &OnboardNodeHandler::velcmdtimerCallback,this);//50Hz is the update rate of Quadcopter cmd
   velcmdtimer.stop();
