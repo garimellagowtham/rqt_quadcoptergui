@@ -9,3 +9,4 @@ uint8 rpyt_control_status = 3             # Enable Rpyt Control of quad
 uint8 pos_control_status = 4             # Enable Pos Control of quad 
 uint8 mpc_control_status = 5             # Enable MPC Control of quad 
 uint8 trajectory_tracking_status = 6     # Enable MPC Control of quad 
+uint8 enable_arm_status = 7     # Enable arm
