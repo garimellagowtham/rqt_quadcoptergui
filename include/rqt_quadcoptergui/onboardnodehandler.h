@@ -103,6 +103,7 @@ protected:
     boost::shared_ptr<tf::TransformBroadcaster> broadcaster;//Transform Broadcaster
 
     ////Timers
+    ros::Timer armcmdtimer;
     ros::Timer mpcveltimer;//REFACTOR #TODO
     ros::Timer velcmdtimer;//REFACTOR #TODO
     ros::Timer poscmdtimer;//REFACTOR #TODO
