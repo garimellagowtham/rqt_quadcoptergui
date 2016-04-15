@@ -259,6 +259,7 @@ protected:
     inline void stateTransitionMPCControl(bool);
     inline void stateTransitionTrajectoryTracking(bool);
     inline void stateTransitionRpytControl(bool);
+    inline void stateTransitionEnableArm(bool);
     //inline void stateTransitionJoyControl(bool);
     //inline void stateTransitionIntegrator(bool);
 

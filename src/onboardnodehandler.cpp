@@ -760,6 +760,35 @@ PUBLISH_TRAJECTORY_TRACKING_STATE:
   gui_state_publisher_.publish(state_message);
 }
 
+inline void OnboardNodeHandler::stateTransitionEnableArm(bool state)
+{
+  rqt_quadcoptergui::GuiStateMessage state_message;
+  state_message.commponent_id = state_message.enable_arm_status;
+  state_message.status = enable_arm;
+
+  if(!arm_model)
+  {
+    ROS_WARN("Arm model not loaded. Cannot enable arm");
+    gui_state_publisher_.publish(state_message);
+    return;
+  }
+
+  if(state)
+  {
+    armcmdtimer.start();
+    enable_arm = true;
+  }
+  else
+  {
+    enable_arm = false;
+    //Stop Trajectory tracking timer:
+    armcmdtimer.stop();
+  }
+  //Publish Change of State:
+  state_message.status = enable_arm;
+  gui_state_publisher_.publish(state_message);
+}
+
 inline void OnboardNodeHandler::stateTransitionRpytControl(bool state)
 {
   if(!parserinstance)
@@ -931,6 +960,9 @@ void OnboardNodeHandler::receiveGuiCommands(const rqt_quadcoptergui::GuiCommandM
     break;
   case command_msg.enable_trajectory_tracking:
     stateTransitionTrajectoryTracking(command_msg.command);
+    break;
+  case command_msg.enable_arm:
+    stateTransitionEnableArm(command_msg.command);
     break;
   case command_msg.arm_quad ://6
     ROS_INFO("Arming Quad");
@@ -1326,6 +1358,7 @@ void OnboardNodeHandler::velcmdtimerCallback(const ros::TimerEvent& event)
 
 void OnboardNodeHandler::armcmdTimerCallback(const ros::TimerEvent& event)
 {
+  ROS_INFO("arm callback");
   if(enable_arm && enable_tracking)
   {  
     geometry_msgs::Vector3 object_position_cam_geo;

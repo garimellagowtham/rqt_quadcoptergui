@@ -156,6 +156,7 @@ protected slots:
   virtual void stateChangePosControl(int);
   virtual void stateChangeMPCControl(int);
   virtual void stateChangeTrajectoryTracking(int);
+  virtual void stateChangeEnableArm(int);
 };
 
 }
