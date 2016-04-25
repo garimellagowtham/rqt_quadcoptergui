@@ -41,7 +41,9 @@ OnboardNodeHandler::OnboardNodeHandler(ros::NodeHandle &nh_):nh(nh_)
   }
   else
   {
-    arm_cmd_pub_ = nh_.advertise<geometry_msgs::Vector3>("arm_cmd", 10);
+    arm_cmd_pub_ = nh_.advertise<geometry_msgs::Vector3>("joint_cmd", 10);
+    arm_gripper_pub_ = nh_.advertise<std_msgs::UInt32>("grip_cmd", 10);
+    arm_angles_sub_ = nh_.subscribe("joint_angles",1, &OnboardNodeHandler::receiveArmAngles, this);
   }
 
   //Create RoiVelController:
@@ -198,6 +200,16 @@ void OnboardNodeHandler::setupMemberVariables()
   initial_state_vel_.setZero();
   meas_filled_ = 0;
   mpc_delay_rpy_data.x = mpc_delay_rpy_data.y = mpc_delay_rpy_data.z =0;
+
+  //Setup arm variables:
+  Eigen::Affine3d cam_quad_tf_eig, arm_quad_tf_eig;
+  tf::transformTFToEigen(CAM_QUAD_transform, cam_quad_tf_eig);
+  tf::transformTFToEigen(ARM_QUAD_transform, arm_quad_tf_eig);
+  arm_cam_tf_eig_ = arm_quad_tf_eig.inverse()*cam_quad_tf_eig;
+  tolerance_tip_pos_ = 0.05;//5 cm
+
+  arm_feedback_angles_.setZero();
+
   //systemid_measurements.reserve(600);
   //control_measurements.reserve(600);
 }
@@ -766,6 +778,8 @@ inline void OnboardNodeHandler::stateTransitionEnableArm(bool state)
   state_message.commponent_id = state_message.enable_arm_status;
   state_message.status = enable_arm;
 
+  //TODO If vel tracking is enabled, disable it.
+
   if(!arm_model)
   {
     ROS_WARN("Arm model not loaded. Cannot enable arm");
@@ -999,6 +1013,11 @@ void OnboardNodeHandler::receiveObstacleDistance(const sensor_msgs::LaserScan &s
     //ROS_INFO("Received Obstacle dist: %f",obs_dist);//DEBUG
     tf::Transform obs_transform(tf::createQuaternionFromRPY(0,0,0), tf::Vector3(obs_dist,0,0));
     broadcaster->sendTransform(tf::StampedTransform(obs_transform, ros::Time::now(), uav_name, "obs"));
+}
+
+void OnboardNodeHandler::receiveArmAngles(const geometry_msgs::Vector3 &angles)
+{
+  arm_feedback_angles_ = Eigen::Vector3d(angles.x, angles.y, angles.z);
 }
 
 void OnboardNodeHandler::gcoptrajectoryCallback(const gcop_comm::CtrlTraj &traj_msg)
@@ -1369,26 +1388,37 @@ void OnboardNodeHandler::armcmdTimerCallback(const ros::TimerEvent& event)
     }
     // transform object position from camera to arm frame
     Eigen::Vector3d object_position_cam(object_position_cam_geo.x, object_position_cam_geo.y, object_position_cam_geo.z);
-    Eigen::Affine3d cam_quad_tf_eig, arm_quad_tf_eig;
-    tf::transformTFToEigen(CAM_QUAD_transform, cam_quad_tf_eig);
-    tf::transformTFToEigen(ARM_QUAD_transform, arm_quad_tf_eig);
-    Eigen::Vector3d object_position_arm = arm_quad_tf_eig.inverse()*cam_quad_tf_eig*object_position_cam;
+    Eigen::Vector3d object_position_arm = arm_cam_tf_eig_*object_position_cam;
     if(arm_model)
     {
       double a[2][3];
       double p[3] = {object_position_arm(0), 0, object_position_arm(2)};
       
-      arm_model->Ik(a, p);
-      // Do Fk on arm current joint angles to get tip pos
-      // If arm tip not close enough to obj
-      geometry_msgs::Vector3 arm_cmd;
-      arm_cmd.x=a[0][1];
-      arm_cmd.y=a[0][2];
-      arm_cmd.z=1700; //TODO: make sure this makes gripper open
-      // else
-      //   TODO:  close gripper, retract arm
-
-      arm_cmd_pub_.publish(arm_cmd);
+      double ikres = arm_model->Ik(a, p);
+      if(ikres > 0)//The object is within reach
+      {
+        geometry_msgs::Vector3 arm_cmd;
+        arm_cmd.x=a[0][1];
+        arm_cmd.y=a[0][2];
+        arm_cmd.z=1700; //TODO: make sure this makes gripper open
+        arm_cmd_pub_.publish(arm_cmd);
+      }
+      //Check if the tip is close to the object:
+      double angles_arm[3] = {0, arm_feedback_angles_[0], arm_feedback_angles_[1]};
+      double tip_pos[3];
+      arm_model->Fk(tip_pos, angles_arm);
+      double error_tip_pos = pow((tip_pos[0] - p[0]),2) + pow((tip_pos[2] - p[2]),2);
+      if(error_tip_pos < tolerance_tip_pos_)
+      {
+        ROS_INFO("Closing Gripper");
+        std_msgs::UInt32 gripper_cmd;
+        gripper_cmd.data = 1200;
+        arm_gripper_pub_.publish(gripper_cmd);
+        //Timeout for few secs and 
+        //   TODO:  retract arm
+        //   TODO: Disable Arm Tracking
+        //   TODO: Add Logging of tip position and commanded tip position and error
+      }
     }
     else
     {

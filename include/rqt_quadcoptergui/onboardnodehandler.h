@@ -12,8 +12,8 @@
 #include <controllers/alvartrackcontroller.h>
 
 //Arm Controller
-#include <dynamixelsdk/arm_helper.h>
-#include <controllers/SetptCtrl.h>
+//#include <dynamixelsdk/arm_helper.h>
+//#include <controllers/SetptCtrl.h>
 #include <controllers/arm.h>
 
 //Dynamic Reconfigure
@@ -29,6 +29,7 @@
 
 //Ros Messages:
 #include <std_msgs/String.h>
+#include <std_msgs/UInt32.h>
 #include <sensor_msgs/Joy.h>
 #include <sensor_msgs/JointState.h>
 #include <sensor_msgs/RegionOfInterest.h>
@@ -82,6 +83,8 @@ protected:
 
     ros::Subscriber guidance_obs_dist_;///< Get obstacle distance from Guidance
 
+    ros::Subscriber arm_angles_sub_;
+
     /////Publishers
     ros::Publisher gui_state_publisher_;
 
@@ -97,6 +100,7 @@ protected:
     ros::Publisher marker_pub_;
    
     ros::Publisher arm_cmd_pub_;
+    ros::Publisher arm_gripper_pub_;
 
 
     //// TF:
@@ -188,11 +192,14 @@ protected:
     ////sensor_msgs::JointState jointstate_msg;///< For publishing arm state
 
     /////Arm Variables:
-    double as[2][3];//Arm inverse kinematics output
-    double armlocaltarget[3];//Arm goal (Where the object is to grab)
-    double actual_armstate[2*NOFJOINTS];//The angles obtained from dynamixelsdk
-    double cmd_armstate[2*NOFJOINTS];//The angles of the arm in radians in gcop convention and angular velocities
-    double tip_position[3];//Tip Position
+    Eigen::Vector3d arm_feedback_angles_;///< Angles obtained as feedback from arm
+    Eigen::Affine3d arm_cam_tf_eig_;///< Transform from arm base to camera
+    double tolerance_tip_pos_;
+    //double as[2][3];//Arm inverse kinematics output
+    //double armlocaltarget[3];//Arm goal (Where the object is to grab)
+    //double actual_armstate[2*NOFJOINTS];//The angles obtained from dynamixelsdk
+    //double cmd_armstate[2*NOFJOINTS];//The angles of the arm in radians in gcop convention and angular velocities
+    //double tip_position[3];//Tip Position
     
 
     //// Parser Variables
@@ -281,6 +288,8 @@ protected:
     void receiveGoalPose(const geometry_msgs::PoseStamped &goal_pose);
 
     void receiveObstacleDistance(const sensor_msgs::LaserScan &scan);
+
+    void receiveArmAngles(const geometry_msgs::Vector3 &angles);
 
     //void joyCallback(const sensor_msgs::Joy::ConstPtr &joymsg);
 
