@@ -43,6 +43,7 @@ OnboardNodeHandler::OnboardNodeHandler(ros::NodeHandle &nh_):nh(nh_)
   {
     arm_cmd_pub_ = nh_.advertise<geometry_msgs::Vector3>("joint_cmd", 10);
     arm_gripper_pub_ = nh_.advertise<std_msgs::UInt32>("grip_cmd", 10);
+    arm_fold_pub_ = nh_.advertise<std_msgs::Empty>("fold_cmd", 10);
     arm_angles_sub_ = nh_.subscribe("joint_angles",1, &OnboardNodeHandler::receiveArmAngles, this);
   }
 
@@ -1415,8 +1416,13 @@ void OnboardNodeHandler::armcmdTimerCallback(const ros::TimerEvent& event)
         gripper_cmd.data = 1200;
         arm_gripper_pub_.publish(gripper_cmd);
         //Timeout for few secs and 
+        ros::Duration(1.0).sleep();//sleep for a second
         //   TODO:  retract arm
+        std_msgs::Empty fold_cmd;
+        arm_fold_pub_.publish(fold_cmd);
         //   TODO: Disable Arm Tracking
+        armcmdtimer.stop();//Stop this timer.
+        stateTransitionEnableArm(false);
         //   TODO: Add Logging of tip position and commanded tip position and error
       }
     }

@@ -30,6 +30,7 @@
 //Ros Messages:
 #include <std_msgs/String.h>
 #include <std_msgs/UInt32.h>
+#include <std_msgs/Empty.h>
 #include <sensor_msgs/Joy.h>
 #include <sensor_msgs/JointState.h>
 #include <sensor_msgs/RegionOfInterest.h>
@@ -101,6 +102,7 @@ protected:
    
     ros::Publisher arm_cmd_pub_;
     ros::Publisher arm_gripper_pub_;
+    ros::Publisher arm_fold_pub_;
 
 
     //// TF:
