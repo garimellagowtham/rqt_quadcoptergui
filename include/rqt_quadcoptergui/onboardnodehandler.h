@@ -15,6 +15,7 @@
 //#include <dynamixelsdk/arm_helper.h>
 //#include <controllers/SetptCtrl.h>
 #include <controllers/arm.h>
+#include <controllers/arm_hardware_controller.h>
 
 //Dynamic Reconfigure
 #include <rqt_quadcoptergui/QuadcopterInterfaceConfig.h>
@@ -29,8 +30,6 @@
 
 //Ros Messages:
 #include <std_msgs/String.h>
-#include <std_msgs/UInt32.h>
-#include <std_msgs/Empty.h>
 #include <sensor_msgs/Joy.h>
 #include <sensor_msgs/JointState.h>
 #include <sensor_msgs/RegionOfInterest.h>
@@ -84,8 +83,6 @@ protected:
 
     ros::Subscriber guidance_obs_dist_;///< Get obstacle distance from Guidance
 
-    ros::Subscriber arm_angles_sub_;
-
     /////Publishers
     ros::Publisher gui_state_publisher_;
 
@@ -100,10 +97,6 @@ protected:
 
     ros::Publisher marker_pub_;
    
-    ros::Publisher arm_cmd_pub_;
-    ros::Publisher arm_gripper_pub_;
-    ros::Publisher arm_fold_pub_;
-
 
     //// TF:
     boost::shared_ptr<tf::TransformBroadcaster> broadcaster;//Transform Broadcaster
@@ -130,6 +123,7 @@ protected:
 
     ///SubClasses of OnboardNodeHandler:
     boost::shared_ptr<gcop::Arm> arm_model;
+    boost::shared_ptr<ArmHardwareController>  arm_hardware_controller_;
     //boost::shared_ptr<dynamixelsdk::DynamixelArm> arm_hardwareinst;
     boost::shared_ptr<pluginlib::ClassLoader<parsernode::Parser> > parser_loader;
     boost::shared_ptr<parsernode::Parser> parserinstance;
@@ -194,7 +188,6 @@ protected:
     ////sensor_msgs::JointState jointstate_msg;///< For publishing arm state
 
     /////Arm Variables:
-    Eigen::Vector3d arm_feedback_angles_;///< Angles obtained as feedback from arm
     Eigen::Affine3d arm_cam_tf_eig_;///< Transform from arm base to camera
     double tolerance_tip_pos_;
     //double as[2][3];//Arm inverse kinematics output
@@ -233,6 +226,7 @@ protected:
     double delay_send_time_;///< Send dummy rpy for this time
     bool  virtual_obstacle_;///< If using virtual obstacle or not
     bool use_alvar_;///< Use alvar tracking instead of roi
+    double arm_default_speed_;///< Default speed of the arm
 
 protected:
     // Helper Functions
@@ -244,7 +238,7 @@ protected:
 
     void iterateMPC();
 
-    inline bool createArmInstance();
+    inline void createArmInstance();
 
     inline bool createParserInstance();
 
@@ -290,8 +284,6 @@ protected:
     void receiveGoalPose(const geometry_msgs::PoseStamped &goal_pose);
 
     void receiveObstacleDistance(const sensor_msgs::LaserScan &scan);
-
-    void receiveArmAngles(const geometry_msgs::Vector3 &angles);
 
     //void joyCallback(const sensor_msgs::Joy::ConstPtr &joymsg);
 

@@ -22,7 +22,7 @@
     <param name="enc_key" type="string" value="8667ff1ec3a163d6ef14a7bf6a9fae66210855f309c1876788f61d2195dc58d7"/>
   </node>
   <node pkg="tf2_ros" type="static_transform_publisher" name="dji_to_cam" args="0.13 0 0 -1.5707 0 -1.5707 dji camera"/>
-  <node pkg="tf2_ros" type="static_transform_publisher" name="dji_to_arm" args="0.15 0 -.085 0 0 0 dji arm"/>
+  <node pkg="tf2_ros" type="static_transform_publisher" name="dji_to_arm" args="0.15 0 -.085 0 1.5707 0 dji arm"/>
   <!--<param name="/duo3d_camera/disparity/min_disparity" type="int" value="-50"/>
   <param name="/duo_node/exposure" type="int" value="30"/>-->
   <!--<include file="$(find opencv3_tracking)/launch/duo_object_tracker.launch"/>-->

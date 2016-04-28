@@ -19,3 +19,6 @@ control/obj_dist_max: 3.0 #Max Object distance (Clipping)
 
 # Param for skipping segments while visualizing gcop trajectory
 display/skip_pub_segments: 5
+
+# Arm params
+arm/joint_speed: 0.6 #Speed of joints 0.6 rad/s roughly 6 rpm

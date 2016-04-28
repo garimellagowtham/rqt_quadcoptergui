@@ -35,17 +35,7 @@ OnboardNodeHandler::OnboardNodeHandler(ros::NodeHandle &nh_):nh(nh_)
   }
 
   ROS_INFO("Creating arm instance");
-  if(!createArmInstance())
-  {
-    ROS_ERROR("Failed to create arm instance");
-  }
-  else
-  {
-    arm_cmd_pub_ = nh_.advertise<geometry_msgs::Vector3>("joint_cmd", 10);
-    arm_gripper_pub_ = nh_.advertise<std_msgs::UInt32>("grip_cmd", 10);
-    arm_fold_pub_ = nh_.advertise<std_msgs::Empty>("fold_cmd", 10);
-    arm_angles_sub_ = nh_.subscribe("joint_angles",1, &OnboardNodeHandler::receiveArmAngles, this);
-  }
+  createArmInstance();
 
   //Create RoiVelController:
   if(!use_alvar_)
@@ -145,6 +135,8 @@ OnboardNodeHandler::~OnboardNodeHandler()
   parser_loader.reset();
   //ctrlrinst.reset();
   arm_model.reset();
+  arm_hardware_controller_->powerOff();//Power off arm before exiting
+  arm_hardware_controller_.reset();
 /*#ifdef ARM_ENABLED
   arm_hardwareinst.reset();
 #endif
@@ -178,9 +170,12 @@ OnboardNodeHandler::~OnboardNodeHandler()
 
 //////////////////////HELPER Functions///////////////////
 
-inline bool OnboardNodeHandler::createArmInstance()
+inline void OnboardNodeHandler::createArmInstance()
 {
   arm_model.reset(new gcop::Arm()); 
+  arm_hardware_controller_.reset(new ArmHardwareController(nh));
+  arm_hardware_controller_->foldArm();
+  arm_hardware_controller_->setJointSpeeds(arm_default_speed_, arm_default_speed_, arm_default_speed_);
 }
 
 void OnboardNodeHandler::publishGuiState(const rqt_quadcoptergui::GuiStateMessage &state_msg)
@@ -208,8 +203,6 @@ void OnboardNodeHandler::setupMemberVariables()
   tf::transformTFToEigen(ARM_QUAD_transform, arm_quad_tf_eig);
   arm_cam_tf_eig_ = arm_quad_tf_eig.inverse()*cam_quad_tf_eig;
   tolerance_tip_pos_ = 0.05;//5 cm
-
-  arm_feedback_angles_.setZero();
 
   //systemid_measurements.reserve(600);
   //control_measurements.reserve(600);
@@ -242,6 +235,7 @@ inline void OnboardNodeHandler::loadParameters()
   nh.param<bool>("/control/virtual_obstacle", virtual_obstacle_,true);
   nh.param<double>("/control/offsets_timeperiod", systemid.offsets_timeperiod,0.5);
   nh.param<bool>("/control/use_alvar", use_alvar_,false);
+  nh.param<double>("/arm/joint_speed",arm_default_speed_,0.6);//Default 0.6 rad/s
   {
     std::string systemid_filename;
     nh.getParam("/control/systemid_params",systemid_filename);
@@ -781,7 +775,7 @@ inline void OnboardNodeHandler::stateTransitionEnableArm(bool state)
 
   //TODO If vel tracking is enabled, disable it.
 
-  if(!arm_model)
+  if(!arm_model || !arm_hardware_controller_)
   {
     ROS_WARN("Arm model not loaded. Cannot enable arm");
     gui_state_publisher_.publish(state_message);
@@ -1016,11 +1010,6 @@ void OnboardNodeHandler::receiveObstacleDistance(const sensor_msgs::LaserScan &s
     broadcaster->sendTransform(tf::StampedTransform(obs_transform, ros::Time::now(), uav_name, "obs"));
 }
 
-void OnboardNodeHandler::receiveArmAngles(const geometry_msgs::Vector3 &angles)
-{
-  arm_feedback_angles_ = Eigen::Vector3d(angles.x, angles.y, angles.z);
-}
-
 void OnboardNodeHandler::gcoptrajectoryCallback(const gcop_comm::CtrlTraj &traj_msg)
 {
     if(!enable_trajectory_tracking)//If follow trajectory has not been enabled do not receive a trajectory
@@ -1157,6 +1146,18 @@ void OnboardNodeHandler::paramreqCallback(rqt_quadcoptergui::QuadcopterInterface
     config.record_home = false;
   }
   delay_send_time_ = config.delay_send_time;
+  if(config.power_off_arm)
+  {
+      config.power_off_arm = false;
+      if(arm_hardware_controller_)
+          arm_hardware_controller_->powerOff();
+  }
+  if(config.fold_arm)
+  {
+      config.fold_arm = false;
+      if(arm_hardware_controller_)
+          arm_hardware_controller_->foldArm();
+  }
 }
 
 void OnboardNodeHandler::quadstatetimerCallback(const ros::TimerEvent &event)
@@ -1398,28 +1399,21 @@ void OnboardNodeHandler::armcmdTimerCallback(const ros::TimerEvent& event)
       double ikres = arm_model->Ik(a, p);
       if(ikres > 0)//The object is within reach
       {
-        geometry_msgs::Vector3 arm_cmd;
-        arm_cmd.x=a[0][1];
-        arm_cmd.y=a[0][2];
-        arm_cmd.z=1700; //TODO: make sure this makes gripper open
-        arm_cmd_pub_.publish(arm_cmd);
+        arm_hardware_controller_->setJointAngles(a[0][1],a[0][2],1700);
       }
       //Check if the tip is close to the object:
-      double angles_arm[3] = {0, arm_feedback_angles_[0], arm_feedback_angles_[1]};
+      double angles_arm[3] = {0, (*arm_hardware_controller_)[0], (*arm_hardware_controller_)[1]};
       double tip_pos[3];
       arm_model->Fk(tip_pos, angles_arm);
       double error_tip_pos = pow((tip_pos[0] - p[0]),2) + pow((tip_pos[2] - p[2]),2);
       if(error_tip_pos < tolerance_tip_pos_)
       {
         ROS_INFO("Closing Gripper");
-        std_msgs::UInt32 gripper_cmd;
-        gripper_cmd.data = 1200;
-        arm_gripper_pub_.publish(gripper_cmd);
+        arm_hardware_controller_->setGripperAngle(1200);
         //Timeout for few secs and 
         ros::Duration(1.0).sleep();//sleep for a second
-        //   TODO:  retract arm
-        std_msgs::Empty fold_cmd;
-        arm_fold_pub_.publish(fold_cmd);
+        //Retract Arm
+        arm_hardware_controller_->foldArm();
         //   TODO: Disable Arm Tracking
         armcmdtimer.stop();//Stop this timer.
         stateTransitionEnableArm(false);
