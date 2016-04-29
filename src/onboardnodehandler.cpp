@@ -134,12 +134,15 @@ OnboardNodeHandler::~OnboardNodeHandler()
   arm_hardwareinst->powermotors(false);
 #endif
 */
+  printf("I am called");
+  arm_model.reset();
+  ROS_INFO("Powering off arm");
+  arm_hardware_controller_->powerOff();//Power off arm before exiting
+  arm_hardware_controller_.reset();
+
   parserinstance.reset();
   parser_loader.reset();
   //ctrlrinst.reset();
-  arm_model.reset();
-  arm_hardware_controller_->powerOff();//Power off arm before exiting
-  arm_hardware_controller_.reset();
 /*#ifdef ARM_ENABLED
   arm_hardwareinst.reset();
 #endif
@@ -206,8 +209,6 @@ void OnboardNodeHandler::setupMemberVariables()
   tf::transformTFToEigen(ARM_QUAD_transform, arm_quad_tf_eig);
   arm_cam_tf_eig_ = arm_quad_tf_eig.inverse()*cam_quad_tf_eig;
   tolerance_tip_pos_ = 0.05;//5 cm
-
-  goal_position.x = goal_position.y = goal_position.z = 0;
 
   //systemid_measurements.reserve(600);
   //control_measurements.reserve(600);
@@ -702,9 +703,9 @@ inline void OnboardNodeHandler::stateTransitionMPCControl(bool state)
           initial_state_vel_ = yawM*x0.v;
           //Publish Trajectory
           geometry_msgs::Vector3 localpos = data.localpos;
-          localpos.x = localpos.x + initial_state_vel_[0]*(vel_send_time_+delay_send_time_);
-          localpos.y = localpos.y + initial_state_vel_[1]*(vel_send_time_+delay_send_time_);
-          localpos.z = localpos.z + initial_state_vel_[2]*(vel_send_time_+delay_send_time_);
+          localpos.x = localpos.x + initial_state_vel_[0]*(vel_send_time_+2*delay_send_time_);
+          localpos.y = localpos.y + initial_state_vel_[1]*(vel_send_time_+2*delay_send_time_);
+          localpos.z = localpos.z + initial_state_vel_[2]*(vel_send_time_+2*delay_send_time_);
           //Publish position wrt to current data
           model_control.publishTrajectory(localpos, data.rpydata);
         }
@@ -1604,7 +1605,7 @@ void OnboardNodeHandler::mpcveltimerCallback(const ros::TimerEvent & event)
   {
     double timediff = (event.current_real - mpc_request_time).toSec();
     
-    if(timediff >= vel_send_time_-delay_send_time_ && !iterate_mpc_thread)//Time for Optimizing
+    /*if(timediff >= vel_send_time_-0.3 && !iterate_mpc_thread)//Time for Optimizing
     {
       //Start Iterating MPC:
       ROS_INFO("Initial Vel: %f,%f,%f",data.linvel.x, data.linvel.y, data.linvel.z);
@@ -1612,7 +1613,7 @@ void OnboardNodeHandler::mpcveltimerCallback(const ros::TimerEvent & event)
       ROS_INFO("Starting MPC Thread");
       iterate_mpc_thread = new boost::thread(boost::bind(&OnboardNodeHandler::iterateMPC,this));//Start Iterating 0.3 seconds before rpyt mode is started
     }
-    else 
+    else */
     if(timediff >= vel_send_time_)//First 3 seconds
     {
         mpcveltimer.stop();
@@ -1638,7 +1639,7 @@ void OnboardNodeHandler::mpcveltimerCallback(const ros::TimerEvent & event)
       //initial_state_vel_ = model_control.xs[0].v.norm()*Eigen::Vector3d(des_obj_dir.x, des_obj_dir.y, des_obj_dir.z);
 
       double object_dist = roi_vel_ctrlr_->getObjectDistance();
-      if(object_dist <= model_control.getDesiredObjectDistance(2*delay_send_time_)+0.05 && !iterate_mpc_thread)//0.05 is buffer
+      if(object_dist <= model_control.getDesiredObjectDistance(2*delay_send_time_)+0.05)//0.05 is buffer
       {
         mpcveltimer.stop();
         mpc_request_time = event.current_real;
@@ -1651,15 +1652,6 @@ void OnboardNodeHandler::mpcveltimerCallback(const ros::TimerEvent & event)
         ROS_INFO("Starting MPC Thread");
         iterate_mpc_thread = new boost::thread(boost::bind(&OnboardNodeHandler::iterateMPC,this));//Start Iterating only one run
         */
-      }
-      else if(object_dist <= model_control.getDesiredObjectDistance(delay_send_time_)+0.05)//0.05 is buffer
-      {
-        mpcveltimer.stop();
-        mpc_request_time = event.current_real;
-        //parserinstance->getquaddata(data);
-        mpc_delay_rpy_data = data.rpydata;
-        ROS_INFO("Starting mpc timer: %f", object_dist);
-        mpctimer.start();
       }
   }
 
@@ -1681,12 +1673,12 @@ void OnboardNodeHandler::mpcveltimerCallback(const ros::TimerEvent & event)
 void OnboardNodeHandler::mpctimerCallback(const ros::TimerEvent& event)
 {
   //For first 0.2 seconds send zero controls The quadcopter is responding only after that:
-  /*if((event.current_real - mpc_request_time).toSec() < delay_send_time_)
+  if((event.current_real - mpc_request_time).toSec() < delay_send_time_)
   {
-    rpytcmd.x = mpc_delay_rpy_data.x;
+    /*rpytcmd.x = mpc_delay_rpy_data.x;
     rpytcmd.y = mpc_delay_rpy_data.y;
     rpytcmd.z = mpc_delay_rpy_data.z;
-
+    */
     rpytcmd.x = rpytcmd.y = 0;//Level
     rpytcmd.z = data.rpydata.z;//Set to current yaw
     rpytcmd.w = (9.81/systemid.qrotor_gains(0));//Set to Default Value
@@ -1709,7 +1701,6 @@ void OnboardNodeHandler::mpctimerCallback(const ros::TimerEvent& event)
     }
     return;
   }
-  */
   //Check if thread can be joined [Done Optimizing]
   /*if(iterate_mpc_thread)
   {
@@ -1759,7 +1750,7 @@ void OnboardNodeHandler::mpctimerCallback(const ros::TimerEvent& event)
       {
         //Record Data
         QRotorSystemIDMeasurement measurement;
-        measurement.t = (ros::Time::now() - mpc_request_time).toSec()-(delay_send_time_+0.02);//For we are using up 0.16 seconds for sending virtual controls to wakeup quadrotor
+        measurement.t = (ros::Time::now() - mpc_request_time).toSec()-(2*delay_send_time_+0.02);//For we are using up 0.16 seconds for sending virtual controls to wakeup quadrotor
 
         measurement.position<<data.localpos.x, data.localpos.y, data.localpos.z;
         measurement.rpy<<data.rpydata.x, data.rpydata.y, data.rpydata.z;
@@ -1769,7 +1760,7 @@ void OnboardNodeHandler::mpctimerCallback(const ros::TimerEvent& event)
         control_measurements.push_back(Vector3d(rpytcmd.x, rpytcmd.y, rpytcmd.z));
       }
     }
-    else if((event.current_real - mpc_request_time).toSec() < model_control.tf + delay_send_time_+0.04)
+    else if((event.current_real - mpc_request_time).toSec() < model_control.tf + 2*delay_send_time_+0.04)
     {
       //ROS_INFO("Sending constant rpy: %f,%f,%f, %f",rpytcmd.x, rpytcmd.y, rpytcmd.z, rpytcmd.w);
       parserinstance->cmdrpythrust(rpytcmd, true);//Send Last Command
@@ -1777,7 +1768,7 @@ void OnboardNodeHandler::mpctimerCallback(const ros::TimerEvent& event)
       {
         //Record Data
         QRotorSystemIDMeasurement measurement;
-        measurement.t = (ros::Time::now() - mpc_request_time).toSec()-(delay_send_time_+0.02);
+        measurement.t = (ros::Time::now() - mpc_request_time).toSec()-(2*delay_send_time_+0.02);
 
         measurement.position<<data.localpos.x, data.localpos.y, data.localpos.z;
         measurement.rpy<<data.rpydata.x, data.rpydata.y, data.rpydata.z;

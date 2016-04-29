@@ -69,7 +69,7 @@ class OnboardNodeHandler
 public:
     OnboardNodeHandler(ros::NodeHandle &nh_);
 
-    virtual ~OnboardNodeHandler();
+    ~OnboardNodeHandler();
 
 protected:
     ////Subscribers
