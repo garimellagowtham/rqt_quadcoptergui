@@ -10,10 +10,10 @@ tracking/yaw_gain: 0.01
 
 ### Control Params:
 control/optimize_online: true
-control/vel_send_time: 3.0
+control/vel_send_time: 6.0
 control/delay_send_time: 0.18
 control/set_offsets_mpc: true #Set Offsets from online optimization
-control/virtual_obstacle: false #If We are using real or virtual obstacle; Default is virtual
+control/virtual_obstacle: true #If We are using real or virtual obstacle; Default is virtual
 control/obj_dist_max: 3.0 #Max Object distance (Clipping)
 #control/use_alvar: true #Use alvar for tracking object
 
@@ -22,3 +22,8 @@ display/skip_pub_segments: 5
 
 # Arm params
 arm/joint_speed: 0.6 #Speed of joints 0.6 rad/s roughly 6 rpm
+
+# reconfig params:
+onboard_node/ki_velctrlxy: 0.1
+onboard_node/ki_velctrlz: 0.1
+onboard_node/kp_velctrl: 4.0

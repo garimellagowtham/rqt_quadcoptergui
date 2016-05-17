@@ -634,9 +634,9 @@ inline void OnboardNodeHandler::stateTransitionMPCControl(bool state)
       mpcveltimer.stop();
       mpctimer.stop();
       //Set current vel to 0:
-      desired_vel.x = desired_vel.y = desired_vel.z = 0;
-      desired_yaw = data.rpydata.z;
-      parserinstance->cmdvelguided(desired_vel, desired_yaw);
+      //desired_vel.x = desired_vel.y = desired_vel.z = 0;
+      //desired_yaw = data.rpydata.z;
+      //parserinstance->cmdvelguided(desired_vel, desired_yaw);
       //Set current trajectory count to 0:
       mpc_trajectory_count = 0;
   }
@@ -870,9 +870,9 @@ inline void OnboardNodeHandler::stateTransitionRpytControl(bool state)
       rpytimer.stop();
       enable_rpytcontrol = false;
       //Set current vel to 0:
-      desired_vel.x = desired_vel.y = desired_vel.z = 0;
-      desired_yaw = data.rpydata.z;
-      parserinstance->cmdvelguided(desired_vel, desired_yaw);
+      //desired_vel.x = desired_vel.y = desired_vel.z = 0;
+      //desired_yaw = data.rpydata.z;
+      //parserinstance->cmdvelguided(desired_vel, desired_yaw);
     }
   }
   else
@@ -1080,8 +1080,8 @@ void OnboardNodeHandler::paramreqCallback(rqt_quadcoptergui::QuadcopterInterface
     config.mpc_goalyaw = so3.yaw(model_control.xf.R);
     */
     config.delay_send_time = delay_send_time_;
-    config.kp_velctrl = vel_ctrlr_->kp_;
-    config.ki_velctrl = vel_ctrlr_->ki_;
+    //config.kp_velctrl = vel_ctrlr_->kp_;
+    //config.ki_velctrl = vel_ctrlr_->ki_;
     //vel_ctrlr_->kp_ = config.kp_velctrl;
     //vel_ctrlr_->ki_ = config.ki_velctrl;
     //cout<<"Goal Yaw: "<<config.mpc_goalyaw<<endl;
@@ -1120,7 +1120,7 @@ void OnboardNodeHandler::paramreqCallback(rqt_quadcoptergui::QuadcopterInterface
     }
     config.update_vel = false;
   }
-  roi_vel_ctrlr_->setGains(config.radial_gain, config.tangential_gain, config.desired_object_distance);
+  //roi_vel_ctrlr_->setGains(config.radial_gain, config.tangential_gain, config.desired_object_distance);
   goal_altitude = config.goal_altitude;
   Nit = config.Nit;
   mpc_closed_loop_ = config.mpc_closed_loop;
@@ -1177,7 +1177,8 @@ void OnboardNodeHandler::paramreqCallback(rqt_quadcoptergui::QuadcopterInterface
           arm_hardware_controller_->foldArm();
   }
   vel_ctrlr_->kp_ = config.kp_velctrl;
-  vel_ctrlr_->ki_ = config.ki_velctrl;
+  vel_ctrlr_->ki_[0] = vel_ctrlr_->ki_[1] = config.ki_velctrlxy;
+  vel_ctrlr_->ki_[2] = config.ki_velctrlz;
 }
 
 void OnboardNodeHandler::quadstatetimerCallback(const ros::TimerEvent &event)
