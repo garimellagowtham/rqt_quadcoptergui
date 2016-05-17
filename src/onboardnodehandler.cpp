@@ -1120,7 +1120,7 @@ void OnboardNodeHandler::paramreqCallback(rqt_quadcoptergui::QuadcopterInterface
     }
     config.update_vel = false;
   }
-  roi_vel_ctrlr_->setGains(config.radial_gain, config.tangential_gain, config.desired_object_distance);
+  //roi_vel_ctrlr_->setGains(config.radial_gain, config.tangential_gain, config.desired_object_distance);
   goal_altitude = config.goal_altitude;
   Nit = config.Nit;
   mpc_closed_loop_ = config.mpc_closed_loop;
@@ -1625,13 +1625,12 @@ void OnboardNodeHandler::mpcveltimerCallback(const ros::TimerEvent & event)
         mpc_delay_rpy_data = data.rpydata;
         ROS_INFO("Starting mpc timer");
         mpctimer.start();
-        /*parserinstance->getquaddata(data);
+        parserinstance->getquaddata(data);
         mpc_delay_rpy_data = data.rpydata;
         model_control.setInitialVel(data.linvel, data.rpydata);
         ROS_INFO("Initial Vel: %f,%f,%f",data.linvel.x, data.linvel.y, data.linvel.z);
         ROS_INFO("Starting MPC Thread");
         iterate_mpc_thread = new boost::thread(boost::bind(&OnboardNodeHandler::iterateMPC,this));//Start Iterating only one run
-        */
     }
   }
   else
@@ -1679,12 +1678,12 @@ void OnboardNodeHandler::mpctimerCallback(const ros::TimerEvent& event)
   //For first 0.2 seconds send zero controls The quadcopter is responding only after that:
   if((event.current_real - mpc_request_time).toSec() < delay_send_time_)
   {
-    /*rpytcmd.x = mpc_delay_rpy_data.x;
+    rpytcmd.x = mpc_delay_rpy_data.x;
     rpytcmd.y = mpc_delay_rpy_data.y;
     rpytcmd.z = mpc_delay_rpy_data.z;
-    */
-    rpytcmd.x = rpytcmd.y = 0;//Level
+    /*rpytcmd.x = rpytcmd.y = 0;//Level
     rpytcmd.z = data.rpydata.z;//Set to current yaw
+    */
     rpytcmd.w = (9.81/systemid.qrotor_gains(0));//Set to Default Value
     parserinstance->cmdrpythrust(rpytcmd, true);
     double object_dist = roi_vel_ctrlr_->getObjectDistance();
@@ -1706,7 +1705,7 @@ void OnboardNodeHandler::mpctimerCallback(const ros::TimerEvent& event)
     return;
   }
   //Check if thread can be joined [Done Optimizing]
-  /*if(iterate_mpc_thread)
+  if(iterate_mpc_thread)
   {
     bool mpc_thread_iterating_copy_;
     mpc_thread_mutex.lock();
@@ -1727,7 +1726,6 @@ void OnboardNodeHandler::mpctimerCallback(const ros::TimerEvent& event)
       return;
     }
   }
-  */
 
   if(!mpc_closed_loop_)
   {
