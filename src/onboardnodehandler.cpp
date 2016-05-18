@@ -1626,7 +1626,7 @@ void OnboardNodeHandler::mpcveltimerCallback(const ros::TimerEvent & event)
         mpc_delay_rpy_data = data.rpydata;
         ROS_INFO("Starting mpc timer");
         mpctimer.start();
-        parserinstance->getquaddata(data);
+        //parserinstance->getquaddata(data);
         mpc_delay_rpy_data = data.rpydata;
         model_control.setInitialVel(data.linvel, data.rpydata);
         ROS_INFO("Initial Vel: %f,%f,%f",data.linvel.x, data.linvel.y, data.linvel.z);
@@ -1649,13 +1649,12 @@ void OnboardNodeHandler::mpcveltimerCallback(const ros::TimerEvent & event)
         mpc_request_time = event.current_real;
         ROS_INFO("Starting mpc timer: %f", object_dist);
         mpctimer.start();
-        /*parserinstance->getquaddata(data);
+        //parserinstance->getquaddata(data);
         mpc_delay_rpy_data = data.rpydata;
         model_control.setInitialVel(data.linvel, data.rpydata);
         ROS_INFO("Initial Vel: %f,%f,%f",data.linvel.x, data.linvel.y, data.linvel.z);
         ROS_INFO("Starting MPC Thread");
         iterate_mpc_thread = new boost::thread(boost::bind(&OnboardNodeHandler::iterateMPC,this));//Start Iterating only one run
-        */
       }
   }
 
