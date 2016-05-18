@@ -1176,6 +1176,7 @@ void OnboardNodeHandler::paramreqCallback(rqt_quadcoptergui::QuadcopterInterface
       if(arm_hardware_controller_)
           arm_hardware_controller_->foldArm();
   }
+  vel_ctrlr_->smooth_fac_ = config.smooth_fac_velctrl;
   vel_ctrlr_->kp_ = config.kp_velctrl;
   vel_ctrlr_->ki_[0] = vel_ctrlr_->ki_[1] = config.ki_velctrlxy;
   vel_ctrlr_->ki_[2] = config.ki_velctrlz;
