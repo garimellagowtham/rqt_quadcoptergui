@@ -7,10 +7,10 @@
   <param name="/control/systemid_params" type="str" value="$(find rqt_quadcoptergui)/params/qrotorsystemid.cfg"/>
   <!--<node pkg="rqt_quadcoptergui" name="onboard_node" type="onboard_node" output="screen" launch-prefix="gdb--><!--args">-->
   <node pkg="rqt_quadcoptergui" name="onboard_node" type="onboard_node" output="screen">
-    <remap from="onboard_node/camera_info" to="duo3d_camera/left/camera_info"/>
+    <remap from="onboard_node/camera_info" to="guidance/left/camera_info"/>
     <remap from="onboard_node/roi" to="roi_out"/>
     <remap from="onboard_node/goal" to="move_base_simple/goal"/>
-    <remap from="onboard_node/depth" to="duo3d_camera/depth_image"/>
+    <remap from="onboard_node/depth" to="guidance/left/depth_image"/>
     <!-- dji parameters -->
     <param name="serial_name" type="string" value="/dev/ttydji"/>
     <param name="baud_rate" type="int" value="230400"/>
@@ -21,7 +21,7 @@
     <param name="enc_key" type="string" value="8667ff1ec3a163d6ef14a7bf6a9fae66210855f309c1876788f61d2195dc58d7"/>
   </node>
   <!--<node pkg="tf2_ros" type="static_transform_publisher" name="dji_to_cam" args="0.13 0 0 -1.5707 0 -1.5707 dji camera"/>-->
-  <node pkg="tf2_ros" type="static_transform_publisher" name="dji_to_cam" args="0.13 0 0 1.5707 0 1.5707 dji camera"/>
+  <node pkg="tf2_ros" type="static_transform_publisher" name="dji_to_cam" args="0.1 0 0.065 -1.5707 0 -1.5707 dji camera"/>
   <node pkg="tf2_ros" type="static_transform_publisher" name="dji_to_arm" args="0.15 0 -.085 0 1.5707 0 dji arm"/>
   <!--<param name="/duo3d_camera/disparity/min_disparity" type="int" value="-50"/>
   <param name="/duo_node/exposure" type="int" value="30"/>-->
