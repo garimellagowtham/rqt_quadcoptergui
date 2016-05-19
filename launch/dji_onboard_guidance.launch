@@ -11,6 +11,7 @@
     <remap from="onboard_node/roi" to="roi_out"/>
     <remap from="onboard_node/goal" to="move_base_simple/goal"/>
     <remap from="onboard_node/depth" to="guidance/left/depth_image"/>
+    <remap from="onboard_node/image" to="guidance/left/image_rect"/>
     <!-- dji parameters -->
     <param name="serial_name" type="string" value="/dev/ttydji"/>
     <param name="baud_rate" type="int" value="230400"/>

@@ -653,7 +653,7 @@ inline void OnboardNodeHandler::stateTransitionMPCControl(bool state)
         mpc_request_time = ros::Time::now();
         mpc_trajectory_count = 0;
         //Set Initial Object Velocity based on real or virtual obstacle
-        if(!virtual_obstacle_)
+        /*if(!virtual_obstacle_)
         {
           geometry_msgs::Vector3 des_obj_dir;
           bool result = roi_vel_ctrlr_->setDesiredObjectDir(data.rpydata,des_obj_dir);
@@ -693,6 +693,7 @@ inline void OnboardNodeHandler::stateTransitionMPCControl(bool state)
           }
         }
         else
+        */
         {
           desired_yaw = data.rpydata.z;
           //Set Initial State Velocity Desired:
@@ -700,14 +701,7 @@ inline void OnboardNodeHandler::stateTransitionMPCControl(bool state)
           Matrix3d yawM;
           Vector3d rpy(0,0,data.rpydata.z);
           so3.q2g(yawM, rpy);
-          initial_state_vel_ = yawM*x0.v;
-          //Publish Trajectory
-          geometry_msgs::Vector3 localpos = data.localpos;
-          localpos.x = localpos.x + initial_state_vel_[0]*(vel_send_time_+2*delay_send_time_);
-          localpos.y = localpos.y + initial_state_vel_[1]*(vel_send_time_+2*delay_send_time_);
-          localpos.z = localpos.z + initial_state_vel_[2]*(vel_send_time_+2*delay_send_time_);
-          //Publish position wrt to current data
-          model_control.publishTrajectory(localpos, data.rpydata);
+          initial_state_vel_ = yawM*x0.v; 
         }
         //Clear iterate mpc thread:
         iterate_mpc_thread = NULL;
@@ -1615,7 +1609,7 @@ void OnboardNodeHandler::mpcveltimerCallback(const ros::TimerEvent & event)
     {
       //Start Iterating MPC:
       ROS_INFO("Initial Vel: %f,%f,%f",data.linvel.x, data.linvel.y, data.linvel.z);
-      model_control.setInitialVel(data.linvel, data.rpydata);
+      model_control.setInitialState(data.linvel, data.rpydata);
       ROS_INFO("Starting MPC Thread");
       iterate_mpc_thread = new boost::thread(boost::bind(&OnboardNodeHandler::iterateMPC,this));//Start Iterating 0.3 seconds before rpyt mode is started
     }
@@ -1629,7 +1623,9 @@ void OnboardNodeHandler::mpcveltimerCallback(const ros::TimerEvent & event)
         mpctimer.start();
         //parserinstance->getquaddata(data);
         mpc_delay_rpy_data = data.rpydata;
-        model_control.setInitialVel(data.linvel, data.rpydata);
+        initial_state_vel_<<data.linvel.x, data.linvel.y, data.linvel.z;
+        model_control.setInitialState(data.linvel, data.rpydata);
+
         ROS_INFO("Initial Vel: %f,%f,%f",data.linvel.x, data.linvel.y, data.linvel.z);
         ROS_INFO("Starting MPC Thread");
         iterate_mpc_thread = new boost::thread(boost::bind(&OnboardNodeHandler::iterateMPC,this));//Start Iterating only one run
@@ -1643,6 +1639,7 @@ void OnboardNodeHandler::mpcveltimerCallback(const ros::TimerEvent & event)
       //desired_yaw = atan2(des_obj_dir.y, des_obj_dir.x);
       //initial_state_vel_ = model_control.xs[0].v.norm()*Eigen::Vector3d(des_obj_dir.x, des_obj_dir.y, des_obj_dir.z);
 
+      
       double object_dist = roi_vel_ctrlr_->getObjectDistance();
       if(object_dist <= model_control.getDesiredObjectDistance(2*delay_send_time_)+0.05)//0.05 is buffer
       {
@@ -1650,10 +1647,25 @@ void OnboardNodeHandler::mpcveltimerCallback(const ros::TimerEvent & event)
         mpc_request_time = event.current_real;
         ROS_INFO("Starting mpc timer: %f", object_dist);
         mpctimer.start();
+
+        //Get the Object Position:
+        geometry_msgs::Vector3 object_position_cam_geo;
+        if(!roi_vel_ctrlr_->getObjectPosition(object_position_cam_geo))//Get Object Position in Camera Frame
+        {
+          ROS_WARN("Cannot get Object position");
+          stateTransitionMPCControl(false);
+          return;
+        }
+        tf::Vector3 object_position_quad(object_position_cam_geo.x, object_position_cam_geo.y, object_position_cam_geo.z);
+        object_position_quad = CAM_QUAD_transform*object_position_quad;//Get Object Position in Quad frame
+        model_control.setObstacleCenter(0,object_position_quad[0], object_position_quad[1], object_position_quad[2]);
+
         //parserinstance->getquaddata(data);
         mpc_delay_rpy_data = data.rpydata;
-        model_control.setInitialVel(data.linvel, data.rpydata);
+        model_control.setInitialState(data.linvel, data.rpydata);
+        initial_state_vel_<<data.linvel.x, data.linvel.y, data.linvel.z;
         ROS_INFO("Initial Vel: %f,%f,%f",data.linvel.x, data.linvel.y, data.linvel.z);
+        ROS_INFO("Object Position Quad: %f,%f,%f",object_position_quad[0], object_position_quad[1], object_position_quad[2]);
         ROS_INFO("Starting MPC Thread");
         iterate_mpc_thread = new boost::thread(boost::bind(&OnboardNodeHandler::iterateMPC,this));//Start Iterating only one run
       }
@@ -1721,6 +1733,10 @@ void OnboardNodeHandler::mpctimerCallback(const ros::TimerEvent& event)
     }
     else if(model_control.J > 40)//Cost is high did not converge
     {
+      //Publish Trajectory
+      geometry_msgs::Vector3 localpos = data.localpos;
+      //Publish position wrt to current data
+      model_control.publishTrajectory(localpos, data.rpydata);
       ROS_WARN("Optimization did not succeed: %f",model_control.J);
       mpctimer.stop();
       stateTransitionMPCControl(false);
@@ -1785,6 +1801,19 @@ void OnboardNodeHandler::mpctimerCallback(const ros::TimerEvent& event)
     {
       mpctimer.stop();
       stateTransitionMPCControl(false);
+
+      //Publish Trajectory
+      geometry_msgs::Vector3 localpos;
+      localpos.x = systemid_measurements.begin()->position[0] + initial_state_vel_[0]*(2*delay_send_time_);
+      localpos.y = systemid_measurements.begin()->position[1] + initial_state_vel_[1]*(2*delay_send_time_);
+      localpos.z = systemid_measurements.begin()->position[2] + initial_state_vel_[2]*(2*delay_send_time_);
+      geometry_msgs::Vector3 initial_rpy;
+      initial_rpy.x = systemid_measurements.begin()->rpy[0];
+      initial_rpy.y = systemid_measurements.begin()->rpy[1];
+      initial_rpy.z = systemid_measurements.begin()->rpy[2];
+      //Publish position wrt to current data
+      model_control.publishTrajectory(localpos, initial_rpy);
+
       //Record Trajectory to a File
       logMeasurements(true);
     }
