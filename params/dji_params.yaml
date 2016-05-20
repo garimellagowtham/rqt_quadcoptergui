@@ -7,6 +7,7 @@ gui/publishrpy: false
 ### Specify Tracking Params
 tracking/vel_mag: 0.1
 tracking/yaw_gain: 0.01
+tracking/obs_avoidance_mode: true
 
 ### Control Params:
 control/optimize_online: true

@@ -535,6 +535,8 @@ inline void OnboardNodeHandler::stateTransitionVelControl(bool state)
       desired_yaw = data.rpydata.z;
       reconfig_update = true;
       //Clear buffers of vel controller:
+      vel_ctrlr_->setGoal(desired_vel.x, desired_vel.y, desired_vel.z, desired_yaw);
+      vel_ctrlr_->resetSmoothVel();
       vel_ctrlr_->clearBuffer();
       rpytcmd.x = rpytcmd.y = rpytcmd.z = 0;
       rpytcmd.w = (9.81/systemid.qrotor_gains(0));//Set to Default Value
@@ -634,8 +636,10 @@ inline void OnboardNodeHandler::stateTransitionMPCControl(bool state)
       mpcveltimer.stop();
       mpctimer.stop();
       //Set current vel to 0:
-      //desired_vel.x = desired_vel.y = desired_vel.z = 0;
-      //desired_yaw = data.rpydata.z;
+      desired_vel.x = desired_vel.y = desired_vel.z = 0;
+      desired_yaw = data.rpydata.z;
+      vel_ctrlr_->setGoal(desired_vel.x, desired_vel.y, desired_vel.z, desired_yaw);
+      vel_ctrlr_->resetSmoothVel();
       //parserinstance->cmdvelguided(desired_vel, desired_yaw);
       //Set current trajectory count to 0:
       mpc_trajectory_count = 0;
