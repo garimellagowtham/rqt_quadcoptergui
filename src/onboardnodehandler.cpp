@@ -701,7 +701,7 @@ inline void OnboardNodeHandler::stateTransitionMPCControl(bool state)
         {
           desired_yaw = data.rpydata.z;
           //Set Initial State Velocity Desired:
-          const QRotorIDState &x0 = model_control.xs[0];
+          const QRotorIDState &x0 = model_control.getInitialState();
           Matrix3d yawM;
           Vector3d rpy(0,0,data.rpydata.z);
           so3.q2g(yawM, rpy);
@@ -1653,9 +1653,11 @@ void OnboardNodeHandler::mpcveltimerCallback(const ros::TimerEvent & event)
       if( roi_vel_ctrlr_->getObjectPosition(object_position_cam_geo))
       {
         tf::Vector3 object_position_quad(object_position_cam_geo.x, object_position_cam_geo.y, object_position_cam_geo.z);
+        tf::Matrix3x3 quad_orientation;
+        quad_orientation.setEulerYPR(0, data.rpydata.y, data.rpydata.x);
         double cyaw = cos(data.rpydata.z);
         double syaw = sin(data.rpydata.z);
-        object_position_quad = CAM_QUAD_transform*object_position_quad - tf::Vector3(data.linvel.x*cyaw +data.linvel.y*syaw, -data.linvel.x*syaw+data.linvel.y*cyaw, data.linvel.z)*2*delay_send_time_;//Get Object Position in Quad frame
+        object_position_quad = quad_orientation*(CAM_QUAD_transform*object_position_quad) - tf::Vector3(data.linvel.x*cyaw +data.linvel.y*syaw, -data.linvel.x*syaw+data.linvel.y*cyaw, data.linvel.z)*2*delay_send_time_;//Get Object Position in Quad frame
         double xydist_to_obs = tf::Vector3(object_position_quad[0], object_position_quad[1], 0).length();//Make this based on obstacle axis etc
         ROS_INFO("xydist_to_obs: %f",xydist_to_obs);
 

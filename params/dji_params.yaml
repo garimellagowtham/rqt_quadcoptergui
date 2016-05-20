@@ -26,7 +26,9 @@ display/skip_pub_segments: 5
 arm/joint_speed: 0.6 #Speed of joints 0.6 rad/s roughly 6 rpm
 
 # reconfig params:
-onboard_node/ki_velctrlxy: 0.05
-onboard_node/ki_velctrlz: 0.05
+onboard_node/ki_velctrlxy: 0.01
+onboard_node/ki_velctrlz: 0.01
+#onboard_node/ki_velctrlxy: 0.05
+#onboard_node/ki_velctrlz: 0.05
 onboard_node/kp_velctrl: 3.0
 onboard_node/smooth_fac_velctrl: 0.95

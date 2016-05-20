@@ -3,7 +3,9 @@
   <rosparam command="load" file="$(find rqt_quadcoptergui)/params/dji_params.yaml"/>
   <param name="/gui/logdir" type="string" value="$(find rqt_quadcoptergui)/djilogfiles"/>
   <param name="/gui/publishvel" type="bool" value="true"/>
-  <param name="/qrotoridmodeltest/control_params" type="str" value="$(find gcop_ctrl)/params/qrotoridmodelv7.cfg"/>
+  <param name="/qrotoridmodeltest/control_params" type="str" value="$(find gcop_ctrl)/params/qrotoridmodelv6.cfg"/><!-- 4m/s -->
+  <!--<param name="/qrotoridmodeltest/control_params" type="str" value="$(find gcop_ctrl)/params/qrotoridmodelv5.cfg"/>--><!-- 5m/s -->
+  <!--<param name="/qrotoridmodeltest/control_params" type="str" value="$(find gcop_ctrl)/params/qrotoridmodelv7.cfg"/>--><!-- 3m/s -->
   <param name="/control/systemid_params" type="str" value="$(find rqt_quadcoptergui)/params/qrotorsystemid.cfg"/>
   <!--<node pkg="rqt_quadcoptergui" name="onboard_node" type="onboard_node" output="screen" launch-prefix="gdb--><!--args">-->
   <node pkg="rqt_quadcoptergui" name="onboard_node" type="onboard_node" output="screen">
