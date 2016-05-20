@@ -82,7 +82,7 @@ OnboardNodeHandler::OnboardNodeHandler(ros::NodeHandle &nh_):nh(nh_)
     //advertise rpy topics:
     imu_rpy_pub_ = nh_.advertise<geometry_msgs::Vector3>("imu_rpy",10);
   }
-  if(publish_vel)
+  //if(publish_vel)
   {
     global_vel_pub_ = nh_.advertise<geometry_msgs::Vector3>("global_vel",10);
   }
@@ -1195,7 +1195,7 @@ void OnboardNodeHandler::quadstatetimerCallback(const ros::TimerEvent &event)
     rpymsg.z = (data.rpydata.z)*(180/M_PI);
     imu_rpy_pub_.publish(rpymsg);
   }
-  if(publish_vel)
+  //if(publish_vel)
   {
     geometry_msgs::Vector3 global_vel_msg;
     global_vel_msg.x = data.linvel.x;
@@ -1640,36 +1640,36 @@ void OnboardNodeHandler::mpcveltimerCallback(const ros::TimerEvent & event)
       //initial_state_vel_ = model_control.xs[0].v.norm()*Eigen::Vector3d(des_obj_dir.x, des_obj_dir.y, des_obj_dir.z);
 
       
-      double object_dist = roi_vel_ctrlr_->getObjectDistance();
-      if(object_dist <= model_control.getDesiredObjectDistance(2*delay_send_time_)+0.05)//0.05 is buffer
-      {
-        mpcveltimer.stop();
-        mpc_request_time = event.current_real;
-        ROS_INFO("Starting mpc timer: %f", object_dist);
-        mpctimer.start();
+      //double object_dist = roi_vel_ctrlr_->getObjectDistance();
 
-        //Get the Object Position:
-        geometry_msgs::Vector3 object_position_cam_geo;
-        if(!roi_vel_ctrlr_->getObjectPosition(object_position_cam_geo))//Get Object Position in Camera Frame
-        {
-          ROS_WARN("Cannot get Object position");
-          stateTransitionMPCControl(false);
-          return;
-        }
+      geometry_msgs::Vector3 object_position_cam_geo;
+      if( roi_vel_ctrlr_->getObjectPosition(object_position_cam_geo))
+      {
         tf::Vector3 object_position_quad(object_position_cam_geo.x, object_position_cam_geo.y, object_position_cam_geo.z);
         double cyaw = cos(data.rpydata.z);
         double syaw = sin(data.rpydata.z);
         object_position_quad = CAM_QUAD_transform*object_position_quad - tf::Vector3(data.linvel.x*cyaw +data.linvel.y*syaw, -data.linvel.x*syaw+data.linvel.y*cyaw, data.linvel.z)*2*delay_send_time_;//Get Object Position in Quad frame
-        model_control.setObstacleCenter(0,object_position_quad[0], object_position_quad[1], object_position_quad[2]);
+        double xydist_to_obs = tf::Vector3(object_position_quad[0], object_position_quad[1], 0).length();//Make this based on obstacle axis etc
+        ROS_INFO("xydist_to_obs: %f",xydist_to_obs);
 
-        //parserinstance->getquaddata(data);
-        mpc_delay_rpy_data = data.rpydata;
-        model_control.setInitialState(data.linvel, data.rpydata);
-        initial_state_vel_<<data.linvel.x, data.linvel.y, data.linvel.z;
-        ROS_INFO("Initial Vel: %f,%f,%f",data.linvel.x, data.linvel.y, data.linvel.z);
-        ROS_INFO("Object Position Quad: %f,%f,%f",object_position_quad[0], object_position_quad[1], object_position_quad[2]);
-        ROS_INFO("Starting MPC Thread");
-        iterate_mpc_thread = new boost::thread(boost::bind(&OnboardNodeHandler::iterateMPC,this));//Start Iterating only one run
+        if(xydist_to_obs < model_control.getDesiredObjectDistance(0))
+        {
+          mpcveltimer.stop();
+          mpc_request_time = event.current_real;
+          ROS_INFO("Starting mpc timer: %f", xydist_to_obs);
+          mpctimer.start();
+
+          model_control.setObstacleCenter(0,object_position_quad[0], object_position_quad[1], object_position_quad[2]);
+
+          //parserinstance->getquaddata(data);
+          mpc_delay_rpy_data = data.rpydata;
+          model_control.setInitialState(data.linvel, data.rpydata);
+          initial_state_vel_<<data.linvel.x, data.linvel.y, data.linvel.z;
+          ROS_INFO("Initial Vel: %f,%f,%f",data.linvel.x, data.linvel.y, data.linvel.z);
+          ROS_INFO("Object Position Quad: %f,%f,%f",object_position_quad[0], object_position_quad[1], object_position_quad[2]);
+          ROS_INFO("Starting MPC Thread");
+          iterate_mpc_thread = new boost::thread(boost::bind(&OnboardNodeHandler::iterateMPC,this));//Start Iterating only one run
+        }
       }
   }
 
@@ -1701,8 +1701,8 @@ void OnboardNodeHandler::mpctimerCallback(const ros::TimerEvent& event)
     */
     rpytcmd.w = (9.81/systemid.qrotor_gains(0));//Set to Default Value
     parserinstance->cmdrpythrust(rpytcmd, true);
-    double object_dist = roi_vel_ctrlr_->getObjectDistance();
-    ROS_INFO("Obj dist: %f",object_dist);
+    //double object_dist = roi_vel_ctrlr_->getObjectDistance();
+    //ROS_INFO("Obj dist: %f",object_dist);
     //ROS_INFO("Sending zero rpy: %f,%f,%f, %f",rpytcmd.x, rpytcmd.y, rpytcmd.z, rpytcmd.w);
     /*{
       //Record Data
