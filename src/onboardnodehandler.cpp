@@ -710,6 +710,9 @@ inline void OnboardNodeHandler::stateTransitionMPCControl(bool state)
         //Clear iterate mpc thread:
         iterate_mpc_thread = NULL;
 
+        //Reset vel ctrlr smoothness
+        vel_ctrlr_->setGoal(0,0,0, desired_yaw);
+        vel_ctrlr_->resetSmoothVel();
         //Clear buffers of vel controller:
         vel_ctrlr_->clearBuffer();
         rpytcmd.x = rpytcmd.y = rpytcmd.z = 0;
