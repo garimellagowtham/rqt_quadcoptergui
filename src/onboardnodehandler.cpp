@@ -1657,7 +1657,9 @@ void OnboardNodeHandler::mpcveltimerCallback(const ros::TimerEvent & event)
           return;
         }
         tf::Vector3 object_position_quad(object_position_cam_geo.x, object_position_cam_geo.y, object_position_cam_geo.z);
-        object_position_quad = CAM_QUAD_transform*object_position_quad;//Get Object Position in Quad frame
+        double cyaw = cos(data.rpydata.z);
+        double syaw = sin(data.rpydata.z);
+        object_position_quad = CAM_QUAD_transform*object_position_quad - tf::Vector3(data.linvel.x*cyaw +data.linvel.y*syaw, -data.linvel.x*syaw+data.linvel.y*cyaw, data.linvel.z)*2*delay_send_time_;//Get Object Position in Quad frame
         model_control.setObstacleCenter(0,object_position_quad[0], object_position_quad[1], object_position_quad[2]);
 
         //parserinstance->getquaddata(data);
@@ -1702,7 +1704,7 @@ void OnboardNodeHandler::mpctimerCallback(const ros::TimerEvent& event)
     double object_dist = roi_vel_ctrlr_->getObjectDistance();
     ROS_INFO("Obj dist: %f",object_dist);
     //ROS_INFO("Sending zero rpy: %f,%f,%f, %f",rpytcmd.x, rpytcmd.y, rpytcmd.z, rpytcmd.w);
-    {
+    /*{
       //Record Data
       QRotorSystemIDMeasurement measurement;
       measurement.t = (ros::Time::now() - mpc_request_time).toSec()-(2*delay_send_time_+0.02);//For we are using up 0.16 seconds for sending virtual controls to wakeup quadrotor
@@ -1715,6 +1717,7 @@ void OnboardNodeHandler::mpctimerCallback(const ros::TimerEvent& event)
       systemid_measurements.push_back(measurement);
       control_measurements.push_back(Vector3d(rpytcmd.x, rpytcmd.y, rpytcmd.z));
     }
+    */
     return;
   }
   //Check if thread can be joined [Done Optimizing]
@@ -1804,9 +1807,9 @@ void OnboardNodeHandler::mpctimerCallback(const ros::TimerEvent& event)
 
       //Publish Trajectory
       geometry_msgs::Vector3 localpos;
-      localpos.x = systemid_measurements.begin()->position[0] + initial_state_vel_[0]*(2*delay_send_time_);
-      localpos.y = systemid_measurements.begin()->position[1] + initial_state_vel_[1]*(2*delay_send_time_);
-      localpos.z = systemid_measurements.begin()->position[2] + initial_state_vel_[2]*(2*delay_send_time_);
+      localpos.x = systemid_measurements.begin()->position[0];
+      localpos.y = systemid_measurements.begin()->position[1];
+      localpos.z = systemid_measurements.begin()->position[2];
       geometry_msgs::Vector3 initial_rpy;
       initial_rpy.x = systemid_measurements.begin()->rpy[0];
       initial_rpy.y = systemid_measurements.begin()->rpy[1];
