@@ -1219,6 +1219,18 @@ void OnboardNodeHandler::quadstatetimerCallback(const ros::TimerEvent &event)
     rpytcmd.z = data.rpydata.z;//Current yaw
     //rpytcmd.z = parsernode::common::map(data.servo_in[3],-10000, 10000, -M_PI, M_PI);
   }
+
+  geometry_msgs::Vector3 object_position_cam_geo;
+  tf::Vector3 object_position_quad(0,0,0);
+  if( roi_vel_ctrlr_->getObjectPosition(object_position_cam_geo))
+  {
+    object_position_quad = tf::Vector3(object_position_cam_geo.x, object_position_cam_geo.y, object_position_cam_geo.z);
+    tf::Matrix3x3 quad_orientation;
+    quad_orientation.setEulerYPR(0, data.rpydata.y, data.rpydata.x);
+    double cyaw = cos(data.rpydata.z);
+    double syaw = sin(data.rpydata.z);
+    object_position_quad = quad_orientation*(CAM_QUAD_transform*object_position_quad) - tf::Vector3(data.linvel.x*cyaw +data.linvel.y*syaw, -data.linvel.x*syaw+data.linvel.y*cyaw, data.linvel.z)*2*delay_send_time_;//Get Object Position in Quad frame
+  }
   double object_distance = roi_vel_ctrlr_->getObjectDistance();
   // Create a Text message based on the data from the Parser class
   sprintf(buffer,
@@ -1226,6 +1238,7 @@ void OnboardNodeHandler::quadstatetimerCallback(const ros::TimerEvent &event)
           "Magx: %2.2f\tMagy %2.2f\tMagz %2.2f\naccx: %2.2f\taccy %2.2f\taccz %2.2f\nvelx: %2.2f\tvely %2.2f\tvelz %2.2f\n"
           "Trvelx: %2.2f\tTrvely: %2.2f\tTrvelz: %2.2f\tTrObjD: %2.2f\nCmdr: %2.2f\tCmdp: %2.2f\tCmdt: %2.2f\tCmdy: %2.2f\n"
           "Goalx: %2.2f\tGoaly: %2.2f\tGoalz: %2.2f\tGoaly: %2.2f\n"
+          "Objx: %2.2f\tObjy: %2.2f\tObjz: %2.2f\n"
           "Mass: %2.2f\tTimestamp: %2.2f\t\nQuadState: %s",
           data.batterypercent
           ,data.localpos.x, data.localpos.y, data.localpos.z
@@ -1237,6 +1250,7 @@ void OnboardNodeHandler::quadstatetimerCallback(const ros::TimerEvent &event)
           ,desired_vel.x,desired_vel.y,desired_vel.z,object_distance
           ,rpytcmd.x*(180/M_PI), rpytcmd.y*(180/M_PI), rpytcmd.w, rpytcmd.z*(180/M_PI)
           ,goal_position.x, goal_position.y, goal_position.z, desired_yaw
+          ,object_position_quad[0], object_position_quad[1], object_position_quad[2]
           ,data.mass,data.timestamp,data.quadstate.c_str());
 
   //Publish State:
