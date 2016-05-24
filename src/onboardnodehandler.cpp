@@ -1660,8 +1660,8 @@ void OnboardNodeHandler::mpcveltimerCallback(const ros::TimerEvent & event)
         object_position_quad = quad_orientation*(CAM_QUAD_transform*object_position_quad) - tf::Vector3(data.linvel.x*cyaw +data.linvel.y*syaw, -data.linvel.x*syaw+data.linvel.y*cyaw, data.linvel.z)*2*delay_send_time_;//Get Object Position in Quad frame
         double xydist_to_obs = tf::Vector3(object_position_quad[0], object_position_quad[1], 0).length();//Make this based on obstacle axis etc
         //ROS_INFO("xydist_to_obs: %f",xydist_to_obs);
-
-        if(xydist_to_obs < model_control.getDesiredObjectDistance(0))
+        double linvel = tf::Vector3(data.linvel.x, data.linvel.y, data.linvel.z).length();
+        if(xydist_to_obs < model_control.getDesiredObjectDistance(0) && linvel > 0.3)
         {
           mpcveltimer.stop();
           mpc_request_time = event.current_real;
