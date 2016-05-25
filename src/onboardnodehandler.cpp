@@ -1074,7 +1074,7 @@ void OnboardNodeHandler::paramreqCallback(rqt_quadcoptergui::QuadcopterInterface
     nh.param<double>("/tracking/radial_gain",config.radial_gain);
     nh.param<double>("/tracking/tangential_gain",config.tangential_gain);
     nh.param<double>("/tracking/desired_object_distance",config.desired_object_distance);
-    config.mpc_velmag = model_control.xs[0].v.norm();
+    config.mpc_velmag = model_control.x0().v.norm();
     /*config.mpc_goalx = model_control.xf.p[0];
     config.mpc_goaly = model_control.xf.p[1];
     config.mpc_goalz = model_control.xf.p[2];
@@ -1127,11 +1127,12 @@ void OnboardNodeHandler::paramreqCallback(rqt_quadcoptergui::QuadcopterInterface
   mpc_closed_loop_ = config.mpc_closed_loop;
   kp_trajectory_tracking = config.kp_trajectory_tracking;
   //Set Goal for MPC:
-  if(model_control.xs[0].v.norm() > 0.01)//At least 1 cm/s Then only scale it otherwise no effect of velmag
+  /*if(model_control.xs[0].v.norm() > 0.01)//At least 1 cm/s Then only scale it otherwise no effect of velmag
   {
     model_control.xs[0].v = (config.mpc_velmag/model_control.xs[0].v.norm())*model_control.xs[0].v;
     model_control.xf.v = (config.mpc_velmag/model_control.xf.v.norm())*model_control.xf.v;//Same magnitude as final
   }
+  */
   //model_control.xs[0].v[0] = config.mpc_vel;
   /*model_control.xf.p[0] = config.mpc_goalx;
   model_control.xf.p[1] = config.mpc_goaly;
@@ -1757,13 +1758,13 @@ void OnboardNodeHandler::mpctimerCallback(const ros::TimerEvent& event)
       stateTransitionMPCControl(false);
       return;
     }
-    else if(model_control.J > 40)//Cost is high did not converge
+    else if(model_control.J() > 40)//Cost is high did not converge
     {
       //Publish Trajectory
       geometry_msgs::Vector3 localpos = data.localpos;
       //Publish position wrt to current data
       model_control.publishTrajectory(localpos, data.rpydata);
-      ROS_WARN("Optimization did not succeed: %f",model_control.J);
+      ROS_WARN("Optimization did not succeed: %f",model_control.J());
       mpctimer.stop();
       stateTransitionMPCControl(false);
       return;
@@ -1778,11 +1779,11 @@ void OnboardNodeHandler::mpctimerCallback(const ros::TimerEvent& event)
     {
       Eigen::Vector4d &current_u = model_control.us.at(mpc_trajectory_count);
       //gcop::QRotorIDState &current_x = model_control.xs.at(mpc_trajectory_count+1);
-      rpytcmd.x = rpytcmd.x + model_control.step_size_*current_u[1];
-      rpytcmd.y = rpytcmd.y + model_control.step_size_*current_u[2];
+      rpytcmd.x = rpytcmd.x + model_control.stepSize()*current_u[1];
+      rpytcmd.y = rpytcmd.y + model_control.stepSize()*current_u[2];
       //rpytcmd.w = (current_u[0]>85)?85:(current_u[0]<20)?20:current_u[0];//Simple Bounds so we dont send crazy values
       rpytcmd.w = (current_u[0]>100)?100:(current_u[0]<10)?10:current_u[0];//Simple Bounds so we dont send crazy values
-      rpytcmd.z = rpytcmd.z + model_control.step_size_*current_u[3];
+      rpytcmd.z = rpytcmd.z + model_control.stepSize()*current_u[3];
       rpytcmd.z = rpytcmd.z > M_PI?(rpytcmd.z - 2*M_PI):(rpytcmd.z < -M_PI)?(rpytcmd.z + 2*M_PI):rpytcmd.z;//Make sure yaw command is reasonable
       mpc_trajectory_count++;
       parserinstance->cmdrpythrust(rpytcmd, true);
@@ -1805,7 +1806,7 @@ void OnboardNodeHandler::mpctimerCallback(const ros::TimerEvent& event)
         control_measurements.push_back(Vector3d(rpytcmd.x, rpytcmd.y, rpytcmd.z));
       }
     }
-    else if((event.current_real - mpc_request_time).toSec() < model_control.tf + 2*delay_send_time_+0.04)
+    else if((event.current_real - mpc_request_time).toSec() < model_control.tf() + 2*delay_send_time_+0.04)
     {
       //ROS_INFO("Sending constant rpy: %f,%f,%f, %f",rpytcmd.x, rpytcmd.y, rpytcmd.z, rpytcmd.w);
       parserinstance->cmdrpythrust(rpytcmd, true);//Send Last Command
