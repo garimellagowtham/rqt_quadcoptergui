@@ -258,7 +258,7 @@ inline void OnboardNodeHandler::loadParameters()
   //nh.param<double>("/onboard_node/delay_send_time", delay_send_time_,0.2);
   nh.param<double>("/control/mpc_iterate_time", mpc_iterate_time_,delay_send_time_);
   nh.param<bool>("/control/virtual_obstacle", virtual_obstacle_,true);
-  nh.param<bool>("/control/waypoint_mpc_", waypoint_mpc_,false);
+  nh.param<bool>("/control/waypoint_mpc", waypoint_mpc_,false);
   nh.param<bool>("/control/use_alvar", use_alvar_,false);
   nh.param<double>("/arm/joint_speed",arm_default_speed_,0.6);//Default 0.6 rad/s
 
@@ -643,6 +643,8 @@ inline void OnboardNodeHandler::stateTransitionVelControl(bool state)
       rpytcmd.w = (9.81/model_control.getParameters()[0]);//Set to Default Value
       //Online System ID Settings
       systemid_complete_time_ = ros::Time::now();
+      systemid_measurements.clear();
+      control_measurements.clear();
       //Start Timer to send vel to quadcopter
       velcmdtimer.start();
     }
@@ -697,7 +699,10 @@ inline void OnboardNodeHandler::stateTransitionPosControl(bool state)
         goal_altitude = goal_position.z;
         reconfig_update = true;
         desired_yaw = data.rpydata.z;
+        //Clear System ID stuff
         systemid_complete_time_ = ros::Time::now();//Reset system id time to start collecting data
+        systemid_measurements.clear();
+        control_measurements.clear();
         //Reset vel ctrlr smoothness
         vel_ctrlr_->setGoal(0,0,0, desired_yaw);
         vel_ctrlr_->resetSmoothVel();
@@ -827,6 +832,8 @@ inline void OnboardNodeHandler::stateTransitionMPCControl(bool state)
 
         //Reset systemid time:
         systemid_complete_time_ = ros::Time::now();
+        systemid_measurements.clear();
+        control_measurements.clear();
         //Reset vel ctrlr smoothness
         vel_ctrlr_->setGoal(0,0,0, desired_yaw);
         vel_ctrlr_->resetSmoothVel();
@@ -1657,7 +1664,7 @@ void OnboardNodeHandler::poscmdtimerCallback(const ros::TimerEvent& event)
     goal_position.z = goal_altitude;
 
     pos_ctrlr_->get(data.localpos,goal_position,desired_vel);
-    ROS_INFO("Desired vel: %f,%f,%f", desired_vel.x, desired_vel.y, desired_vel.z);
+    //ROS_INFO("Desired vel: %f,%f,%f", desired_vel.x, desired_vel.y, desired_vel.z);
     velcmdtimerCallback(event);//Call vel callback
     //parserinstance->cmdwaypoint(goal_position, desired_yaw);
   }

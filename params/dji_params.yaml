@@ -20,6 +20,13 @@ control/measurement_period: 2.0 #Time to record systemid meas
 control/obj_dist_max: 6.0 #Max Object distance (Clipping)
 #control/use_alvar: true #Use alvar for tracking object
 
+## Position Control Params:
+control/tolerance_pos: 2.0 #Tolerance in position checking for waypoint
+control/max_vel: 2.0 #Max velocity to go to goal position
+
+## Waypoint MPC:
+control/waypoint_mpc: false
+
 # Param for skipping segments while visualizing gcop trajectory
 display/skip_pub_segments: 5
 
