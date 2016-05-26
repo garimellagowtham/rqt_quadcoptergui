@@ -1,0 +1,6 @@
+<launch>
+  <node ns="waypoint_manager" name="waypoint_manager" pkg="rqt_quadcoptergui" type="waypoint_manager_node.py" output="screen">
+    <remap from="gps" to="gps"/>
+    <remap from="gps_ref" to="gps_ref"/>
+  </node>
+</launch>
