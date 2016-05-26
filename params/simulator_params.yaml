@@ -25,7 +25,7 @@ control/measurement_period: 2.0 #Time to record systemid meas
 display/skip_pub_segments: 5
 
 # reconfig params:
-onboard_node/ki_velctrlxy: 0.005
-onboard_node/ki_velctrlz: 0
-onboard_node/kp_velctrl: 2.0
-onboard_node/delay_send_time: 0.2
+reconfig/ki_velctrlxy: 0.005
+reconfig/ki_velctrlz: 0
+reconfig/kp_velctrl: 2.0
+reconfig/delay_send_time: 0.2

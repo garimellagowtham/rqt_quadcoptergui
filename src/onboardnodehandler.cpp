@@ -55,6 +55,9 @@ OnboardNodeHandler::OnboardNodeHandler(ros::NodeHandle &nh_):nh(nh_)
   ROS_INFO("Starting Thread for System ID");
   iterate_systemid_thread = new boost::thread(boost::bind(&OnboardNodeHandler::onlineOptimizeThread,this));//Start thread
 
+  ROS_INFO("Starting Reconfig Thread");
+  reconfig_service_thread = new boost::thread(boost::bind(&OnboardNodeHandler::reconfigThread,this));//Start thread
+
   //Create Velocity controller:
   vel_ctrlr_.reset(new QuadVelController(delay_send_time_));
 
@@ -68,7 +71,7 @@ OnboardNodeHandler::OnboardNodeHandler(ros::NodeHandle &nh_):nh(nh_)
   gui_command_subscriber_ = nh.subscribe("/gui_commands", 10, &OnboardNodeHandler::receiveGuiCommands, this);
   goal_pose_subscriber_ = nh.subscribe("goal",1,&OnboardNodeHandler::receiveGoalPose,this);
   trajectory_subscriber_ = nh.subscribe("ctrltraj",1,&OnboardNodeHandler::gcoptrajectoryCallback,this);
-  guidance_obs_dist_ = nh.subscribe("/guidance/obstacle_distance",1,&OnboardNodeHandler::receiveObstacleDistance,this);
+  //guidance_obs_dist_ = nh.subscribe("/guidance/obstacle_distance",1,&OnboardNodeHandler::receiveObstacleDistance,this);
   //Subscribe to Camera Estimator:
   //camdata_sub = nh_.subscribe("/Pose_Est/objpose",1,&OnboardNodeHandler::camcmdCallback,this);
 
@@ -91,12 +94,6 @@ OnboardNodeHandler::OnboardNodeHandler(ros::NodeHandle &nh_):nh(nh_)
   {
     global_vel_pub_ = nh_.advertise<geometry_msgs::Vector3>("global_vel",10);
   }
-
-  //Connect to dynamic reconfigure server:
-	ROS_INFO("Setting Up Reconfigure Sever");
-  reconfigserver.reset(new dynamic_reconfigure::Server<rqt_quadcoptergui::QuadcopterInterfaceConfig>(nh_));
-  reconfigcallbacktype = boost::bind(&OnboardNodeHandler::paramreqCallback, this, _1, _2);
-  reconfigserver->setCallback(reconfigcallbacktype);
 
   //Create Timers:
   ROS_INFO("Creating Timers");
@@ -166,7 +163,6 @@ OnboardNodeHandler::~OnboardNodeHandler()
 
   broadcaster.reset();
 
-  reconfigserver.reset();
 
   //goaltimer.stop();
   velcmdtimer.stop();
@@ -176,8 +172,16 @@ OnboardNodeHandler::~OnboardNodeHandler()
 
   //Let Join thread:
   if(iterate_systemid_thread)
+  {
     iterate_systemid_thread->join();
+    delete iterate_systemid_thread;
+  }
 
+  if(reconfig_service_thread)
+  {
+    reconfig_service_thread->join();
+    delete reconfig_service_thread;
+  }
   //vrpnfile.close();//Close the file
   //camfile.close();//Close the file
   //tipfile.close();//Close the file
@@ -429,7 +433,7 @@ inline void OnboardNodeHandler::storeMeasurements()
       double time_diff = measurement.t - prev_ctrl_time;
       if(time_diff < 0.005 || time_diff > 0.025)
       {
-        ROS_WARN("Time diff Expected 0.02; Found: %f, size: %d, time: %f",time_diff, control_measurements.size(), time);
+        ROS_WARN("Time diff Expected 0.02; Found: %f, size: %lu, time: %f",time_diff, control_measurements.size(), time);
         time_diff = time_diff < 0.005?0.005:(time_diff > 0.025)?0.025:time_diff;//Hard reset;
       }
 
@@ -514,6 +518,8 @@ PUBLISH_LOGGING_STATE:
 
 inline void OnboardNodeHandler::stateTransitionTracking(bool state)
 {
+  //Reconfig Lock
+  boost::recursive_mutex::scoped_lock lock(reconfig_mutex);
   if(!parserinstance)
   {
     ROS_WARN("Parser Instance not defined. Cannot Track");
@@ -579,6 +585,8 @@ PUBLISH_TRACKING_STATE:
 
 inline void OnboardNodeHandler::stateTransitionVelControl(bool state)
 {
+  //Reconfig Lock
+  boost::recursive_mutex::scoped_lock lock(reconfig_mutex);
   bool result = false;
 
   if(!parserinstance)
@@ -647,6 +655,8 @@ PUBLISH_VEL_CONTROL_STATE:
 
 inline void OnboardNodeHandler::stateTransitionPosControl(bool state)
 {
+  //Reconfig Lock
+  boost::recursive_mutex::scoped_lock lock(reconfig_mutex);
   if(!parserinstance)
   {
     ROS_WARN("Parser Instance not defined. Cannot Control Quad");
@@ -701,6 +711,8 @@ PUBLISH_POS_CONTROL_STATE:
 
 inline void OnboardNodeHandler::stateTransitionMPCControl(bool state)
 {
+  //Reconfig Lock
+  boost::recursive_mutex::scoped_lock lock(reconfig_mutex);
   if(!parserinstance)
   {
     ROS_WARN("Parser Instance not defined. Cannot Control Quad");
@@ -1102,13 +1114,14 @@ void OnboardNodeHandler::receiveGoalPose(const geometry_msgs::PoseStamped &goal_
   }
 }
 
-void OnboardNodeHandler::receiveObstacleDistance(const sensor_msgs::LaserScan &scan)
+/*void OnboardNodeHandler::receiveObstacleDistance(const sensor_msgs::LaserScan &scan)
 {
     double obs_dist = scan.ranges[1];
     //ROS_INFO("Received Obstacle dist: %f",obs_dist);//DEBUG
     tf::Transform obs_transform(tf::createQuaternionFromRPY(0,0,0), tf::Vector3(obs_dist,0,0));
     broadcaster->sendTransform(tf::StampedTransform(obs_transform, ros::Time::now(), uav_name, "obs"));
 }
+*/
 
 void OnboardNodeHandler::gcoptrajectoryCallback(const gcop_comm::CtrlTraj &traj_msg)
 {
@@ -1146,6 +1159,8 @@ void OnboardNodeHandler::gcoptrajectoryCallback(const gcop_comm::CtrlTraj &traj_
 
 void OnboardNodeHandler::paramreqCallback(rqt_quadcoptergui::QuadcopterInterfaceConfig &config, uint32_t level)
 {
+  //Lock the mutex:
+  boost::recursive_mutex::scoped_lock lock(reconfig_mutex);
   ros::Time current_time = ros::Time::now();
   // Use the config values to set the goals and gains for quadcopter
   if(!parserinstance)
@@ -1189,7 +1204,7 @@ void OnboardNodeHandler::paramreqCallback(rqt_quadcoptergui::QuadcopterInterface
   //roi_vel_ctrlr_->setGains(config.radial_gain, config.tangential_gain, config.desired_object_distance);
   goal_altitude = config.goal_altitude;
   //Nit = config.Nit;
-  mpc_closed_loop_ = config.mpc_closed_loop;
+  //mpc_closed_loop_ = config.mpc_closed_loop;
   kp_trajectory_tracking = config.kp_trajectory_tracking;
   //Set Goal for MPC:
   /*if(model_control.xs[0].v.norm() > 0.01)//At least 1 cm/s Then only scale it otherwise no effect of velmag
@@ -1252,6 +1267,8 @@ void OnboardNodeHandler::paramreqCallback(rqt_quadcoptergui::QuadcopterInterface
 
 void OnboardNodeHandler::quadstatetimerCallback(const ros::TimerEvent &event)
 {
+  //Reconfig Lock
+  boost::recursive_mutex::scoped_lock lock(reconfig_mutex);
   if(!parserinstance)
   {
     //ROS_ERROR("No parser instance created");
@@ -1473,6 +1490,34 @@ void OnboardNodeHandler::onlineOptimizeThread()
     }
 }
 
+void OnboardNodeHandler::reconfigThread()
+{
+
+  /////Reconfigure Server
+  boost::shared_ptr<dynamic_reconfigure::Server<rqt_quadcoptergui::QuadcopterInterfaceConfig> >reconfigserver;
+  dynamic_reconfigure::Server<rqt_quadcoptergui::QuadcopterInterfaceConfig>::CallbackType reconfigcallbacktype;
+  ros::CallbackQueue reconfig_queue;
+
+
+  //Private NodeHandle:
+  ros::NodeHandle reconfig_nh("reconfig");
+  reconfig_nh.setCallbackQueue(&reconfig_queue);
+
+  //Connect to dynamic reconfigure server:
+	ROS_INFO("Setting Up Reconfigure Sever");
+  reconfigserver.reset(new dynamic_reconfigure::Server<rqt_quadcoptergui::QuadcopterInterfaceConfig>(reconfig_nh));
+  reconfigcallbacktype = boost::bind(&OnboardNodeHandler::paramreqCallback, this, _1, _2);
+  reconfigserver->setCallback(reconfigcallbacktype);
+
+  //Service the Callback queue:
+  while (ros::ok())
+  {
+    reconfig_queue.callAvailable(ros::WallDuration(0.1));
+    ros::Duration(0.05).sleep();//20 Hz service
+  }
+  reconfigserver.reset();
+}
+
 void OnboardNodeHandler::getCurrentState(QRotorIDState &state)
 {
   //Fill current state:
@@ -1571,6 +1616,8 @@ void OnboardNodeHandler::armcmdTimerCallback(const ros::TimerEvent& event)
 
 void OnboardNodeHandler::poscmdtimerCallback(const ros::TimerEvent& event)
 {
+  //Reconfig Lock
+  boost::recursive_mutex::scoped_lock lock(reconfig_mutex);
   if(enable_poscontrol)
   {
   /*  goal_position.z = goal_altitude;

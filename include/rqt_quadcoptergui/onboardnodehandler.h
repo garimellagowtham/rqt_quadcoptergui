@@ -29,6 +29,7 @@
 
 //Boost Threads
 #include <boost/thread/mutex.hpp>
+#include <boost/thread/recursive_mutex.hpp>
 
 //Ros Messages:
 #include <std_msgs/String.h>
@@ -115,9 +116,6 @@ protected:
     ros::Timer quadstatetimer;// Send quad state to GUI
     ros::Timer hometimer;///< Go to Home
 
-    /////Reconfigure Server
-    boost::shared_ptr<dynamic_reconfigure::Server<rqt_quadcoptergui::QuadcopterInterfaceConfig> >reconfigserver;
-		dynamic_reconfigure::Server<rqt_quadcoptergui::QuadcopterInterfaceConfig>::CallbackType reconfigcallbacktype;
 
 protected:
     //NodeHandle
@@ -177,6 +175,8 @@ protected:
 
     /// Thread for system ID
     boost::thread *iterate_systemid_thread;
+    boost::thread *reconfig_service_thread;
+    boost::recursive_mutex reconfig_mutex;
 
     //double waypoint_vel;///< Velocity with which to move to goal
     //double waypoint_yawvel;///< Velocity with which to move in yaw towards goal 
@@ -300,7 +300,7 @@ protected:
 
     void receiveGoalPose(const geometry_msgs::PoseStamped &goal_pose);
 
-    void receiveObstacleDistance(const sensor_msgs::LaserScan &scan);
+    //void receiveObstacleDistance(const sensor_msgs::LaserScan &scan);
 
     //void joyCallback(const sensor_msgs::Joy::ConstPtr &joymsg);
 
@@ -323,6 +323,8 @@ protected:
     void rpytimerCallback(const ros::TimerEvent&);
 
     void onlineOptimizeThread();
+
+    void reconfigThread();
 
     void trajectorytimerCallback(const ros::TimerEvent&);
   
