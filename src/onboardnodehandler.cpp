@@ -1822,6 +1822,8 @@ void OnboardNodeHandler::mpcpostimerCallback(const ros::TimerEvent & event)
         }
       }
 
+      //Set object position
+
       geometry_msgs::Vector3 object_position_cam_geo;
       if( roi_vel_ctrlr_->getObjectPosition(object_position_cam_geo))
       {
