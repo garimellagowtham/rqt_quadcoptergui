@@ -110,7 +110,7 @@ protected:
     ros::Timer poscmdtimer;//REFACTOR #TODO
     ros::Timer mpctimer;//REFACTOR #TODO
     ros::Timer rpytimer;//REFACTOR #TODO
-    ros::Timer rpy_stop_timer;//REFACTOR #TODO
+    //ros::Timer online_systemid_timer;//REFACTOR #TODO
     ros::Timer trajectorytimer;//REFACTOR #TODO
     ros::Timer quadstatetimer;// Send quad state to GUI
     ros::Timer hometimer;///< Go to Home
@@ -132,7 +132,6 @@ protected:
     boost::shared_ptr<VelController> roi_vel_ctrlr_;
     boost::shared_ptr<QuadVelController> vel_ctrlr_;///< Controls velocity of quadrotor using rpyt
     QRotorIDModelControl model_control;///< MPC Controller for Quadrotor model
-    QRotorSystemID systemid;///< System Identification class from GCOP
     SO3 &so3;
 
     // boost::shared_ptr<SetptCtrl> ctrlrinst;
@@ -154,15 +153,18 @@ protected:
     double kp_trajectory_tracking;///< Trajectory tracking gain on velocity
     double timeout_trajectory_tracking;///< Timeout on when to stop trajectory tracking in sec
     double timeout_mpc_control;///< Timeout on mpc closed loop control
-    ros::Time rpytimer_start_time;///< When rpytimer started
+    //ros::Time rpytimer_start_time;///< When rpytimer started
     string logdir_stamped_;///< Name of Log Directory
     Vector3d initial_state_vel_;///< MPC Initial State Velocity
     ros::Time home_start_time;//When go home command is pressed
+    bool systemid_flag_;///< Used to check if systemid is being performed or not
+    ros::Time systemid_complete_time_;///< Time when systemid is completed
     //////////////SYSTEM ID HELPER VARIABLES////////////////////
     vector<QRotorSystemIDMeasurement> systemid_measurements;///< System ID Measurements
     vector<Vector3d> control_measurements;///< Control Measurements [ONLY FOR LOGGING]
     QRotorIDState vel_ctrlr_state;///< State for velocity controller
-    double prev_rp_cmd[2];///< Previous roll and pitch commands for finding control rate
+    //double prev_rp_cmd[2];///< Previous roll and pitch commands for finding control rate
+    QRotorIDState systemid_init_state;///< Initial State for System Identification
     double prev_ctrl_time;///< Previous control time for roll and pitch commands in System ID
     int meas_filled_;///< Number of measurements filled
     geometry_msgs::Vector3 mpc_delay_rpy_data;///< RPY Commands sent during start of 
@@ -171,8 +173,12 @@ protected:
     boost::thread *iterate_mpc_thread;///< Iterate MPC
     bool mpc_thread_iterating;///< Whether mpc is iterating
     boost::mutex mpc_thread_mutex;
-    
-    //double waypoint_vel;///< Velocity with which to move to goal 
+    boost::mutex systemid_thread_mutex;
+
+    /// Thread for system ID
+    boost::thread *iterate_systemid_thread;
+
+    //double waypoint_vel;///< Velocity with which to move to goal
     //double waypoint_yawvel;///< Velocity with which to move in yaw towards goal 
 
     //// State Variables
@@ -234,6 +240,7 @@ protected:
     bool  virtual_obstacle_;///< If using virtual obstacle or not
     bool use_alvar_;///< Use alvar tracking instead of roi
     double arm_default_speed_;///< Default speed of the arm
+    bool closedloop_estimation_;///< Estimate parameters in closed loop
 
 protected:
     // Helper Functions
@@ -256,7 +263,9 @@ protected:
 
     inline void logMeasurements(bool mpc_flag);
 
-    //inline void setInitialStateMPC();
+    inline void storeMeasurements();
+
+    inline void setInitialState();
 
     //Gui State Transition Functions:
     //inline void stateTransitionController(bool);
@@ -313,7 +322,7 @@ protected:
 
     void rpytimerCallback(const ros::TimerEvent&);
 
-    void onlineOptimizeCallback(const ros::TimerEvent&);
+    void onlineOptimizeThread();
 
     void trajectorytimerCallback(const ros::TimerEvent&);
   

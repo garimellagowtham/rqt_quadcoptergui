@@ -16,6 +16,10 @@ control/mpc_iterate_time: 0.2
 control/set_offsets_mpc: true #Set Offsets from online optimization
 control/virtual_obstacle: false #If We are using real or virtual obstacle; Default is virtual
 control/obj_dist_max: 6.0 #Max Object distance (Clipping)
+control/closedloop_estimation: true #Closed loop systemid
+control/measurement_period: 2.0 #Time to record systemid meas
+#control/closedloop_estimation: false #Closed loop systemid
+#control/measurement_period: 10.0 #Time to record systemid meas
 
 # Param for skipping segments while visualizing gcop trajectory
 display/skip_pub_segments: 5
