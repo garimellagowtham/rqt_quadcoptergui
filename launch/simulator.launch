@@ -6,7 +6,7 @@
   <param name="/qrotoridmodeltest/control_params" type="str" value="$(find gcop_ctrl)/params/qrotoridmodelv7.cfg"/>
   <param name="/control/systemid_params" type="str" value="$(find rqt_quadcoptergui)/params/simulator_systemid.cfg"/>
   <!--<param name="/gui/logdir" type="string" value="$(find rqt_quadcoptergui)/djilogfiles"/>-->
-  <!--<node pkg="rqt_quadcoptergui" name="onboard_node" type="onboard_node" output="screen" launch-prefix="gdb--><!--args">-->
+  <!--<node pkg="rqt_quadcoptergui" name="onboard_node" type="onboard_node" output="screen" launch-prefix="gdb--> <!--args">-->
   <node pkg="rqt_quadcoptergui" name="onboard_node" type="onboard_node" output="screen">
     <remap from="/onboard_node/joy" to="/joy"/>
     <remap from="/onboard_node/goal" to="/move_base_simple/goal"/>

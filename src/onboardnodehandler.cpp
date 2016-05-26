@@ -61,6 +61,9 @@ OnboardNodeHandler::OnboardNodeHandler(ros::NodeHandle &nh_):nh(nh_)
   //Create Velocity controller:
   vel_ctrlr_.reset(new QuadVelController(delay_send_time_));
 
+  //Create Position controller:
+  pos_ctrlr_.reset(new QuadPosController(nh));
+
 /*#ifdef ARM_ENABLED
   ROS_INFO("Creating Arm Hardware Instance");
   arm_hardwareinst.reset(new dynamixelsdk::DynamixelArm(dyn_deviceInd, dyn_baudnum));
@@ -111,8 +114,8 @@ OnboardNodeHandler::OnboardNodeHandler(ros::NodeHandle &nh_):nh(nh_)
   //Timer for commanding quadcopter
   velcmdtimer = nh_.createTimer(ros::Duration(0.02), &OnboardNodeHandler::velcmdtimerCallback,this);//50Hz is the update rate of Quadcopter cmd
   velcmdtimer.stop();
-  mpcveltimer = nh_.createTimer(ros::Duration(0.02), &OnboardNodeHandler::mpcveltimerCallback,this);//50Hz is the update rate of Quadcopter cmd
-  mpcveltimer.stop();
+  mpcpostimer = nh_.createTimer(ros::Duration(0.02), &OnboardNodeHandler::mpcpostimerCallback,this);//50Hz is the update rate of Quadcopter cmd
+  mpcpostimer.stop();
   poscmdtimer = nh_.createTimer(ros::Duration(0.02), &OnboardNodeHandler::poscmdtimerCallback,this);//50Hz is the update rate of Quadcopter cmd
   poscmdtimer.stop();
   hometimer = nh_.createTimer(ros::Duration(0.02), &OnboardNodeHandler::poscmdtimerCallback,this);//50Hz is the update rate of Quadcopter cmd
@@ -212,7 +215,7 @@ void OnboardNodeHandler::setupMemberVariables()
   //Initial command:
   rpytcmd.x = rpytcmd.y = rpytcmd.z = 0;
   rpytcmd.w = 10;
-  initial_state_vel_.setZero();
+  //initial_state_vel_.setZero();
   meas_filled_ = 0;
   mpc_delay_rpy_data.x = mpc_delay_rpy_data.y = mpc_delay_rpy_data.z =0;
 
@@ -255,6 +258,7 @@ inline void OnboardNodeHandler::loadParameters()
   //nh.param<double>("/onboard_node/delay_send_time", delay_send_time_,0.2);
   nh.param<double>("/control/mpc_iterate_time", mpc_iterate_time_,delay_send_time_);
   nh.param<bool>("/control/virtual_obstacle", virtual_obstacle_,true);
+  nh.param<bool>("/control/waypoint_mpc_", waypoint_mpc_,false);
   nh.param<bool>("/control/use_alvar", use_alvar_,false);
   nh.param<double>("/arm/joint_speed",arm_default_speed_,0.6);//Default 0.6 rad/s
 
@@ -693,6 +697,10 @@ inline void OnboardNodeHandler::stateTransitionPosControl(bool state)
         goal_altitude = goal_position.z;
         reconfig_update = true;
         desired_yaw = data.rpydata.z;
+        systemid_complete_time_ = ros::Time::now();//Reset system id time to start collecting data
+        //Reset vel ctrlr smoothness
+        vel_ctrlr_->setGoal(0,0,0, desired_yaw);
+        vel_ctrlr_->resetSmoothVel();
         poscmdtimer.start();
       }
       else
@@ -736,7 +744,7 @@ inline void OnboardNodeHandler::stateTransitionMPCControl(bool state)
 
   if(!enable_mpccontrol)
   {
-      mpcveltimer.stop();
+      mpcpostimer.stop();
       mpctimer.stop();
       //Set current vel to 0:
       desired_vel.x = desired_vel.y = desired_vel.z = 0;
@@ -801,6 +809,7 @@ inline void OnboardNodeHandler::stateTransitionMPCControl(bool state)
         }
         else
         */
+        if(virtual_obstacle_ || !waypoint_mpc_)
         {
           desired_yaw = data.rpydata.z;
           //Set Initial State Velocity Desired:
@@ -808,11 +817,16 @@ inline void OnboardNodeHandler::stateTransitionMPCControl(bool state)
           Matrix3d yawM;
           Vector3d rpy(0,0,data.rpydata.z);
           so3.q2g(yawM, rpy);
-          initial_state_vel_ = yawM*x0.v; 
+          Eigen::Vector3d initial_state_vel_ = yawM*x0.v;
+          desired_vel.x = initial_state_vel_[0];
+          desired_vel.y = initial_state_vel_[1];
+          desired_vel.z = initial_state_vel_[2];
         }
         //Clear iterate mpc thread:
         iterate_mpc_thread = NULL;
 
+        //Reset systemid time:
+        systemid_complete_time_ = ros::Time::now();
         //Reset vel ctrlr smoothness
         vel_ctrlr_->setGoal(0,0,0, desired_yaw);
         vel_ctrlr_->resetSmoothVel();
@@ -821,7 +835,7 @@ inline void OnboardNodeHandler::stateTransitionMPCControl(bool state)
         rpytcmd.x = rpytcmd.y = rpytcmd.z = 0;
         rpytcmd.w = (9.81/model_control.getParameters()[0]);//Set to Default Value
         //Start MPC Vel Timer to achieve initial vel and start mpctimerCallback
-        mpcveltimer.start();
+        mpcpostimer.start();
       }
       else
       {
@@ -1641,7 +1655,11 @@ void OnboardNodeHandler::poscmdtimerCallback(const ros::TimerEvent& event)
       */
  //   double current_desired_yaw = data.rpydata.z + goal_yaw_diff;
     goal_position.z = goal_altitude;
-    parserinstance->cmdwaypoint(goal_position, desired_yaw);
+
+    pos_ctrlr_->get(data.localpos,goal_position,desired_vel);
+    ROS_INFO("Desired vel: %f,%f,%f", desired_vel.x, desired_vel.y, desired_vel.z);
+    velcmdtimerCallback(event);//Call vel callback
+    //parserinstance->cmdwaypoint(goal_position, desired_yaw);
   }
   else//Home Timer
   {
@@ -1739,7 +1757,7 @@ void OnboardNodeHandler::iterateMPC()///Used by boost thread
   mpc_thread_mutex.unlock();
 }
 
-void OnboardNodeHandler::mpcveltimerCallback(const ros::TimerEvent & event)
+void OnboardNodeHandler::mpcpostimerCallback(const ros::TimerEvent & event)
 {
   //cout<<"Obstacle Dist: "<<model_control.getDesiredObjectDistance(delay_send_time_);//DEBUG
   //ROS_INFO("Vel sent: %f,%f,%f",desired_vel.x, desired_vel.y, desired_vel.z);
@@ -1760,14 +1778,14 @@ void OnboardNodeHandler::mpcveltimerCallback(const ros::TimerEvent & event)
     else */
     if(timediff >= vel_send_time_)//First 3 seconds
     {
-        mpcveltimer.stop();
+        mpcpostimer.stop();
         mpc_request_time = event.current_real;
         mpc_delay_rpy_data = data.rpydata;
         ROS_INFO("Starting mpc timer");
         mpctimer.start();
         //parserinstance->getquaddata(data);
         mpc_delay_rpy_data = data.rpydata;
-        initial_state_vel_<<data.linvel.x, data.linvel.y, data.linvel.z;
+        desired_vel = data.linvel;
         model_control.setInitialState(data.linvel, data.rpydata);
 
         ROS_INFO("Initial Vel: %f,%f,%f",data.linvel.x, data.linvel.y, data.linvel.z);
@@ -1785,6 +1803,17 @@ void OnboardNodeHandler::mpcveltimerCallback(const ros::TimerEvent & event)
 
       
       //double object_dist = roi_vel_ctrlr_->getObjectDistance();
+      //Set Velocity Based on position controller:
+      if(waypoint_mpc_)
+      {
+        bool res = pos_ctrlr_->get(data.localpos,desired_vel);
+        if(!res)
+        {
+          ROS_INFO("Completed MPC Position Control");
+          stateTransitionMPCControl(false);
+          return;
+        }
+      }
 
       geometry_msgs::Vector3 object_position_cam_geo;
       if( roi_vel_ctrlr_->getObjectPosition(object_position_cam_geo))
@@ -1802,7 +1831,7 @@ void OnboardNodeHandler::mpcveltimerCallback(const ros::TimerEvent & event)
         double linvel = tf::Vector3(data.linvel.x, data.linvel.y, data.linvel.z).length();
         if(xydist_to_obs < model_control.getDesiredObjectDistance(0) && linvel > 0.3)
         {
-          mpcveltimer.stop();
+          mpcpostimer.stop();
           mpc_request_time = event.current_real;
           ROS_INFO("Starting mpc timer: %f", xydist_to_obs);
           mpctimer.start();
@@ -1812,7 +1841,7 @@ void OnboardNodeHandler::mpcveltimerCallback(const ros::TimerEvent & event)
           //parserinstance->getquaddata(data);
           mpc_delay_rpy_data = data.rpydata;
           model_control.setInitialState(data.linvel, data.rpydata);
-          initial_state_vel_<<data.linvel.x, data.linvel.y, data.linvel.z;
+          desired_vel = data.linvel;
           object_position_mpc_pred.x = object_position_quad[0];
           object_position_mpc_pred.y = object_position_quad[1];
           object_position_mpc_pred.z = object_position_quad[2];
@@ -1826,7 +1855,7 @@ void OnboardNodeHandler::mpcveltimerCallback(const ros::TimerEvent & event)
   }
 
   //Set desired vel:
-  vel_ctrlr_->setGoal(initial_state_vel_[0], initial_state_vel_[1], initial_state_vel_[2], desired_yaw);
+  vel_ctrlr_->setGoal(desired_vel.x, desired_vel.y, desired_vel.z, desired_yaw);
   //Get current state
   getCurrentState(vel_ctrlr_state);
   //Find command rpy for desired velocity:
@@ -1838,6 +1867,10 @@ void OnboardNodeHandler::mpcveltimerCallback(const ros::TimerEvent & event)
   rpytcmd.w = command[0];
   //send command rpy to get desired vel
   parserinstance->cmdrpythrust(rpytcmd,true);
+  if(optimize_online_)
+  {
+    storeMeasurements();
+  }
 }
 
 void OnboardNodeHandler::mpctimerCallback(const ros::TimerEvent& event)
@@ -1854,6 +1887,10 @@ void OnboardNodeHandler::mpctimerCallback(const ros::TimerEvent& event)
     */
     rpytcmd.w = (9.81/model_control.getParameters()[0]);//Set to Default Value
     parserinstance->cmdrpythrust(rpytcmd, true);
+    if(optimize_online_)
+    {
+      storeMeasurements();
+    }
     //double object_dist = roi_vel_ctrlr_->getObjectDistance();
     //ROS_INFO("Obj dist: %f",object_dist);
     //ROS_INFO("Buffer rpy: %f,%f,%f, %f",rpytcmd.x, rpytcmd.y, rpytcmd.z, rpytcmd.w);
@@ -1919,6 +1956,10 @@ void OnboardNodeHandler::mpctimerCallback(const ros::TimerEvent& event)
       rpytcmd.z = rpytcmd.z > M_PI?(rpytcmd.z - 2*M_PI):(rpytcmd.z < -M_PI)?(rpytcmd.z + 2*M_PI):rpytcmd.z;//Make sure yaw command is reasonable
       mpc_trajectory_count++;
       parserinstance->cmdrpythrust(rpytcmd, true);
+      if(optimize_online_)
+      {
+        storeMeasurements();
+      }
       //static ros::Time prev_time = ros::Time::now();
       //ROS_INFO("Current Control: %d, %f,%f,%f,%f",mpc_trajectory_count, rpytcmd.x, rpytcmd.y, rpytcmd.z, rpytcmd.w);
       //ROS_INFO("state.u[2]: %f,%f,%f",model_control.xs[0].u[2], model_control.xs[1].u[2], model_control.us[0][3]);
@@ -1955,11 +1996,11 @@ void OnboardNodeHandler::mpctimerCallback(const ros::TimerEvent& event)
           ROS_INFO("object MPC Start: %f,%f,%f",object_position_quad[0],object_position_quad[1],object_position_quad[2]);
         }
         //Record:
-        systemid_measurements.push_back(measurement);
-        control_measurements.push_back(Vector3d(rpytcmd.x, rpytcmd.y, rpytcmd.z));
+      /////  systemid_measurements.push_back(measurement);
+        ////// control_measurements.push_back(Vector3d(rpytcmd.x, rpytcmd.y, rpytcmd.z));
       }
     }
-    else if((event.current_real - mpc_request_time).toSec() < model_control.tf() + mpc_iterate_time_ + delay_send_time_+0.04)
+    /*else if((event.current_real - mpc_request_time).toSec() < model_control.tf() + mpc_iterate_time_ + delay_send_time_+0.04)
     {
       //ROS_INFO("Sending constant rpy: %f,%f,%f, %f",rpytcmd.x, rpytcmd.y, rpytcmd.z, rpytcmd.w);
       parserinstance->cmdrpythrust(rpytcmd, true);//Send Last Command
@@ -1976,10 +2017,18 @@ void OnboardNodeHandler::mpctimerCallback(const ros::TimerEvent& event)
         control_measurements.push_back(Vector3d(rpytcmd.x, rpytcmd.y, rpytcmd.z));
       }
     }
+    */
     else
     {
       mpctimer.stop();
-      stateTransitionMPCControl(false);
+      if(!waypoint_mpc_)
+      {
+        stateTransitionMPCControl(false);
+      }
+      else
+      {
+          mpcpostimer.start();
+      }
 
       //Publish Trajectory
       geometry_msgs::Vector3 localpos;
@@ -1993,9 +2042,10 @@ void OnboardNodeHandler::mpctimerCallback(const ros::TimerEvent& event)
       //Publish position wrt to current data
       model_control.publishTrajectory(localpos, initial_rpy);
       //Record Trajectory to a File
-      logMeasurements(true);
-      systemid_measurements.clear();//Clear vector for new measurements
-      control_measurements.clear();
+      //logMeasurements(true);
+      //systemid_measurements.clear();//Clear vector for system ID
+      //control_measurements.clear();
+      /*
       {
         //Log the obstacle positions:
         std::string filename = logdir_stamped_+"/obstacleposition";
@@ -2004,6 +2054,7 @@ void OnboardNodeHandler::mpctimerCallback(const ros::TimerEvent& event)
         obsposfile.precision(10);
         obsposfile<<object_position_mpc_start.x<<"\t"<<object_position_mpc_start.y<<"\t"<<object_position_mpc_start.z<<"\t"<<object_position_mpc_pred.x<<"\t"<<object_position_mpc_pred.y<<"\t"<<object_position_mpc_pred.z<<"\t"<<endl;
       } 
+      */
     }
   }
   ///NOT IMPLEMENTED

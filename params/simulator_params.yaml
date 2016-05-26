@@ -21,6 +21,10 @@ control/measurement_period: 2.0 #Time to record systemid meas
 #control/closedloop_estimation: false #Closed loop systemid
 #control/measurement_period: 10.0 #Time to record systemid meas
 
+## Position Control Params:
+control/tolerance_pos: 0.2 #Tolerance in position checking for waypoint
+control/max_vel: 2.0 #Max velocity to go to goal position
+
 # Param for skipping segments while visualizing gcop trajectory
 display/skip_pub_segments: 5
 

@@ -15,6 +15,7 @@
 #include <dynamixelsdk/arm_helper.h>
 #include <controllers/SetptCtrl.h>
 #include <controllers/quadvelcontroller.h>
+#include <controllers/quadposcontroller.h>
 
 #include <controllers/arm.h>
 #include <controllers/arm_hardware_controller.h>
@@ -106,7 +107,7 @@ protected:
 
     ////Timers
     ros::Timer armcmdtimer;
-    ros::Timer mpcveltimer;//REFACTOR #TODO
+    ros::Timer mpcpostimer;//REFACTOR #TODO
     ros::Timer velcmdtimer;//REFACTOR #TODO
     ros::Timer poscmdtimer;//REFACTOR #TODO
     ros::Timer mpctimer;//REFACTOR #TODO
@@ -129,6 +130,7 @@ protected:
     boost::shared_ptr<parsernode::Parser> parserinstance;
     boost::shared_ptr<VelController> roi_vel_ctrlr_;
     boost::shared_ptr<QuadVelController> vel_ctrlr_;///< Controls velocity of quadrotor using rpyt
+    boost::shared_ptr<QuadPosController> pos_ctrlr_;///< Controls position based on a path or a given desired pos
     QRotorIDModelControl model_control;///< MPC Controller for Quadrotor model
     SO3 &so3;
 
@@ -153,7 +155,7 @@ protected:
     double timeout_mpc_control;///< Timeout on mpc closed loop control
     //ros::Time rpytimer_start_time;///< When rpytimer started
     string logdir_stamped_;///< Name of Log Directory
-    Vector3d initial_state_vel_;///< MPC Initial State Velocity
+    //Vector3d initial_state_vel_;///< MPC Initial State Velocity
     ros::Time home_start_time;//When go home command is pressed
     bool systemid_flag_;///< Used to check if systemid is being performed or not
     ros::Time systemid_complete_time_;///< Time when systemid is completed
@@ -238,6 +240,7 @@ protected:
     double delay_send_time_;///< Send dummy rpy for this time
     double mpc_iterate_time_;///< Time taken for mpc to iterate
     bool  virtual_obstacle_;///< If using virtual obstacle or not
+    bool  waypoint_mpc_;///< Use mpc to follow waypoints and avoid obstacles
     bool use_alvar_;///< Use alvar tracking instead of roi
     double arm_default_speed_;///< Default speed of the arm
     bool closedloop_estimation_;///< Estimate parameters in closed loop
@@ -310,7 +313,7 @@ protected:
 
     //void goaltimerCallback(const ros::TimerEvent&);
 
-    void mpcveltimerCallback(const ros::TimerEvent&);
+    void mpcpostimerCallback(const ros::TimerEvent&);
 
     void velcmdtimerCallback(const ros::TimerEvent&);
 
