@@ -212,6 +212,7 @@ void OnboardNodeHandler::setupMemberVariables()
 
   //systemid_measurements.reserve(600);
   //control_measurements.reserve(600);
+  systemid.verbose = true;
 }
 
 inline void OnboardNodeHandler::loadParameters()
@@ -237,7 +238,8 @@ inline void OnboardNodeHandler::loadParameters()
   nh.param<bool>("/control/set_offsets_mpc", set_offsets_mpc_,false);
   nh.param<double>("/control/measurement_period", measurement_period,10.0);
   nh.param<double>("/control/vel_send_time", vel_send_time_,3.0);
-  nh.param<double>("/control/delay_send_time", delay_send_time_,0.2);
+  nh.param<double>("/onboard_node/delay_send_time", delay_send_time_,0.2);
+  nh.param<double>("/control/mpc_iterate_time", mpc_iterate_time_,delay_send_time_);
   nh.param<bool>("/control/virtual_obstacle", virtual_obstacle_,true);
   nh.param<double>("/control/offsets_timeperiod", systemid.offsets_timeperiod,0.5);
   nh.param<bool>("/control/use_alvar", use_alvar_,false);
@@ -1365,7 +1367,6 @@ void OnboardNodeHandler::onlineOptimizeCallback(const ros::TimerEvent &event)
     so3.q2g(systemid_init_state.R,systemid_measurements[0].rpy);
     systemid_init_state.u<<0,0,systemid_measurements[0].rpy(2);
     systemid.EstimateParameters(systemid_measurements,systemid_init_state,&stdev_gains, &mean_offsets, &stdev_offsets);//Estimate Parameters
-    systemid.qrotor_gains[0] -= 0.004;
     if(!set_offsets_mpc_)
     {
       model_control.setParametersAndStdev(systemid.qrotor_gains,stdev_gains);//Set Optimization to right gains
@@ -1673,7 +1674,9 @@ void OnboardNodeHandler::mpcveltimerCallback(const ros::TimerEvent & event)
         quad_orientation.setEulerYPR(0, data.rpydata.y, data.rpydata.x);
         double cyaw = cos(data.rpydata.z);
         double syaw = sin(data.rpydata.z);
-        object_position_quad = quad_orientation*(CAM_QUAD_transform*object_position_quad) - tf::Vector3(data.linvel.x*cyaw +data.linvel.y*syaw, -data.linvel.x*syaw+data.linvel.y*cyaw, data.linvel.z)*2*delay_send_time_;//Get Object Position in Quad frame
+        tf::Vector3 yawcompensated_vel = tf::Vector3(data.linvel.x*cyaw +data.linvel.y*syaw, -data.linvel.x*syaw+data.linvel.y*cyaw, data.linvel.z);
+        double total_delay_time = delay_send_time_ + mpc_iterate_time_;
+        object_position_quad = quad_orientation*(CAM_QUAD_transform*object_position_quad) - yawcompensated_vel*total_delay_time;//Get Object Position in Quad frame
         double xydist_to_obs = tf::Vector3(object_position_quad[0], object_position_quad[1], 0).length();//Make this based on obstacle axis etc
         //ROS_INFO("xydist_to_obs: %f",xydist_to_obs);
         double linvel = tf::Vector3(data.linvel.x, data.linvel.y, data.linvel.z).length();
@@ -1690,7 +1693,11 @@ void OnboardNodeHandler::mpcveltimerCallback(const ros::TimerEvent & event)
           mpc_delay_rpy_data = data.rpydata;
           model_control.setInitialState(data.linvel, data.rpydata);
           initial_state_vel_<<data.linvel.x, data.linvel.y, data.linvel.z;
-          ROS_INFO("Initial Vel: %f,%f,%f",data.linvel.x, data.linvel.y, data.linvel.z);
+          object_position_mpc_pred.x = object_position_quad[0];
+          object_position_mpc_pred.y = object_position_quad[1];
+          object_position_mpc_pred.z = object_position_quad[2];
+          ROS_INFO("Initial Pos: %f,%f,%f",data.localpos.x, data.localpos.y, data.localpos.z);
+          ROS_INFO("Initial Vel: %f,%f,%f",yawcompensated_vel[0],yawcompensated_vel[1], yawcompensated_vel[2]);
           ROS_INFO("Object Position Quad: %f,%f,%f",object_position_quad[0], object_position_quad[1], object_position_quad[2]);
           ROS_INFO("Starting MPC Thread");
           iterate_mpc_thread = new boost::thread(boost::bind(&OnboardNodeHandler::iterateMPC,this));//Start Iterating only one run
@@ -1715,8 +1722,9 @@ void OnboardNodeHandler::mpcveltimerCallback(const ros::TimerEvent & event)
 
 void OnboardNodeHandler::mpctimerCallback(const ros::TimerEvent& event)
 {
+  parserinstance->getquaddata(data);
   //For first 0.2 seconds send zero controls The quadcopter is responding only after that:
-  if((event.current_real - mpc_request_time).toSec() < delay_send_time_)
+  if((event.current_real - mpc_request_time).toSec() < mpc_iterate_time_)
   {
     rpytcmd.x = mpc_delay_rpy_data.x;
     rpytcmd.y = mpc_delay_rpy_data.y;
@@ -1728,7 +1736,8 @@ void OnboardNodeHandler::mpctimerCallback(const ros::TimerEvent& event)
     parserinstance->cmdrpythrust(rpytcmd, true);
     //double object_dist = roi_vel_ctrlr_->getObjectDistance();
     //ROS_INFO("Obj dist: %f",object_dist);
-    //ROS_INFO("Sending zero rpy: %f,%f,%f, %f",rpytcmd.x, rpytcmd.y, rpytcmd.z, rpytcmd.w);
+    //ROS_INFO("Buffer rpy: %f,%f,%f, %f",rpytcmd.x, rpytcmd.y, rpytcmd.z, rpytcmd.w);
+    //ROS_INFO("Actual rpy: %f,%f,%f", data.rpydata.x, data.rpydata.y, data.rpydata.z);
     /*{
       //Record Data
       QRotorSystemIDMeasurement measurement;
@@ -1772,6 +1781,8 @@ void OnboardNodeHandler::mpctimerCallback(const ros::TimerEvent& event)
     }
   }
 
+  
+
   if(!mpc_closed_loop_)
   {
     //ROS_INFO("Number of controls: %d, %d",model_control.us.size(), mpc_trajectory_count);
@@ -1797,17 +1808,38 @@ void OnboardNodeHandler::mpctimerCallback(const ros::TimerEvent& event)
       {
         //Record Data
         QRotorSystemIDMeasurement measurement;
-        measurement.t = (ros::Time::now() - mpc_request_time).toSec()-(2*delay_send_time_+0.02);//For we are using up 0.16 seconds for sending virtual controls to wakeup quadrotor
-
+        measurement.t = (ros::Time::now() - mpc_request_time).toSec()-(mpc_iterate_time_ + delay_send_time_+0.02);//For we are using up 0.16 seconds for sending virtual controls to wakeup quadrotor
         measurement.position<<data.localpos.x, data.localpos.y, data.localpos.z;
         measurement.rpy<<data.rpydata.x, data.rpydata.y, data.rpydata.z;
         measurement.control<<rpytcmd.w, current_u[1], current_u[2], current_u[3];
+
+        if(measurement.t >= 0 && measurement.t < 0.02)//When it gets to 0 first
+        {
+          //Record the starting obstacle distance:
+          if(!roi_vel_ctrlr_->getObjectPosition(object_position_mpc_start))
+            ROS_WARN("Cannot find object position at mpc start");
+          tf::Vector3 object_position_quad(object_position_mpc_start.x, object_position_mpc_start.y, object_position_mpc_start.z);
+          double cyaw = cos(data.rpydata.z);
+          double syaw = sin(data.rpydata.z);
+          tf::Vector3 yawcompensated_vel = tf::Vector3(data.linvel.x*cyaw +data.linvel.y*syaw, -data.linvel.x*syaw+data.linvel.y*cyaw, data.linvel.z);
+          tf::Matrix3x3 quad_orientation;
+          quad_orientation.setEulerYPR(0, data.rpydata.y, data.rpydata.x);
+          object_position_quad = quad_orientation*(CAM_QUAD_transform*object_position_quad);
+          object_position_mpc_start.x = object_position_quad[0];
+          object_position_mpc_start.y = object_position_quad[1];
+          object_position_mpc_start.z = object_position_quad[2];
+          quad_meas_mpc_start = measurement;//Store the starting measurement
+          ROS_INFO("Time: %f",measurement.t);
+          ROS_INFO("Initial Pos: %f,%f,%f",data.localpos.x, data.localpos.y, data.localpos.z);
+          ROS_INFO("Initial Vel: %f,%f,%f",yawcompensated_vel[0],yawcompensated_vel[1], yawcompensated_vel[2]);
+          ROS_INFO("object MPC Start: %f,%f,%f",object_position_quad[0],object_position_quad[1],object_position_quad[2]);
+        }
         //Record:
         systemid_measurements.push_back(measurement);
         control_measurements.push_back(Vector3d(rpytcmd.x, rpytcmd.y, rpytcmd.z));
       }
     }
-    else if((event.current_real - mpc_request_time).toSec() < model_control.tf() + 2*delay_send_time_+0.04)
+    else if((event.current_real - mpc_request_time).toSec() < model_control.tf() + mpc_iterate_time_ + delay_send_time_+0.04)
     {
       //ROS_INFO("Sending constant rpy: %f,%f,%f, %f",rpytcmd.x, rpytcmd.y, rpytcmd.z, rpytcmd.w);
       parserinstance->cmdrpythrust(rpytcmd, true);//Send Last Command
@@ -1815,8 +1847,7 @@ void OnboardNodeHandler::mpctimerCallback(const ros::TimerEvent& event)
       {
         //Record Data
         QRotorSystemIDMeasurement measurement;
-        measurement.t = (ros::Time::now() - mpc_request_time).toSec()-(2*delay_send_time_+0.02);
-
+        measurement.t = (ros::Time::now() - mpc_request_time).toSec()-(mpc_iterate_time_ + delay_send_time_+0.02); 
         measurement.position<<data.localpos.x, data.localpos.y, data.localpos.z;
         measurement.rpy<<data.rpydata.x, data.rpydata.y, data.rpydata.z;
         measurement.control<<rpytcmd.w, 0, 0, 0;
@@ -1832,18 +1863,25 @@ void OnboardNodeHandler::mpctimerCallback(const ros::TimerEvent& event)
 
       //Publish Trajectory
       geometry_msgs::Vector3 localpos;
-      localpos.x = systemid_measurements.begin()->position[0];
-      localpos.y = systemid_measurements.begin()->position[1];
-      localpos.z = systemid_measurements.begin()->position[2];
+      localpos.x = quad_meas_mpc_start.position[0];
+      localpos.y = quad_meas_mpc_start.position[1];
+      localpos.z = quad_meas_mpc_start.position[2];
       geometry_msgs::Vector3 initial_rpy;
-      initial_rpy.x = systemid_measurements.begin()->rpy[0];
-      initial_rpy.y = systemid_measurements.begin()->rpy[1];
-      initial_rpy.z = systemid_measurements.begin()->rpy[2];
+      initial_rpy.x = quad_meas_mpc_start.rpy[0];
+      initial_rpy.y = quad_meas_mpc_start.rpy[1];
+      initial_rpy.z = quad_meas_mpc_start.rpy[2];
       //Publish position wrt to current data
       model_control.publishTrajectory(localpos, initial_rpy);
-
       //Record Trajectory to a File
       logMeasurements(true);
+      {
+        //Log the obstacle positions:
+        std::string filename = logdir_stamped_+"/obstacleposition";
+        filename = parsernode::common::addtimestring(filename);
+        ofstream obsposfile(filename.c_str());
+        obsposfile.precision(10);
+        obsposfile<<object_position_mpc_start.x<<"\t"<<object_position_mpc_start.y<<"\t"<<object_position_mpc_start.z<<"\t"<<object_position_mpc_pred.x<<"\t"<<object_position_mpc_pred.y<<"\t"<<object_position_mpc_pred.z<<"\t"<<endl;
+      } 
     }
   }
   ///NOT IMPLEMENTED

@@ -4,7 +4,7 @@
   <param name="mesh_description" textfile="$(find rqt_quadcoptergui)/urdf/mesh.urdf"/>
   <param name="/gui/logdir" type="string" value="$(find rqt_quadcoptergui)/simlogfiles"/>
   <param name="/qrotoridmodeltest/control_params" type="str" value="$(find gcop_ctrl)/params/qrotoridmodelv7.cfg"/>
-  <param name="/control/systemid_params" type="str" value="$(find rqt_quadcoptergui)/params/qrotorsystemid.cfg"/>
+  <param name="/control/systemid_params" type="str" value="$(find rqt_quadcoptergui)/params/simulator_systemid.cfg"/>
   <!--<param name="/gui/logdir" type="string" value="$(find rqt_quadcoptergui)/djilogfiles"/>-->
   <!--<node pkg="rqt_quadcoptergui" name="onboard_node" type="onboard_node" output="screen" launch-prefix="gdb--><!--args">-->
   <node pkg="rqt_quadcoptergui" name="onboard_node" type="onboard_node" output="screen">

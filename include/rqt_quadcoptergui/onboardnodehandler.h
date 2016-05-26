@@ -198,6 +198,9 @@ protected:
     //double actual_armstate[2*NOFJOINTS];//The angles obtained from dynamixelsdk
     //double cmd_armstate[2*NOFJOINTS];//The angles of the arm in radians in gcop convention and angular velocities
     //double tip_position[3];//Tip Position
+    geometry_msgs::Vector3 object_position_mpc_start;///< Object Position at start of MPC
+    geometry_msgs::Vector3 object_position_mpc_pred;///< Object Position predicted using delay time
+    QRotorSystemIDMeasurement quad_meas_mpc_start;///< Object Position predicted using delay time
     
 
     //// Parser Variables
@@ -227,6 +230,7 @@ protected:
     double measurement_period;///< Measurement time for optimization
     double vel_send_time_;///< Velocity Send Time
     double delay_send_time_;///< Send dummy rpy for this time
+    double mpc_iterate_time_;///< Time taken for mpc to iterate
     bool  virtual_obstacle_;///< If using virtual obstacle or not
     bool use_alvar_;///< Use alvar tracking instead of roi
     double arm_default_speed_;///< Default speed of the arm

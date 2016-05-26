@@ -11,8 +11,8 @@ tracking/obs_avoidance_mode: true
 
 ### Control Params:
 control/optimize_online: true
-control/vel_send_time: 1.0
-control/delay_send_time: 0.2
+control/vel_send_time: 5.0
+control/mpc_iterate_time: 0.2
 control/set_offsets_mpc: true #Set Offsets from online optimization
 control/virtual_obstacle: false #If We are using real or virtual obstacle; Default is virtual
 control/obj_dist_max: 6.0 #Max Object distance (Clipping)
@@ -21,6 +21,7 @@ control/obj_dist_max: 6.0 #Max Object distance (Clipping)
 display/skip_pub_segments: 5
 
 # reconfig params:
-onboard_node/ki_velctrlxy: 0.05
-onboard_node/ki_velctrlz: 0.1
-onboard_node/kp_velctrl: 4.0
+onboard_node/ki_velctrlxy: 0.005
+onboard_node/ki_velctrlz: 0
+onboard_node/kp_velctrl: 2.0
+onboard_node/delay_send_time: 0.2
