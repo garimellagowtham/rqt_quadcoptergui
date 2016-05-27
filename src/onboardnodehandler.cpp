@@ -13,7 +13,7 @@ OnboardNodeHandler::OnboardNodeHandler(ros::NodeHandle &nh_):nh(nh_)
                                                             , reconfig_init(false), reconfig_update(false)
                                                             , desired_yaw(0), kp_trajectory_tracking(1.0), timeout_trajectory_tracking(1.0), timeout_mpc_control(1.0)
                                                             , model_control(nh_, "world"), mpc_closed_loop_(false), mpc_trajectory_count(0)
-                                                            , so3(SO3::Instance()), iterate_mpc_thread(NULL), mpc_thread_iterating(false)
+                                                            , so3(SO3::Instance()), iterate_mpc_thread(NULL), mpc_thread_iterate(false), fast_iterate_mpc(false)
                                                             , systemid_flag_(false), systemid_complete_time_(ros::Time::now())
                                                             //, waypoint_vel(0.1), waypoint_yawvel(0.01)
                                                             //, armcmdrate(4), armratecount(0), gripped_already(false), newcamdata(false)
@@ -57,6 +57,9 @@ OnboardNodeHandler::OnboardNodeHandler(ros::NodeHandle &nh_):nh(nh_)
 
   ROS_INFO("Starting Reconfig Thread");
   reconfig_service_thread = new boost::thread(boost::bind(&OnboardNodeHandler::reconfigThread,this));//Start thread
+
+  ROS_INFO("Starting Reconfig Thread");
+  iterate_mpc_thread = new boost::thread(boost::bind(&OnboardNodeHandler::iterateMPCThread,this));//Start thread
 
   //Create Velocity controller:
   vel_ctrlr_.reset(new QuadVelController(delay_send_time_));
@@ -1747,25 +1750,36 @@ void OnboardNodeHandler::trajectorytimerCallback(const ros::TimerEvent& event)
     }
 }
 
-void OnboardNodeHandler::iterateMPC()///Used by boost thread
+void OnboardNodeHandler::iterateMPCThread()///Used by boost thread
 {
-  mpc_thread_mutex.lock();
-  mpc_thread_iterating = true;
-  mpc_thread_mutex.unlock();
-  model_control.iterate(true);//Fast Iterate
-  //Log Trajectory
-  if(!logdir_created)
-    setupLogDir();
+  bool mpc_thread_iterate_copy;
+  while(ros::ok())
   {
+    mpc_thread_mutex.lock();
+    mpc_thread_iterate_copy = mpc_thread_iterate;
+    mpc_thread_mutex.unlock();
+    if(mpc_thread_iterate_copy)
+    {
+      if(fast_iterate_mpc)
+        model_control.iterate(true);//Fast Iterate
 
-    std::string filename = logdir_stamped_+"/mpctrajectory";
-    filename = parsernode::common::addtimestring(filename);
-    model_control.logTrajectory(filename);
+      //Log Trajectory
+      /*if(!logdir_created)
+        setupLogDir();
+        {
+
+        std::string filename = logdir_stamped_+"/mpctrajectory";
+        filename = parsernode::common::addtimestring(filename);
+        model_control.logTrajectory(filename);
+        }
+       */
+      mpc_thread_mutex.lock();
+      ROS_INFO("Iterating done");
+      mpc_thread_iterate = false;
+      mpc_thread_mutex.unlock();
+    }
+    ros::Duration(0.02).sleep();//Service at 50 Hz mpc calls
   }
-  mpc_thread_mutex.lock();
-  ROS_INFO("Iterating done");
-  mpc_thread_iterating = false;
-  mpc_thread_mutex.unlock();
 }
 
 void OnboardNodeHandler::mpcpostimerCallback(const ros::TimerEvent & event)
@@ -1801,7 +1815,17 @@ void OnboardNodeHandler::mpcpostimerCallback(const ros::TimerEvent & event)
 
         ROS_INFO("Initial Vel: %f,%f,%f",data.linvel.x, data.linvel.y, data.linvel.z);
         ROS_INFO("Starting MPC Thread");
-        iterate_mpc_thread = new boost::thread(boost::bind(&OnboardNodeHandler::iterateMPC,this));//Start Iterating only one run
+        mpc_thread_mutex.lock();
+        if(!mpc_thread_iterate)
+        {
+          mpc_thread_iterate = true;
+          fast_iterate_mpc = true;
+        }
+        else
+        {
+          ROS_WARN("Already iterating ");
+        }
+        mpc_thread_mutex.unlock();
     }
   }
   else
@@ -1847,6 +1871,7 @@ void OnboardNodeHandler::mpcpostimerCallback(const ros::TimerEvent & event)
         {
           mpcpostimer.stop();
           mpc_request_time = event.current_real;
+          mpc_trajectory_count = 0;
           ROS_INFO("Starting mpc timer: %f", xydist_to_obs);
           mpctimer.start();
 
@@ -1863,7 +1888,17 @@ void OnboardNodeHandler::mpcpostimerCallback(const ros::TimerEvent & event)
           ROS_INFO("Initial Vel: %f,%f,%f",yawcompensated_vel[0],yawcompensated_vel[1], yawcompensated_vel[2]);
           ROS_INFO("Object Position Quad: %f,%f,%f",object_position_quad[0], object_position_quad[1], object_position_quad[2]);
           ROS_INFO("Starting MPC Thread");
-          iterate_mpc_thread = new boost::thread(boost::bind(&OnboardNodeHandler::iterateMPC,this));//Start Iterating only one run
+          mpc_thread_mutex.lock();
+          if(!mpc_thread_iterate)
+          {
+            mpc_thread_iterate = true;
+            fast_iterate_mpc = true;
+          }
+          else
+          {
+            ROS_WARN("Already iterating ");
+          }
+          mpc_thread_mutex.unlock();
         }
       }
   }
@@ -1928,11 +1963,11 @@ void OnboardNodeHandler::mpctimerCallback(const ros::TimerEvent& event)
   //Check if thread can be joined [Done Optimizing]
   if(iterate_mpc_thread)
   {
-    bool mpc_thread_iterating_copy_;
+    bool mpc_thread_iterate_copy_;
     mpc_thread_mutex.lock();
-    mpc_thread_iterating_copy_ = mpc_thread_iterating;
+    mpc_thread_iterate_copy_ = mpc_thread_iterate;
     mpc_thread_mutex.unlock();
-    if(mpc_thread_iterating_copy_)
+    if(mpc_thread_iterate_copy_)
     {
       ROS_WARN("Optimization not completed on time");
       mpctimer.stop();
@@ -2041,6 +2076,15 @@ void OnboardNodeHandler::mpctimerCallback(const ros::TimerEvent& event)
       }
       else
       {
+          //Restart MPC Full Iteration
+          mpc_thread_mutex.lock();
+          if(!mpc_thread_iterate)
+          {
+            ROS_INFO("Running Full Iteration ");
+            mpc_thread_iterate = true;
+            fast_iterate_mpc = false;
+          }
+          mpc_thread_mutex.unlock();
           mpcpostimer.start();
       }
 

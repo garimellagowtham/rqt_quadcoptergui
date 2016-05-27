@@ -170,15 +170,16 @@ protected:
     geometry_msgs::Vector3 mpc_delay_rpy_data;///< RPY Commands sent during start of 
 
     /// Thread for Iterating:
-    boost::thread *iterate_mpc_thread;///< Iterate MPC
-    bool mpc_thread_iterating;///< Whether mpc is iterating
+    bool mpc_thread_iterate;///< Whether mpc is iterating
+    bool fast_iterate_mpc;///< Whether to do a fast iteration or not
     boost::mutex mpc_thread_mutex;
     boost::mutex systemid_thread_mutex;
+    boost::recursive_mutex reconfig_mutex;
 
     /// Thread for system ID
     boost::thread *iterate_systemid_thread;
     boost::thread *reconfig_service_thread;
-    boost::recursive_mutex reconfig_mutex;
+    boost::thread *iterate_mpc_thread;///< Iterate MPC
 
     //double waypoint_vel;///< Velocity with which to move to goal
     //double waypoint_yawvel;///< Velocity with which to move in yaw towards goal 
@@ -254,8 +255,6 @@ protected:
 
     inline void loadParameters();
 
-    void iterateMPC();
-
     inline void createArmInstance();
 
     inline bool createParserInstance();
@@ -329,6 +328,8 @@ protected:
     void onlineOptimizeThread();
 
     void reconfigThread();
+
+    void iterateMPCThread();
 
     void trajectorytimerCallback(const ros::TimerEvent&);
   
