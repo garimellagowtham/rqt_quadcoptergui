@@ -638,15 +638,7 @@ inline void OnboardNodeHandler::stateTransitionVelControl(bool state)
     }
     else
     {
-      desired_vel.x = desired_vel.y = desired_vel.z = 0;
-      desired_yaw = data.rpydata.z;
-      reconfig_update = true;
-      //Clear buffers of vel controller:
-      vel_ctrlr_->setGoal(desired_vel.x, desired_vel.y, desired_vel.z, desired_yaw);
-      vel_ctrlr_->resetSmoothVel();
-      vel_ctrlr_->clearBuffer();
-      rpytcmd.x = rpytcmd.y = rpytcmd.z = 0;
-      rpytcmd.w = (9.81/model_control.getParameters()[0]);//Set to Default Value
+      clearVelController();
       clearSystemID();
       //Start Timer to send vel to quadcopter
       velcmdtimer.start();
@@ -701,11 +693,8 @@ inline void OnboardNodeHandler::stateTransitionPosControl(bool state)
         goal_position = data.localpos;
         goal_altitude = goal_position.z;
         reconfig_update = true;
-        desired_yaw = data.rpydata.z;
         clearSystemID();
-        //Reset vel ctrlr smoothness
-        vel_ctrlr_->setGoal(0,0,0, desired_yaw);
-        vel_ctrlr_->resetSmoothVel();
+        clearVelController();
         poscmdtimer.start();
       }
       else
@@ -759,6 +748,7 @@ inline void OnboardNodeHandler::stateTransitionMPCControl(bool state)
       //parserinstance->cmdvelguided(desired_vel, desired_yaw);
       //Set current trajectory count to 0:
       mpc_trajectory_count = 0;
+      pos_ctrlr_->resetWayPointCount();//For new trials start from beginning of path
   }
   else
   {
@@ -828,16 +818,10 @@ inline void OnboardNodeHandler::stateTransitionMPCControl(bool state)
           desired_vel.z = initial_state_vel_[2];
         }
         //Clear iterate mpc thread:
-        iterate_mpc_thread = NULL;
+        //iterate_mpc_thread = NULL;
 
         clearSystemID();
-        //Reset vel ctrlr smoothness
-        vel_ctrlr_->setGoal(0,0,0, desired_yaw);
-        vel_ctrlr_->resetSmoothVel();
-        //Clear buffers of vel controller:
-        vel_ctrlr_->clearBuffer();
-        rpytcmd.x = rpytcmd.y = rpytcmd.z = 0;
-        rpytcmd.w = (9.81/model_control.getParameters()[0]);//Set to Default Value
+        clearVelController();
         //Start MPC Vel Timer to achieve initial vel and start mpctimerCallback
         mpcpostimer.start();
       }
@@ -1011,6 +995,20 @@ inline void OnboardNodeHandler::clearSystemID()
   control_measurements.clear();
   meas_filled_ = 0;
 }
+
+inline void OnboardNodeHandler::clearVelController()
+{
+  desired_vel.x = desired_vel.y = desired_vel.z = 0;
+  desired_yaw = data.rpydata.z;
+  reconfig_update = true;
+  //Clear buffers of vel controller:
+  vel_ctrlr_->setGoal(desired_vel.x, desired_vel.y, desired_vel.z, desired_yaw);
+  vel_ctrlr_->resetSmoothVel();
+  vel_ctrlr_->clearBuffer();
+  rpytcmd.x = rpytcmd.y = rpytcmd.z = 0;
+  rpytcmd.w = (9.81/model_control.getParameters()[0]);//Set to Default Value
+}
+
 ////////////////////////Gui Button Commands////////////
 inline void OnboardNodeHandler::armQuad()
 {
@@ -1842,6 +1840,11 @@ void OnboardNodeHandler::mpcpostimerCallback(const ros::TimerEvent & event)
       if(waypoint_mpc_)
       {
         bool res = pos_ctrlr_->get(data.localpos,desired_vel);
+        /*double delta_yaw = (desired_yaw - data.rpydata.z);
+        delta_yaw = delta_yaw > M_PI?(delta_yaw - 2*M_PI):(delta_yaw < -M_PI)?(delta_yaw + 2*M_PI):delta_yaw;
+        if(std::abs(delta_yaw) > M_PI/2)
+          desired_yaw = data.rpydata.z;//Do not turn back in any case
+          */
         if(!res)
         {
           ROS_INFO("Completed MPC Position Control");

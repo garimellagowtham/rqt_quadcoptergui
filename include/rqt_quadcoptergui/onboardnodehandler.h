@@ -285,6 +285,7 @@ protected:
     //inline void stateTransitionJoyControl(bool);
     //inline void stateTransitionIntegrator(bool);
     inline void clearSystemID();
+    inline void clearVelController();
 
     //Gui Button Command Functions:
     inline void armQuad();
