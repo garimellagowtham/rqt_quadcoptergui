@@ -21,6 +21,8 @@ def gps_convert_ned(gps_t_lon, gps_t_lat,
   d_lat = gps_t_lat - gps_r_lat;
   ned_x = (math.pi/180.)*d_lat * C_EARTH;
   ned_y = (math.pi/180.)*d_lon * C_EARTH * math.cos((math.pi/180.)*gps_t_lat);
+  #s = 'ned_x: '+repr(ned_x) + ' ned_y: ' + repr(ned_y);
+  #print s;
   return (ned_x, ned_y)
 
 
@@ -66,6 +68,7 @@ class WaypointManagerFrame(Frame):
   def publishWps(self):
     gps_msgs = self.getGpsList();
     path = Path()
+    path.header.frame_id = 'world'
     for gm in gps_msgs:
       (x,y) = gps_convert_ned(
         gm.longitude,
@@ -79,6 +82,7 @@ class WaypointManagerFrame(Frame):
       pose.pose.position.x = x
       pose.pose.position.y = y
       pose.pose.position.z = z
+      pose.header.frame_id = 'world'
       path.poses.append(pose)
     self.path_pub.publish(path)
 
@@ -134,7 +138,7 @@ class WaypointManagerFrame(Frame):
     self.pack(fill=BOTH, expand=1)   
 
     self.gps_list = Listbox(self.parent)
-    self.gps_list.pack(side=RIGHT)    
+    self.gps_list.pack(side=LEFT)    
 
     self.addButton = Button(self, text="Add",
         command=self.insertCurrentGps)
@@ -152,12 +156,15 @@ def signal_handler(signal, frame):
   print('Killed')
   sys.exit(0)
 
+root = Tk()
+wpManager = WaypointManagerFrame(root)
+
 def gpsCallback(data):
   wpManager.setGPS(data)
 def gpsStartCallback(data):
   print "Got home GPS"
-  wpManager.setRefGPS(data)
-  gps_ref_sub.unsubscribe()
+  wpManager.setRefGps(data)
+  #gps_ref_sub.unsubscribe()
 
 if __name__ == '__main__':
   signal.signal(signal.SIGINT, signal_handler)
@@ -169,8 +176,6 @@ if __name__ == '__main__':
   ros_thread.daemon = True
   ros_thread.start()
 
-  root = Tk()
-  wpManager = WaypointManagerFrame(root)
   root.mainloop()
   root.destroy()
 

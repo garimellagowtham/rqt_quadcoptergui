@@ -22,17 +22,18 @@ control/measurement_period: 2.0 #Time to record systemid meas
 #control/measurement_period: 10.0 #Time to record systemid meas
 
 ## Position Control Params:
-control/tolerance_pos: 2.0 #Tolerance in position checking for waypoint
-control/max_vel: 2.0 #Max velocity to go to goal position
+reconfig/tolerance_pos: 0.5 #Tolerance in position checking for waypoint
+control/max_vel: 3.0 #Max velocity to go to goal position
+reconfig/reduction_gain: 0.5 #Max velocity to go to goal position
 
 ## Waypoint MPC:
-control/waypoint_mpc: false
+control/waypoint_mpc: true
 
 # Param for skipping segments while visualizing gcop trajectory
 display/skip_pub_segments: 5
 
 # reconfig params:
-reconfig/ki_velctrlxy: 0.005
+reconfig/ki_velctrlxy: 0.001
 reconfig/ki_velctrlz: 0
-reconfig/kp_velctrl: 2.0
+reconfig/kp_velctrl: 1.0
 reconfig/delay_send_time: 0.2

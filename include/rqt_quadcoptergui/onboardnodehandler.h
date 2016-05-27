@@ -285,6 +285,7 @@ protected:
     inline void stateTransitionEnableArm(bool);
     //inline void stateTransitionJoyControl(bool);
     //inline void stateTransitionIntegrator(bool);
+    inline void clearSystemID();
 
     //Gui Button Command Functions:
     inline void armQuad();

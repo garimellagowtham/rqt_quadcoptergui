@@ -435,10 +435,13 @@ inline void OnboardNodeHandler::storeMeasurements()
       QRotorSystemIDMeasurement measurement;
       measurement.t = time;
       double time_diff = measurement.t - prev_ctrl_time;
-      if(time_diff < 0.005 || time_diff > 0.025)
+      if(time_diff < 0.005)
       {
-        ROS_WARN("Time diff Expected 0.02; Found: %f, size: %lu, time: %f",time_diff, control_measurements.size(), time);
-        time_diff = time_diff < 0.005?0.005:(time_diff > 0.025)?0.025:time_diff;//Hard reset;
+        ROS_WARN("Time diff Expected 0.02; Found: %f, size: %lu, time: %f; skipping measurement",time_diff, control_measurements.size(), time);
+        if(meas_filled_ > 0)
+          --meas_filled_;
+        return;
+        //time_diff = time_diff < 0.005?0.005:(time_diff > 0.025)?0.025:time_diff;//Hard reset;
       }
 
       measurement.control[0] = rpytcmd.w;
@@ -641,10 +644,7 @@ inline void OnboardNodeHandler::stateTransitionVelControl(bool state)
       vel_ctrlr_->clearBuffer();
       rpytcmd.x = rpytcmd.y = rpytcmd.z = 0;
       rpytcmd.w = (9.81/model_control.getParameters()[0]);//Set to Default Value
-      //Online System ID Settings
-      systemid_complete_time_ = ros::Time::now();
-      systemid_measurements.clear();
-      control_measurements.clear();
+      clearSystemID();
       //Start Timer to send vel to quadcopter
       velcmdtimer.start();
     }
@@ -699,10 +699,7 @@ inline void OnboardNodeHandler::stateTransitionPosControl(bool state)
         goal_altitude = goal_position.z;
         reconfig_update = true;
         desired_yaw = data.rpydata.z;
-        //Clear System ID stuff
-        systemid_complete_time_ = ros::Time::now();//Reset system id time to start collecting data
-        systemid_measurements.clear();
-        control_measurements.clear();
+        clearSystemID();
         //Reset vel ctrlr smoothness
         vel_ctrlr_->setGoal(0,0,0, desired_yaw);
         vel_ctrlr_->resetSmoothVel();
@@ -830,10 +827,7 @@ inline void OnboardNodeHandler::stateTransitionMPCControl(bool state)
         //Clear iterate mpc thread:
         iterate_mpc_thread = NULL;
 
-        //Reset systemid time:
-        systemid_complete_time_ = ros::Time::now();
-        systemid_measurements.clear();
-        control_measurements.clear();
+        clearSystemID();
         //Reset vel ctrlr smoothness
         vel_ctrlr_->setGoal(0,0,0, desired_yaw);
         vel_ctrlr_->resetSmoothVel();
@@ -974,7 +968,7 @@ inline void OnboardNodeHandler::stateTransitionRpytControl(bool state)
       ROS_INFO("Starting rpy timer");
       //rpytimer_start_time = ros::Time::now();
       //Online Optimization Settings
-      systemid_complete_time_ = ros::Time::now();
+      clearSystemID();
       parserinstance->getquaddata(data);
       rpytimer.start();
 
@@ -1006,6 +1000,14 @@ PUBLISH_RPYT_CONTROL_STATE:
   gui_state_publisher_.publish(state_message);
 }
 
+inline void OnboardNodeHandler::clearSystemID()
+{
+  //Clear System ID stuff
+  systemid_complete_time_ = ros::Time::now();//Reset system id time to start collecting data
+  systemid_measurements.clear();
+  control_measurements.clear();
+  meas_filled_ = 0;
+}
 ////////////////////////Gui Button Commands////////////
 inline void OnboardNodeHandler::armQuad()
 {
@@ -1283,6 +1285,8 @@ void OnboardNodeHandler::paramreqCallback(rqt_quadcoptergui::QuadcopterInterface
   vel_ctrlr_->kp_ = config.kp_velctrl;
   vel_ctrlr_->ki_[0] = vel_ctrlr_->ki_[1] = config.ki_velctrlxy;
   vel_ctrlr_->ki_[2] = config.ki_velctrlz;
+  //Set Gains for pos controller:
+  pos_ctrlr_->setGains(config.kp_posctrl, config.waypoint_tolerance);
   ROS_INFO("Time taken for reconfig: %f",(ros::Time::now() - current_time).toSec());
 }
 
@@ -1818,6 +1822,7 @@ void OnboardNodeHandler::mpcpostimerCallback(const ros::TimerEvent & event)
         {
           ROS_INFO("Completed MPC Position Control");
           stateTransitionMPCControl(false);
+          pos_ctrlr_->resetWayPointCount();//For new trials start from beginning of path
           return;
         }
       }
