@@ -817,8 +817,15 @@ inline void OnboardNodeHandler::stateTransitionMPCControl(bool state)
           desired_vel.y = initial_state_vel_[1];
           desired_vel.z = initial_state_vel_[2];
         }
-        //Clear iterate mpc thread:
-        //iterate_mpc_thread = NULL;
+        //Do Full Iteration:
+        mpc_thread_mutex.lock();
+        if(!mpc_thread_iterate)
+        {
+          ROS_INFO("Running Full Iteration ");
+          mpc_thread_iterate = true;
+          fast_iterate_mpc = false;
+        }
+        mpc_thread_mutex.unlock();
 
         clearSystemID();
         clearVelController();
@@ -1244,10 +1251,15 @@ void OnboardNodeHandler::paramreqCallback(rqt_quadcoptergui::QuadcopterInterface
   Vector3d rpy(0,0,config.mpc_goalyaw);
   so3.q2g(model_control.xf.R,rpy);
   */
-  if(config.reset_controls)
+  if(config.reset_system)
   {
       model_control.resetControls();//Reset the controls to base value when reset is pressed
-      config.reset_controls = false;//Set back to false
+
+      systemid_thread_mutex.lock();//Also reset systemid params
+      reset_parameters_systemid_ = true;
+      systemid_thread_mutex.unlock();
+
+      config.reset_system = false;//Set back to false
   }
   if(config.go_home)
   {
@@ -1434,6 +1446,7 @@ void OnboardNodeHandler::onlineOptimizeThread()
 {
     QRotorSystemID systemid;///< System Identification class from GCOP
     bool systemid_flag_copy = false;
+    bool reset_parameters_systemid_copy = false;
     Matrix7d stdev_gains;
     Vector6d mean_offsets;
     Matrix6d stdev_offsets;
@@ -1450,7 +1463,24 @@ void OnboardNodeHandler::onlineOptimizeThread()
     {
       systemid_thread_mutex.lock();
       systemid_flag_copy = systemid_flag_;
+      reset_parameters_systemid_copy = reset_parameters_systemid_;
+      reset_parameters_systemid_ = false;// Consume the flag
       systemid_thread_mutex.unlock();
+      if(reset_parameters_systemid_copy)
+      {
+        ROS_INFO("Resetting System ID Params");
+        gcop::loadParameters(systemid_filename,systemid);
+        if(!set_offsets_mpc_)
+        {
+          model_control.setParametersAndStdev(systemid.qrotor_gains,stdev_gains);//Set Optimization to right gains
+          vel_ctrlr_->setParameters(systemid.qrotor_gains);
+        }
+        else
+        {
+          model_control.setParametersAndStdev(systemid.qrotor_gains,stdev_gains,&mean_offsets,&stdev_offsets);//Set Optimization to right gains
+          vel_ctrlr_->setParameters(systemid.qrotor_gains, &mean_offsets);
+        }
+      }
       if(systemid_flag_copy)
       {
         //Stop rpytControl:

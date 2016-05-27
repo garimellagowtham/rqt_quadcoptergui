@@ -158,6 +158,7 @@ protected:
     //Vector3d initial_state_vel_;///< MPC Initial State Velocity
     ros::Time home_start_time;//When go home command is pressed
     bool systemid_flag_;///< Used to check if systemid is being performed or not
+    bool reset_parameters_systemid_;///< Used to reset system id parameters
     ros::Time systemid_complete_time_;///< Time when systemid is completed
     //////////////SYSTEM ID HELPER VARIABLES////////////////////
     vector<QRotorSystemIDMeasurement> systemid_measurements;///< System ID Measurements
