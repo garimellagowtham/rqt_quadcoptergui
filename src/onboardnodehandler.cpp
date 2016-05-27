@@ -259,7 +259,7 @@ inline void OnboardNodeHandler::loadParameters()
   nh.param<bool>("/control/closedloop_estimation",closedloop_estimation_,false);
   nh.param<double>("/control/vel_send_time", vel_send_time_,3.0);
   //nh.param<double>("/onboard_node/delay_send_time", delay_send_time_,0.2);
-  nh.param<double>("/control/mpc_iterate_time", mpc_iterate_time_,delay_send_time_);
+  nh.param<double>("/control/mpc_iterate_time", mpc_iterate_time_,0.2);
   nh.param<bool>("/control/virtual_obstacle", virtual_obstacle_,true);
   nh.param<bool>("/control/waypoint_mpc", waypoint_mpc_,false);
   nh.param<bool>("/control/use_alvar", use_alvar_,false);
@@ -1890,6 +1890,7 @@ void OnboardNodeHandler::mpcpostimerCallback(const ros::TimerEvent & event)
           ROS_INFO("Initial Pos: %f,%f,%f",data.localpos.x, data.localpos.y, data.localpos.z);
           ROS_INFO("Initial Vel: %f,%f,%f",yawcompensated_vel[0],yawcompensated_vel[1], yawcompensated_vel[2]);
           ROS_INFO("Object Position Quad: %f,%f,%f",object_position_quad[0], object_position_quad[1], object_position_quad[2]);
+          ROS_INFO("Global Vel, Yaw: %f,%f,%f,%f",data.linvel.x, data.linvel.y, data.linvel.z, data.rpydata.z);
           ROS_INFO("Starting MPC Thread");
           mpc_thread_mutex.lock();
           if(!mpc_thread_iterate)

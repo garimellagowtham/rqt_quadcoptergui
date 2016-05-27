@@ -12,20 +12,25 @@ tracking/obs_avoidance_mode: true
 ### Control Params:
 control/optimize_online: true
 #control/vel_send_time: 6.0
-control/vel_send_time: 5.0
+control/vel_send_time: 5.0 #Only for virtual obstacle
 control/set_offsets_mpc: true #Set Offsets from online optimization
-control/virtual_obstacle: false #If We are using real or virtual obstacle; Default is virtual
-control/closedloop_estimation: true #Closed loop systemid
+control/closedloop_estimation: true #Closed loop systemid parameter estimation
 control/measurement_period: 2.0 #Time to record systemid meas
 control/obj_dist_max: 6.0 #Max Object distance (Clipping)
 #control/use_alvar: true #Use alvar for tracking object
 
 ## Position Control Params:
-control/tolerance_pos: 2.0 #Tolerance in position checking for waypoint
-control/max_vel: 2.0 #Max velocity to go to goal position
+reconfig/tolerance_pos: 0.5 #Tolerance in position checking for waypoint
+control/max_vel: 3.0 #Max velocity to go to goal position
+reconfig/reduction_gain: 0.5 #Max velocity to go to goal position
 
 ## Waypoint MPC:
-control/waypoint_mpc: false
+control/virtual_obstacle: false #If We are using real or virtual obstacle; Default is virtual
+control/waypoint_mpc: true # If it is a virtual obstacle waypoint mpc should not be used/ does not matter
+
+## Position Control Params:
+control/tolerance_pos: 2.0 #Tolerance in position checking for waypoint
+control/max_vel: 2.0 #Max velocity to go to goal position
 
 # Param for skipping segments while visualizing gcop trajectory
 display/skip_pub_segments: 5
@@ -41,3 +46,4 @@ reconfig/ki_velctrlz: 0
 reconfig/kp_velctrl: 3.0
 reconfig/smooth_fac_velctrl: 0.95
 reconfig/delay_send_time: 0.2
+control/mpc_iterate_time: 0.15
