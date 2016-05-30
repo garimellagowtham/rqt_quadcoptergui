@@ -7,7 +7,6 @@ OnboardNodeHandler::OnboardNodeHandler(ros::NodeHandle &nh_):nh(nh_)
                                                             , broadcaster(new tf::TransformBroadcaster())
                                                             , logdir_created(false), enable_logging(false)
                                                             , publish_rpy(false)
-                                                            , publish_vel(false)
                                                             , enable_tracking(false), enable_velcontrol(false), enable_rpytcontrol(false), enable_poscontrol(false)
                                                             , enable_mpccontrol(false), enable_trajectory_tracking(false)
                                                             , reconfig_init(false), reconfig_update(false)
@@ -39,15 +38,16 @@ OnboardNodeHandler::OnboardNodeHandler(ros::NodeHandle &nh_):nh(nh_)
   createArmInstance();
 
   //Create RoiVelController:
-  if(!use_alvar_)
+  //if(!use_alvar_)
   {
     roi_vel_ctrlr_.reset(new RoiVelController(nh,uav_name));
   }
-  else
+  /*else
   {
     ROS_INFO("Using Alvar Tracking");
     roi_vel_ctrlr_.reset(new AlvarTrackController(nh,uav_name));
   }
+  */
   roi_vel_ctrlr_->setCameraTransform(CAM_QUAD_transform);
   nh.param<double>("/control/obj_dist_max", roi_vel_ctrlr_->obj_dist_max,2.0);
 
@@ -203,10 +203,11 @@ inline void OnboardNodeHandler::createArmInstance()
   arm_hardware_controller_->setJointSpeeds(arm_default_speed_, arm_default_speed_, arm_default_speed_);
 }
 
-void OnboardNodeHandler::publishGuiState(const rqt_quadcoptergui::GuiStateMessage &state_msg)
+/*void OnboardNodeHandler::publishGuiState(const rqt_quadcoptergui::GuiStateMessage &state_msg)
 {
     gui_state_publisher_.publish(state_msg);
 }
+*/
 
 inline void copyPtToVec(geometry_msgs::Vector3 in, geometry_msgs::Point out)
 {
@@ -251,8 +252,7 @@ inline void OnboardNodeHandler::loadParameters()
   nh.param<std::string>("/gui/uav_name",uav_name,"dji");
   nh.param<std::string>("/gui/logdir",logdir,"/home/gowtham");
   nh.param<bool>("/gui/publishrpy",publish_rpy,false);
-  nh.param<bool>("/gui/publishvel",publish_vel,false);
-  nh.param<double>("/mpc/goal_tolerance", goal_tolerance,0.2);//Stop when 0.2m away from goal
+  //nh.param<double>("/mpc/goal_tolerance", goal_tolerance,0.2);//Stop when 0.2m away from goal
   nh.param<bool>("/control/optimize_online", optimize_online_,false);
   nh.param<bool>("/control/set_offsets_mpc", set_offsets_mpc_,false);
   nh.param<double>("/control/measurement_period", measurement_period,10.0);
@@ -262,7 +262,7 @@ inline void OnboardNodeHandler::loadParameters()
   nh.param<double>("/control/mpc_iterate_time", mpc_iterate_time_,0.2);
   nh.param<bool>("/control/virtual_obstacle", virtual_obstacle_,true);
   nh.param<bool>("/control/waypoint_mpc", waypoint_mpc_,false);
-  nh.param<bool>("/control/use_alvar", use_alvar_,false);
+  //nh.param<bool>("/control/use_alvar", use_alvar_,false);
   nh.param<double>("/arm/joint_speed",arm_default_speed_,0.6);//Default 0.6 rad/s
 
   ROS_INFO("Dummy Times: %f,%f",delay_send_time_, vel_send_time_);
@@ -397,7 +397,6 @@ inline void OnboardNodeHandler::setupLogDir()
   logdir_created = true;//Specify that log directory has been created
 }
 
-///May have to add more stuff to this #TODO
 inline void OnboardNodeHandler::storeMeasurements()
 {
   systemid_thread_mutex.lock();
@@ -1491,7 +1490,7 @@ void OnboardNodeHandler::onlineOptimizeThread()
  
         systemid_measurements.resize(meas_filled_);
         //QRotorIDState systemid_init_state;
-        ros::Time time_curr = ros::Time::now();
+        //ros::Time time_curr = ros::Time::now();
         systemid.EstimateParameters(systemid_measurements,systemid_init_state,&stdev_gains, &mean_offsets, &stdev_offsets);//Estimate Parameters
         //ROS_INFO("Time taken for optimization: %f",(ros::Time::now() - time_curr).toSec());
         //systemid.qrotor_gains[0] -= 0.004;
@@ -1612,7 +1611,7 @@ void OnboardNodeHandler::velcmdtimerCallback(const ros::TimerEvent& event)
   if(parserinstance)
   {
     parserinstance->cmdrpythrust(rpytcmd, true);
-    if(optimize_online_)
+    if(optimize_online_ && closedloop_estimation_)
     {
       storeMeasurements();
     }
@@ -1950,7 +1949,7 @@ void OnboardNodeHandler::mpcpostimerCallback(const ros::TimerEvent & event)
   rpytcmd.w = command[0];
   //send command rpy to get desired vel
   parserinstance->cmdrpythrust(rpytcmd,true);
-  if(optimize_online_)
+  if(optimize_online_ && closedloop_estimation_)
   {
     storeMeasurements();
   }
@@ -1970,7 +1969,7 @@ void OnboardNodeHandler::mpctimerCallback(const ros::TimerEvent& event)
     */
     rpytcmd.w = (9.81/model_control.getParameters()[0]);//Set to Default Value
     parserinstance->cmdrpythrust(rpytcmd, true);
-    if(optimize_online_)
+    if(optimize_online_ && closedloop_estimation_)
     {
       storeMeasurements();
     }
@@ -2039,7 +2038,7 @@ void OnboardNodeHandler::mpctimerCallback(const ros::TimerEvent& event)
       rpytcmd.z = rpytcmd.z > M_PI?(rpytcmd.z - 2*M_PI):(rpytcmd.z < -M_PI)?(rpytcmd.z + 2*M_PI):rpytcmd.z;//Make sure yaw command is reasonable
       mpc_trajectory_count++;
       parserinstance->cmdrpythrust(rpytcmd, true);
-      if(optimize_online_)
+      if(optimize_online_ && closedloop_estimation_)
       {
         storeMeasurements();
       }
