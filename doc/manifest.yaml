@@ -1,0 +1,34 @@
+actions: []
+authors: ''
+brief: ''
+bugtracker: ''
+depends:
+- dynamic_reconfigure
+- gcop_ctrl
+- roscpp
+- parsernode
+- rqt_gui_cpp
+- dynamixelsdk
+- rqt_gui
+- message_runtime
+- sensor_msgs
+- image_transport
+- controllers
+- tf
+- visualization_msgs
+- message_generation
+- std_msgs
+- catkin
+- gcop_comm
+- cv_bridge
+- tf_conversions
+description: The rqt_quadcoptergui package
+license: MIT
+maintainers: Gowtham Garimella <ggarime1@jhu.edu>
+msgs:
+- GuiStateMessage
+- GuiCommandMessage
+package_type: package
+repo_url: ''
+srvs: []
+url: ''
